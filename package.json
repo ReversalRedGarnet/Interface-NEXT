@@ -4,9 +4,9 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/room.test.mjs && node test/rooms.smoke.mjs",
+    "test": "node test/room.test.mjs && node test/rooms.smoke.mjs && node test/editor.test.mjs",
     "build-grid": "node js/build-grid.js",
-    "serve": "python3 -m http.server 8000"
+    "serve": "node js/serve.js"
   },
   "devDependencies": {
     "jsdom": "^26.0.0"

@@ -1,9 +1,11 @@
 /**
  * build-grid.js — shared PC-grid generator for room data files.
  */
-const fs = require('fs');
-const path = require('path');
+import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const DATA_DIR = path.join(__dirname, '..', 'data');
 
 function makeGrid({ startTop, startLeft, rowGap, colGap, rows, cols, blocks = 1, blockGap = 0, startCount = 1 }) {

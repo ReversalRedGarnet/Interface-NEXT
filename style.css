@@ -1,30 +1,37 @@
-/* USP STEMP — IT Room Monitor · style.css
-   Brand: PMS 321 #009BA6 (USP teal-blue), PMS 158 #F47920 (STEMP orange)
-   Fonts: Libre Baskerville (display), IBM Plex Sans (body), IBM Plex Mono (mono) */
+/* IT Room Monitor · style.css
+   Soft white-and-black palette: white surfaces, near-black text, light-gray
+   borders/dividers, no accent color anywhere except the four device status
+   colors below (working/minor/major/unknown), which are untouched.
+   Fonts: system stack only — no external font loading. */
 
 /* ── Custom Properties ── */
 :root {
-  /* USP Brand */
-  --usp-blue:          #009BA6;
-  --usp-blue-dark:     #007E88;
-  --usp-blue-xdark:    #005F68;
-  --usp-blue-tint:     #E2F6F7;
-  --usp-blue-mid:      #B5E5E8;
-  --usp-orange:        #F47920;
-  --usp-orange-dark:   #D4641A;
-  --usp-orange-tint:   #FEF0E6;
+  /* Emphasis — the only "color" left once brand accents are gone; used for
+     primary buttons, focus rings, and anything that used to carry a brand
+     color. Named --usp-* below for historical/low-risk reasons (every rule
+     in this file already references these names) — there is no USP/brand
+     styling left, only these two neutral shades. */
+  --usp-blue:          #171717;
+  --usp-blue-dark:     #000000;
+  --usp-blue-xdark:    #171717;
+  --usp-blue-tint:     #F5F5F5;
+  --usp-blue-mid:      #E5E5E5;
+  --usp-orange:        #171717;
+  --usp-orange-dark:   #000000;
+  --usp-orange-tint:   #F5F5F5;
 
   /* Neutrals */
-  --bg:                #EDF3F4;
+  --bg:                #FFFFFF;
   --surface:           #FFFFFF;
-  --surface-2:         #F4F9F9;
-  --border:            #C4D5D7;
-  --border-light:      #DCE9EA;
-  --text:              #0E2328;
-  --text-mid:          #35595D;
-  --text-muted:        #6A8B8F;
+  --surface-2:         #F5F5F5;
+  --border:            #E5E5E5;
+  --border-light:      #EFEFEF;
+  --text:              #171717;
+  --text-mid:          #404040;
+  --text-muted:        #737373;
 
-  /* Status */
+  /* Status — do not change: these are the device working/minor/major/
+     unknown colors and are exempt from the neutral palette above. */
   --working:           #16A34A;
   --working-dark:      #15803D;
   --working-bg:        #DCFCE7;
@@ -41,15 +48,15 @@
   /* Tokens */
   --radius:            6px;
   --radius-lg:         12px;
-  --shadow-sm:         0 1px 3px rgba(0,48,56,.07), 0 1px 2px rgba(0,48,56,.04);
-  --shadow:            0 4px 14px rgba(0,48,56,.09), 0 2px 4px rgba(0,48,56,.05);
-  --shadow-lg:         0 12px 40px rgba(0,48,56,.14), 0 4px 12px rgba(0,48,56,.08);
+  --shadow-sm:         0 1px 3px rgba(0,0,0,.06), 0 1px 2px rgba(0,0,0,.04);
+  --shadow:            0 4px 14px rgba(0,0,0,.08), 0 2px 4px rgba(0,0,0,.05);
+  --shadow-lg:         0 12px 40px rgba(0,0,0,.12), 0 4px 12px rgba(0,0,0,.07);
   --transition:        .15s ease;
 
-  /* Fonts */
-  --font-display:      'Libre Baskerville', Georgia, 'Times New Roman', serif;
-  --font-body:         'IBM Plex Sans', system-ui, -apple-system, sans-serif;
-  --font-mono:         'IBM Plex Mono', 'Courier New', monospace;
+  /* Fonts — system stack only, no external font loading */
+  --font-display:      -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body:         -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:         ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
 }
 
 /* ── Reset ─────────────────────────────────────────────── */
@@ -71,8 +78,8 @@ body {
 
 /* ── Site header (every page) ── */
 .site-header {
-  background: var(--usp-blue-xdark);
-  border-bottom: 3px solid var(--usp-orange);
+  background: var(--surface);
+  border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
   z-index: 200;
@@ -88,54 +95,20 @@ body {
   gap: 16px;
 }
 
-.site-brand {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* "USP" in bold serif */
-.brand-usp {
-  font-family: var(--font-display);
-  font-size: 17px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 0.05em;
-}
-
-/* orange separator dot */
-.brand-sep {
-  color: var(--usp-orange);
-  font-size: 14px;
-}
-
-/* "STEMP" badge */
-.brand-stemp {
-  font-family: var(--font-body);
-  font-size: 10px;
-  font-weight: 600;
-  color: var(--usp-blue-tint);
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  padding: 2px 8px;
-  border: 1px solid rgba(255,255,255,.22);
-  border-radius: 3px;
-}
-
-/* right-side label */
+/* plain, neutral page label — no logo, no color bar */
 .site-tool {
   font-family: var(--font-body);
-  font-size: 10px;
-  font-weight: 500;
-  color: rgba(255,255,255,.50);
-  letter-spacing: 0.10em;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-mid);
+  letter-spacing: 0.08em;
   text-transform: uppercase;
 }
 
 /* ── SITE FOOTER (every page) — mirrors .site-header styling ── */
 .site-footer {
-  background: var(--usp-blue-xdark);
-  border-top: 3px solid var(--usp-orange);
+  background: var(--surface);
+  border-top: 1px solid var(--border);
   padding: 9px 24px;
   text-align: center;
   margin-top: auto;
@@ -147,7 +120,7 @@ body {
   font-family: var(--font-body);
   font-size: 10px;
   font-weight: 500;
-  color: rgba(255,255,255,.50);
+  color: var(--text-muted);
   letter-spacing: 0.10em;
   text-transform: uppercase;
 }
@@ -509,7 +482,7 @@ h1 {
   display: none;
   position: fixed;
   inset: 0;
-  background: rgba(8,36,42,.35);
+  background: rgba(0,0,0,.35);
   backdrop-filter: blur(3px);
   justify-content: center;
   align-items: center;
@@ -522,7 +495,7 @@ h1 {
 .popup {
   background: var(--surface);
   border: 1.5px solid var(--border-light);
-  border-top: 4px solid var(--usp-blue);   /* USP blue top accent */
+  border-top: 4px solid var(--usp-blue);
   border-radius: var(--radius-lg);
   padding: 28px 28px 24px;
   width: 100%;
@@ -692,7 +665,6 @@ h1 {
   transition: var(--transition);
 }
 
-/* USP blue primary */
 .btn-primary             { background: var(--usp-blue);   color: #fff; }
 .btn-primary:hover       { background: var(--usp-blue-dark); }
 
@@ -785,7 +757,7 @@ body.menu-page {
 
 .campus-card:hover {
   border-color: var(--usp-blue);
-  box-shadow: 0 6px 22px rgba(0,155,166,.12);
+  box-shadow: 0 6px 22px rgba(0,0,0,.12);
 }
 
 .campus-card-header {
@@ -931,7 +903,7 @@ body.menu-page {
   border-radius: 50%;
   background: var(--usp-orange);
   border: 1.5px solid #fff;
-  box-shadow: 0 1px 2px rgba(0,48,56,.25);
+  box-shadow: 0 1px 2px rgba(0,0,0,.25);
   z-index: 2;
 }
 

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Floor Plan Editor — IT Room Monitor</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="editor.css">
+</head>
+<body class="editor-page">
+
+  <div class="site-header">
+    <div class="site-header-inner">
+      <span class="site-tool">IT Room Monitor — Floor Plan Editor</span>
+    </div>
+  </div>
+
+  <div class="editor-app" id="editor-app">
+
+    <header class="editor-header">
+      <h1>Floor Plan Editor</h1>
+      <p class="subtitle">Open the project folder, then edit an existing room or scaffold a new one. Requires Chrome or Edge (File System Access API).</p>
+      <div class="editor-connect">
+        <button class="toolbar-btn" id="btn-connect">📁 Open Project Folder</button>
+        <span class="editor-connect-status" id="connect-status">Not connected</span>
+      </div>
+    </header>
+
+    <div class="editor-body" id="editor-body" hidden>
+
+      <aside class="editor-sidebar">
+
+        <section class="editor-panel">
+          <h2>Room</h2>
+          <label class="editor-field">
+            <span>Existing room</span>
+            <select id="room-picker">
+              <option value="">— choose —</option>
+            </select>
+          </label>
+          <button class="toolbar-btn" id="btn-new-room">＋ New Room…</button>
+        </section>
+
+        <section class="editor-panel" id="tools-panel" hidden>
+          <h2>Tools</h2>
+          <div class="editor-tool-group">
+            <span class="editor-tool-group-label">Devices</span>
+            <div class="editor-tool-row" id="device-tools"></div>
+          </div>
+          <div class="editor-tool-group">
+            <span class="editor-tool-group-label">Shapes</span>
+            <div class="editor-tool-row" id="shape-tools"></div>
+          </div>
+          <p class="editor-hint">Arm a tool, click the canvas to place it. Escape returns to Select. Reposition anything by dragging it, or click it once and click a destination point instead. Drag a wall's or outline's small handles to reshape it; a rectangular shape's corner handles resize it (always staying a rectangle); an entrance is a fixed width and only moves, not resizes.</p>
+          <label class="editor-field editor-field-inline">
+            <span>Grid size</span>
+            <input type="number" id="grid-size" min="0" step="1" value="10">
+          </label>
+          <label class="editor-field editor-field-inline">
+            <input type="checkbox" id="show-grid" checked>
+            <span>Show grid</span>
+          </label>
+        </section>
+
+        <section class="editor-panel" id="properties-panel" hidden>
+          <h2>Properties</h2>
+          <div id="properties-fields"></div>
+          <button class="btn-danger" id="btn-delete-selected" hidden>Delete</button>
+        </section>
+
+      </aside>
+
+      <main class="editor-canvas-wrap">
+        <div class="editor-canvas-scroll" id="canvas-scroll">
+          <svg id="editor-canvas" class="editor-canvas" xmlns="http://www.w3.org/2000/svg"></svg>
+        </div>
+      </main>
+
+    </div>
+
+    <div class="editor-footer" id="editor-footer" hidden>
+      <span id="dirty-indicator" class="editor-dirty"></span>
+      <button class="btn-primary" id="btn-save" disabled>💾 Save</button>
+    </div>
+
+    <p class="editor-status" id="editor-status" role="status" aria-live="polite"></p>
+
+  </div><!-- /.editor-app -->
+
+  <!-- New room dialog -->
+  <div class="overlay" id="new-room-overlay" role="dialog" aria-modal="true" aria-labelledby="new-room-title">
+    <div class="popup">
+      <button class="popup-close" id="new-room-close" aria-label="Close">✕</button>
+      <h3 class="popup-title" id="new-room-title">New Room</h3>
+      <p class="popup-body">Creates data/{id}.json, rooms/{id}.html, and updates index.html and js/export.js together.</p>
+
+      <label class="editor-field">
+        <span>Room id</span>
+        <input type="text" id="nr-id" placeholder="e.g. S28-110">
+      </label>
+      <label class="editor-field">
+        <span>Label</span>
+        <input type="text" id="nr-label" placeholder="e.g. S28-110">
+      </label>
+      <label class="editor-field">
+        <span>Campus</span>
+        <input list="nr-campus-list" id="nr-campus" placeholder="e.g. King George Campus">
+        <datalist id="nr-campus-list"></datalist>
+      </label>
+      <label class="editor-field">
+        <span>Canvas size</span>
+        <span class="editor-field-row">
+          <input type="number" id="nr-width" value="1200" min="200">
+          <span>×</span>
+          <input type="number" id="nr-height" value="800" min="200">
+        </span>
+      </label>
+
+      <p class="editor-status editor-status-error" id="new-room-errors" role="alert"></p>
+
+      <div class="popup-actions">
+        <button class="btn-primary" id="new-room-create">Create</button>
+        <button class="btn-secondary" id="new-room-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script type="module" src="js/editor/editor.js"></script>
+
+  <footer class="site-footer">
+    <p>A side project by ReversalRedGarnet (s11225524) · © July-2026</p>
+  </footer>
+
+</body>
+</html>

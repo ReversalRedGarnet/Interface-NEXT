@@ -23,9 +23,24 @@ data/
 rooms/
   gpl.html, library.html, mtl.html, s28-104.html, s28-107.html
   — page shell + a few lines of routing metadata (id/label/campus/back/dataUrl)
+editor.html, editor.css
+  — drag-and-drop floor-plan editor; see "Editing rooms visually" below
+js/editor/
+  editor.js          — page wiring: File System Access I/O, room picker,
+                        tool palette, properties panel, new-room dialog
+  canvas-renderer.js — draws the editable SVG surface (independent of
+                        room.js's own read-only drawLayout)
+  tools.js           — pointer-driven drag/place/select + grid snapping
+  schema.js           — the data/*.json schema: shape/device field specs,
+                        defaults, exact-key-order (de)serialization
+  room-scaffold.js   — generates rooms/{id}.html, patches index.html and
+                        js/export.js's ALL_ROOMS, and the cross-file
+                        id-collision check for a brand-new room
 test/
   room.test.mjs   — drives room.js in jsdom; asserts on the DOM an intern touches
   rooms.smoke.mjs — renders all five real rooms; checks bounds and labels
+  editor.test.mjs — schema.js + room-scaffold.js: existing-room round-trip,
+                    new-room 4-file generation, id-collision validation
 ```
 
 ## Running locally
@@ -81,6 +96,58 @@ printer), not a regular grid — edit `data/library.json` directly for that one.
 Device labels longer than 5 characters get a wider chip automatically, so a
 name like `STAFF-PC` isn't clipped. Devices typed `staff` get the wide chip
 regardless.
+
+## Editing rooms visually
+`editor.html` is a drag-and-drop floor-plan editor for `data/*.json` — no more
+hand-editing coordinates. It needs a **Chromium-based browser** (Chrome or
+Edge): it uses the File System Access API to read and write project files
+directly, which is the only way it persists anything (there's no server or
+build step here, and download-then-manually-replace didn't scale to
+iterative edits). Firefox/Safari will show a message explaining this rather
+than silently failing.
+
+1. Open `editor.html` over **localhost or https** (e.g. `npm run serve`) and
+   click **Open Project Folder** — grant it access to the repo root. The
+   File System Access API isn't available in an insecure context, so a
+   plain-http LAN address (e.g. `http://192.168.x.x:8000`) won't work even
+   in Chrome — `http://localhost:8000` does.
+2. Pick an existing room to edit its floor plan and devices, or **New
+   Room…** to scaffold one from scratch.
+3. Arm a tool (a device type or a layout shape) in the sidebar and click
+   the canvas to place it. Reposition anything already placed either way:
+   press-drag-release, or click it once to select (no drag) and click a
+   destination point to send it there — both snap to the grid size shown
+   in the sidebar and land at the same spot; Escape cancels a pending
+   click-to-move before you've clicked the destination. Dragging a
+   rectangular shape's corner handle (room/wallrect/floor/entrance/counter,
+   or a 4-point outline) always resizes it — the opposite corner stays put
+   and it can't be skewed into a non-rectangle. Select an item to edit its
+   exact fields (position, size, label, …) in the Properties panel, or
+   delete it.
+4. **Save** writes `data/{id}.json` only — editing a room never touches
+   `rooms/*.html`, `index.html`, or `js/export.js`.
+
+**New Room** is different: a room only shows up on the menu and in CSV
+exports if four things agree (see "Known limitation" below and
+`js/export.js`'s `ALL_ROOMS`), so creating one writes all four together
+*after* checking the id doesn't collide with anything already using it
+(case-insensitively, since two ids differing only in case would collide as
+Windows filenames even though `localStorage` keys are case-sensitive):
+`data/{id}.json`, `rooms/{id}.html`, a new link in `index.html` (a new
+campus card too, if the campus doesn't exist yet), and a new entry in
+`ALL_ROOMS`. If a later file in that sequence fails to write, the editor
+reports exactly which files it did write so the rest can be finished by
+hand — there's no way to make four separate file writes atomic in a
+browser.
+
+Two things the editor deliberately leaves alone — update them by hand if a
+new room needs them:
+- `test/rooms.smoke.mjs`'s `ROOMS` list — a new room isn't smoke-tested
+  until it's added there.
+- `js/build-grid.js`'s `ROOM_GRIDS` — only relevant if you want a new
+  room's devices generated from a regular grid formula instead of the
+  editor's placement; the 4 existing grid rooms use it, the editor doesn't
+  need it.
 
 ## State & multi-device sync
 Device statuses are saved in the browser's `localStorage` — **per browser,
