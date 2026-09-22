@@ -1,0 +1,14 @@
+{
+  "name": "it-room-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node test/room.test.mjs && node test/rooms.smoke.mjs",
+    "build-grid": "node js/build-grid.js",
+    "serve": "python3 -m http.server 8000"
+  },
+  "devDependencies": {
+    "jsdom": "^26.0.0"
+  }
+}

@@ -1,0 +1,244 @@
+{
+  "canvasWidth": 1200,
+  "canvasHeight": 800,
+  "layout": [
+    {
+      "type": "outline",
+      "points": [
+        [
+          30.6,
+          0
+        ],
+        [
+          1169.4,
+          0
+        ],
+        [
+          1169.4,
+          798.7
+        ],
+        [
+          575.2,
+          798.7
+        ],
+        [
+          575.2,
+          556.7
+        ],
+        [
+          30.6,
+          556.7
+        ]
+      ]
+    },
+    {
+      "type": "room",
+      "label": "Library Staff Space",
+      "x": 30.6,
+      "y": 0,
+      "width": 544.6,
+      "height": 266.2
+    },
+    {
+      "type": "room",
+      "label": "Learning Lab",
+      "x": 30.6,
+      "y": 266.2,
+      "width": 145.3,
+      "height": 290.5
+    },
+    {
+      "type": "entrance",
+      "label": "Entrance",
+      "x": 405.8,
+      "y": 459.9,
+      "width": 169.4,
+      "height": 96.8
+    },
+    {
+      "type": "room",
+      "label": "Kurukuru",
+      "x": 889.9,
+      "y": 689.8,
+      "width": 133.1,
+      "height": 108.9
+    },
+    {
+      "type": "room",
+      "label": "Belama",
+      "x": 1023,
+      "y": 689.8,
+      "width": 146.4,
+      "height": 108.9
+    },
+    {
+      "type": "wall",
+      "x1": 175.9,
+      "y1": 556.7,
+      "x2": 405.8,
+      "y2": 556.7
+    },
+    {
+      "type": "wall",
+      "x1": 575.2,
+      "y1": 689.8,
+      "x2": 817.3,
+      "y2": 689.8
+    }
+  ],
+  "devices": [
+    {
+      "id": "PC1",
+      "type": "pc",
+      "top": 457,
+      "left": 360
+    },
+    {
+      "id": "PC2",
+      "type": "pc",
+      "top": 507,
+      "left": 360
+    },
+    {
+      "id": "PC3",
+      "type": "pc",
+      "top": 577,
+      "left": 582
+    },
+    {
+      "id": "PC4",
+      "type": "pc",
+      "top": 577,
+      "left": 632
+    },
+    {
+      "id": "PC5",
+      "type": "pc",
+      "top": 577,
+      "left": 682
+    },
+    {
+      "id": "PC6",
+      "type": "pc",
+      "top": 577,
+      "left": 732
+    },
+    {
+      "id": "PC7",
+      "type": "pc",
+      "top": 633,
+      "left": 582
+    },
+    {
+      "id": "PC8",
+      "type": "pc",
+      "top": 633,
+      "left": 632
+    },
+    {
+      "id": "PC9",
+      "type": "pc",
+      "top": 633,
+      "left": 682
+    },
+    {
+      "id": "PC10",
+      "type": "pc",
+      "top": 633,
+      "left": 732
+    },
+    {
+      "id": "PC11",
+      "type": "pc",
+      "top": 695,
+      "left": 582
+    },
+    {
+      "id": "PC12",
+      "type": "pc",
+      "top": 695,
+      "left": 632
+    },
+    {
+      "id": "PC13",
+      "type": "pc",
+      "top": 695,
+      "left": 682
+    },
+    {
+      "id": "PC14",
+      "type": "pc",
+      "top": 695,
+      "left": 732
+    },
+    {
+      "id": "PC15",
+      "type": "pc",
+      "top": 695,
+      "left": 782
+    },
+    {
+      "id": "PC16",
+      "type": "pc",
+      "top": 745,
+      "left": 582
+    },
+    {
+      "id": "PC17",
+      "type": "pc",
+      "top": 745,
+      "left": 632
+    },
+    {
+      "id": "PC18",
+      "type": "pc",
+      "top": 745,
+      "left": 682
+    },
+    {
+      "id": "PC19",
+      "type": "pc",
+      "top": 745,
+      "left": 732
+    },
+    {
+      "id": "PC20",
+      "type": "pc",
+      "top": 745,
+      "left": 782
+    },
+    {
+      "id": "PC21",
+      "type": "pc",
+      "top": 745,
+      "left": 832
+    },
+    {
+      "id": "SPC1",
+      "type": "staff",
+      "top": 275,
+      "left": 35,
+      "label": "Staff 1"
+    },
+    {
+      "id": "SPC2",
+      "type": "staff",
+      "top": 295,
+      "left": 182,
+      "label": "Staff 2"
+    },
+    {
+      "id": "SPC3",
+      "type": "staff",
+      "top": 295,
+      "left": 520,
+      "label": "Staff 3"
+    },
+    {
+      "id": "PRINTER",
+      "type": "printer",
+      "top": 172,
+      "left": 600
+    }
+  ]
+}
