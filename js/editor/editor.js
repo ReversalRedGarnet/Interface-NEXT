@@ -8,6 +8,8 @@
 import {
   DEVICE_TYPES, PLACEABLE_SHAPE_TYPES, LAYOUT_SHAPES, shapeDisplayName,
   normalizeRoomData, createBlankRoomData, serializeRoomData,
+  normalizeAssetsData, serializeAssetsData, generateAssetId, registerAssetId,
+  findAssetIdOwner,
 } from './schema.js';
 import { render } from './canvas-renderer.js';
 import { createToolController } from './tools.js';
@@ -65,6 +67,9 @@ const state = {
   gridSize: 10,
   showGrid: true,
   dirty: false,
+  assets: {},          // data/assets.json — project-wide, loaded once on connect
+  assetsDirty: false,
+  assetIdWarning: null, // { deviceIndex, message } | null — set by an in-flight/finished project-wide collision check
 };
 
 function setStatus(msg, isError = false) {
@@ -166,7 +171,22 @@ async function connect() {
   connectStatus.textContent = `Connected: ${rootHandle.name}`;
   editorBody.hidden = false;
   setStatus('');
+  await loadAssetsRegistry();
   await refreshRoomPicker();
+}
+
+/** data/assets.json is project-wide (not per-room), so it's loaded once
+ *  here rather than alongside each room. Missing/unreadable → starts blank;
+ *  it's created on the first save that registers an asset id. */
+async function loadAssetsRegistry() {
+  try {
+    const dataDir = await rootHandle.getDirectoryHandle('data');
+    const text = await readTextFile(dataDir, 'assets.json');
+    state.assets = normalizeAssetsData(JSON.parse(text));
+  } catch {
+    state.assets = {};
+  }
+  state.assetsDirty = false;
 }
 
 async function refreshRoomPicker() {
@@ -181,6 +201,54 @@ async function refreshRoomPicker() {
     opt.dataset.campus = entry.campus;
     roomPicker.appendChild(opt);
   }
+}
+
+/* ── Project-wide assetId collision check ─────────────────────────── */
+
+/** Reads every OTHER room's devices from disk. The current room's own
+ *  (possibly-unsaved) devices are supplied by the caller from memory
+ *  instead — re-reading its own file here could show a stale copy mid-edit. */
+async function readOtherRoomsDevices(excludeStem) {
+  const dataDir = await rootHandle.getDirectoryHandle('data');
+  const names = await listFileNames(dataDir);
+  const rooms = [];
+  for (const name of names) {
+    if (!name.toLowerCase().endsWith('.json')) continue;
+    const stem = name.replace(/\.json$/i, '');
+    if (stem.toLowerCase() === 'assets') continue; // the lookup file, not a room
+    if (stem.toLowerCase() === excludeStem.toLowerCase()) continue;
+    try {
+      const parsed = JSON.parse(await readTextFile(dataDir, name));
+      rooms.push({ roomId: stem, devices: Array.isArray(parsed?.devices) ? parsed.devices : [] });
+    } catch {
+      // unreadable/corrupt file — skip it rather than fail the whole check
+    }
+  }
+  return rooms;
+}
+
+/** Fires after typing/generating an assetId; advisory only — never blocks
+ *  or reverts the value, just surfaces who else already has it (if anyone),
+ *  anywhere in the project. Guards against a slow check finishing after the
+ *  user has since selected something else. */
+async function runAssetIdCheck(assetId, deviceIndex, deviceId) {
+  if (!assetId || !rootHandle || state.mode !== 'existing') return;
+  const currentStem = roomFileStem(state.roomId);
+  let owner;
+  try {
+    const otherRooms = await readOtherRoomsDevices(currentStem);
+    const rooms = [{ roomId: currentStem, devices: state.data.devices }, ...otherRooms];
+    owner = findAssetIdOwner(assetId, rooms, { roomId: currentStem, deviceId });
+  } catch {
+    return; // advisory feature — a failed scan should never disrupt editing
+  }
+  if (state.selection?.kind !== 'device' || state.selection.index !== deviceIndex) return; // moved on already
+  if (!owner) return; // state.assetIdWarning was already cleared when the check was kicked off
+  const message = owner.roomId === currentStem
+    ? `${owner.deviceId} already uses this ID.`
+    : `${owner.deviceId} in ${owner.roomId} already uses this ID.`;
+  state.assetIdWarning = { deviceIndex, message };
+  renderProperties();
 }
 
 /* ── Loading / saving an existing room ───────────────────────────── */
@@ -225,9 +293,16 @@ async function saveExistingRoom() {
   try {
     const dataDir = await rootHandle.getDirectoryHandle('data');
     await writeTextFile(dataDir, `${stem}.json`, serializeRoomData(state.data));
+
+    const savedAssets = state.assetsDirty;
+    if (savedAssets) {
+      await writeTextFile(dataDir, 'assets.json', serializeAssetsData(state.assets), { create: true });
+      state.assetsDirty = false;
+    }
+
     state.dirty = false;
     updateDirtyUI();
-    setStatus(`Saved data/${stem}.json`);
+    setStatus(`Saved data/${stem}.json${savedAssets ? ' and data/assets.json' : ''}`);
   } catch (err) {
     setStatus(`Save failed: ${err.message}`, true);
   }
@@ -395,6 +470,72 @@ function markDirtyRerender() {
   renderAll();
 }
 
+/** Adds `assetId` to state.assets with a blank record if it isn't already
+ *  a known key — never overwrites an existing record. Marks assets.json
+ *  dirty only when it actually added something. */
+function registerNewAsset(assetId) {
+  const { assets, added } = registerAssetId(state.assets, assetId);
+  if (added) {
+    state.assets = assets;
+    state.assetsDirty = true;
+  }
+}
+
+function assetIdField(device, index) {
+  const wrap = document.createElement('label');
+  wrap.className = 'editor-field';
+  const span = document.createElement('span');
+  span.textContent = 'Asset ID (optional)';
+  wrap.appendChild(span);
+
+  const row = document.createElement('div');
+  row.className = 'editor-assetid-row';
+
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = device.assetId || '';
+  input.placeholder = 'e.g. AST-4K9QXZ';
+
+  function setAssetId(v) {
+    if (v) { device.assetId = v; registerNewAsset(v); } else delete device.assetId;
+    state.assetIdWarning = null; // clear any stale result before re-checking
+    markDirtyRerender();
+    if (v) runAssetIdCheck(v, index, device.id);
+  }
+
+  input.addEventListener('change', () => setAssetId(input.value.trim()));
+
+  const genBtn = document.createElement('button');
+  genBtn.type = 'button';
+  genBtn.className = 'editor-btn-inline';
+  genBtn.textContent = 'Generate';
+  genBtn.title = 'Fill in an auto-generated, unused asset id';
+  genBtn.addEventListener('click', () => {
+    const id = generateAssetId(state.assets);
+    input.value = id;
+    setAssetId(id);
+  });
+
+  row.appendChild(input);
+  row.appendChild(genBtn);
+  wrap.appendChild(row);
+
+  // Non-blocking — informational only, and never reverts the value; see
+  // runAssetIdCheck. Persisted in state (not a local closure) so it
+  // survives renderProperties() rebuilding this field from scratch.
+  const warning = document.createElement('p');
+  warning.className = 'editor-field-warning';
+  const current = state.assetIdWarning;
+  if (current && current.deviceIndex === index) {
+    warning.textContent = current.message;
+  } else {
+    warning.hidden = true;
+  }
+  wrap.appendChild(warning);
+
+  return wrap;
+}
+
 function renderProperties() {
   const has = !!state.selection;
   propertiesPanel.hidden = !has;
@@ -415,6 +556,7 @@ function renderProperties() {
       if (v) device.label = v; else delete device.label;
       markDirtyRerender();
     })));
+    propertiesFields.appendChild(assetIdField(device, index));
     return;
   }
 

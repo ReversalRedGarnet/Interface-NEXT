@@ -91,7 +91,8 @@
       "id": "PC1",
       "type": "pc",
       "top": 457,
-      "left": 360
+      "left": 360,
+      "assetId": "AST-SDVEWE"
     },
     {
       "id": "PC2",

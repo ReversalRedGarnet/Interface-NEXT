@@ -155,7 +155,96 @@ function orderedShape(shape) {
 function orderedDevice(device) {
   const out = { id: device.id, type: device.type, top: device.top, left: device.left };
   if (device.label) out.label = device.label;
+  if (device.assetId) out.assetId = device.assetId;
   return out;
+}
+
+/* ── data/assets.json — the assetId → {type, manufacturer, serial, notes}
+ * lookup. A device's own `assetId` (see orderedDevice above) just points
+ * into this file; room.js never reads it, same as any other field it
+ * doesn't recognize. ── */
+
+const ASSET_ID_ALPHABET = '0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+const ASSET_ID_SUFFIX_LENGTH = 6;
+
+/** AST-<6 random base-36 chars> (e.g. AST-4K9QXZ): short enough to type or
+ *  read aloud, and visually distinct from device ids (PC1, STAFF-PC, …) and
+ *  room ids so the three id spaces are never confused. `rand` is injectable
+ *  so tests can force a collision deterministically instead of relying on
+ *  36^6 odds. Retries until the id isn't already a key in assetsData. */
+export function generateAssetId(assetsData = {}, rand = Math.random) {
+  let id;
+  do {
+    let suffix = '';
+    for (let i = 0; i < ASSET_ID_SUFFIX_LENGTH; i++) {
+      suffix += ASSET_ID_ALPHABET[Math.floor(rand() * ASSET_ID_ALPHABET.length)];
+    }
+    id = `AST-${suffix}`;
+  } while (Object.prototype.hasOwnProperty.call(assetsData, id));
+  return id;
+}
+
+/** A freshly-registered asset's starting record — every field present
+ *  (blank) so opening data/assets.json shows the shape to fill in, rather
+ *  than an empty `{}` with no hint of what belongs there. */
+function blankAssetRecord() {
+  return { type: '', manufacturer: '', serial: '', notes: '' };
+}
+
+/** Ensures `assetId` exists as a key in assetsData, without ever
+ *  overwriting a record that's already there — a device pointing at an id
+ *  someone already filled in shouldn't reset it back to blank. Returns a
+ *  new object (assetsData is never mutated) plus whether it actually added
+ *  anything, so callers only need to write data/assets.json when it did. */
+export function registerAssetId(assetsData, assetId) {
+  if (!assetId || Object.prototype.hasOwnProperty.call(assetsData, assetId)) {
+    return { assets: assetsData, added: false };
+  }
+  return { assets: { ...assetsData, [assetId]: blankAssetRecord() }, added: true };
+}
+
+/** Tolerates a missing/malformed file (→ `{}`, same spirit as
+ *  normalizeRoomData) but otherwise passes each record through untouched —
+ *  extra fields someone hand-added to a record aren't the editor's to drop. */
+export function normalizeAssetsData(data) {
+  if (!data || typeof data !== 'object' || Array.isArray(data)) return {};
+  const out = {};
+  for (const [id, rec] of Object.entries(data)) {
+    out[id] = (rec && typeof rec === 'object' && !Array.isArray(rec)) ? { ...rec } : {};
+  }
+  return out;
+}
+
+export function serializeAssetsData(assetsData) {
+  return JSON.stringify(assetsData, null, 2) + '\n';
+}
+
+/**
+ * Looks for another device — anywhere in the project — already using
+ * `assetId`. This is the collision worth surfacing: device ids (PC1,
+ * STAFF-PC, …) repeat freely across rooms, but assetId is meant to be a
+ * project-wide identifier, so a match in a *different* room's file is the
+ * case most worth catching, not just a duplicate within the room currently
+ * open. Pure/non-blocking by design — it only reports what it finds; the
+ * caller decides whether to warn, and never has to block on it.
+ *
+ * `rooms` is `[{ roomId, devices }, …]`. The caller supplies the current
+ * room's *live* (possibly-unsaved) device list for its own entry rather
+ * than re-reading its file from disk — an in-progress edit should never be
+ * compared against its own stale on-disk copy — and on-disk devices for
+ * every other room. `exclude` is the device being edited, so it never
+ * reports a collision against its own current value.
+ */
+export function findAssetIdOwner(assetId, rooms, exclude) {
+  if (!assetId) return null;
+  for (const room of rooms) {
+    for (const device of room.devices) {
+      if (device.assetId !== assetId) continue;
+      if (room.roomId === exclude.roomId && device.id === exclude.deviceId) continue;
+      return { roomId: room.roomId, deviceId: device.id };
+    }
+  }
+  return null;
 }
 
 /** Serializes back to the exact schema shape/key-order data/*.json already

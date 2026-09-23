@@ -131,8 +131,9 @@
     {
       "id": "PC7",
       "type": "pc",
-      "top": 367,
-      "left": 274
+      "top": 390,
+      "left": 290,
+      "assetId": "AST-SDVEWE"
     },
     {
       "id": "PC8",

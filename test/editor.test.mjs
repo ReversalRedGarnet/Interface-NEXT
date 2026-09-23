@@ -34,6 +34,7 @@ global.document = dom.window.document;
 const {
   normalizeRoomData, serializeRoomData, createBlankRoomData, createShape, createDevice, nextDeviceId, snap,
   LAYOUT_SHAPE_TYPES, PLACEABLE_SHAPE_TYPES, ENTRANCE_WIDTH, shapeDisplayName,
+  generateAssetId, registerAssetId, normalizeAssetsData, serializeAssetsData, findAssetIdOwner,
 } = await import('../js/editor/schema.js');
 const {
   roomFileStem, dataUrlForId, generateRoomHtml,
@@ -510,6 +511,202 @@ await test('library.json\'s existing rect-style entrance still round-trips (back
   const saved = JSON.parse(serializeRoomData(data));
   const savedEntrance = saved.layout.find(s => s.type === 'entrance');
   assertEqual(JSON.stringify(savedEntrance), JSON.stringify(entrance), 'the legacy entrance shape changed shape on an untouched round-trip');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   5. Phase 2 — device.assetId + data/assets.json
+   ══════════════════════════════════════════════════════════════════ */
+
+await test('a device without an assetId still round-trips cleanly (no assetId key appears)', async () => {
+  const data = normalizeRoomData({
+    canvasWidth: 400, canvasHeight: 300, layout: [],
+    devices: [{ id: 'PC1', type: 'pc', top: 10, left: 20 }],
+  });
+  const saved = JSON.parse(serializeRoomData(data)).devices[0];
+  assert(!('assetId' in saved), 'a device with no assetId should not gain one on save');
+  assertEqual(Object.keys(saved).join(','), 'id,type,top,left', 'key order should be unaffected by the new optional field');
+});
+
+await test('setting an assetId persists correctly, in the documented key order', async () => {
+  const withAssetOnly = normalizeRoomData({
+    canvasWidth: 400, canvasHeight: 300, layout: [],
+    devices: [{ id: 'PC1', type: 'pc', top: 10, left: 20, assetId: 'AST-4K9QXZ' }],
+  });
+  const saved1 = JSON.parse(serializeRoomData(withAssetOnly)).devices[0];
+  assertEqual(saved1.assetId, 'AST-4K9QXZ', 'assetId value should persist through load/save');
+  assertEqual(Object.keys(saved1).join(','), 'id,type,top,left,assetId', 'assetId should be the last key when label is absent');
+
+  const withBoth = normalizeRoomData({
+    canvasWidth: 400, canvasHeight: 300, layout: [],
+    devices: [{ id: 'PC2', type: 'staff', top: 1, left: 2, label: 'Staff 1', assetId: 'AST-000001' }],
+  });
+  const saved2 = JSON.parse(serializeRoomData(withBoth)).devices[0];
+  assertEqual(Object.keys(saved2).join(','), 'id,type,top,left,label,assetId', 'assetId should come after label when both are present');
+});
+
+await test('clearing assetId (blank string) drops the key on save, like clearing a label does', async () => {
+  const data = normalizeRoomData({
+    canvasWidth: 400, canvasHeight: 300, layout: [],
+    devices: [{ id: 'PC1', type: 'pc', top: 10, left: 20, assetId: '' }],
+  });
+  const saved = JSON.parse(serializeRoomData(data)).devices[0];
+  assert(!('assetId' in saved), 'an explicitly blank assetId should not be written out');
+});
+
+await test('generateAssetId matches the documented AST-XXXXXX format', async () => {
+  const id = generateAssetId({});
+  assert(/^AST-[0-9A-Z]{6}$/.test(id), `unexpected id format: ${id}`);
+});
+
+await test('generateAssetId retries past a collision instead of returning a duplicate', async () => {
+  // Force the first 6-character draw to land on "000000" (rand() → 0 every
+  // time picks alphabet index 0), which is pre-seeded as already taken;
+  // the next 6 draws are 0 except the last, which is pushed to the top
+  // end of the alphabet, so the retry must land on a different id.
+  const seeded = { 'AST-000000': { type: '', manufacturer: '', serial: '', notes: '' } };
+  const values = [0, 0, 0, 0, 0, 0, /* retry → */ 0, 0, 0, 0, 0, 0.999999];
+  let i = 0;
+  const rand = () => values[i++];
+  const id = generateAssetId(seeded, rand);
+  assertEqual(id, 'AST-00000Z', 'should have retried past the seeded collision to the next candidate');
+});
+
+await test('registerAssetId adds a blank 4-field record for a brand-new id', async () => {
+  const { assets, added } = registerAssetId({}, 'AST-NEW001');
+  assert(added, 'should report that it added a new record');
+  assertEqual(
+    JSON.stringify(assets['AST-NEW001']),
+    JSON.stringify({ type: '', manufacturer: '', serial: '', notes: '' }),
+    'a new asset should start with all four fields blank',
+  );
+});
+
+await test('registerAssetId never overwrites an already-registered record', async () => {
+  const existing = { 'AST-1': { type: 'Laptop', manufacturer: 'Dell', serial: 'SN123', notes: 'spare' } };
+  const { assets, added } = registerAssetId(existing, 'AST-1');
+  assert(!added, 'should report nothing was added — the id already existed');
+  assertEqual(JSON.stringify(assets['AST-1']), JSON.stringify(existing['AST-1']), 'an already-registered asset\'s data must not be reset to blank');
+});
+
+await test('registerAssetId is a no-op for a blank/falsy id', async () => {
+  const { assets, added } = registerAssetId({ a: 1 }, '');
+  assert(!added, 'a blank id should never be registered');
+  assertEqual(Object.keys(assets).length, 1, 'assetsData should be unchanged');
+});
+
+await test('normalizeAssetsData tolerates a missing/malformed file, same as normalizeRoomData does', async () => {
+  assertEqual(JSON.stringify(normalizeAssetsData(undefined)), '{}', 'a missing file should normalize to an empty lookup');
+  assertEqual(JSON.stringify(normalizeAssetsData(null)), '{}', 'null should normalize to an empty lookup');
+  assertEqual(JSON.stringify(normalizeAssetsData([1, 2, 3])), '{}', 'an array should normalize to an empty lookup');
+  assertEqual(JSON.stringify(normalizeAssetsData('nope')), '{}', 'a string should normalize to an empty lookup');
+});
+
+await test('normalizeAssetsData preserves extra/unrecognized fields on a record', async () => {
+  const raw = { 'AST-1': { type: 'PC', manufacturer: 'Dell', serial: 'X', notes: '', location: 'Rack 3' } };
+  const normalized = normalizeAssetsData(raw);
+  assertEqual(normalized['AST-1'].location, 'Rack 3', 'a hand-added field should not be dropped, same as any other unrecognized field would ride along untouched');
+});
+
+await test('data/assets.json is created/updated correctly as new assetIds get registered (simulated editor Save flow)', async () => {
+  // Starting point: no data/assets.json on disk yet — loadAssetsRegistry()
+  // in editor.js falls back to normalizeAssetsData(undefined) in that case.
+  let assets = normalizeAssetsData(undefined);
+  assertEqual(JSON.stringify(assets), '{}', 'starting from no file should behave like starting from {}');
+
+  // First device: clicks "Generate", then Save.
+  const id1 = generateAssetId(assets);
+  let result = registerAssetId(assets, id1);
+  assert(result.added, 'a brand-new generated id should be registered');
+  assets = result.assets;
+
+  const afterFirstSave = JSON.parse(serializeAssetsData(assets));
+  assert(id1 in afterFirstSave, 'the first registered id should be present in the serialized file');
+  assertEqual(
+    JSON.stringify(afterFirstSave[id1]),
+    JSON.stringify({ type: '', manufacturer: '', serial: '', notes: '' }),
+    'a freshly-registered asset should start blank',
+  );
+
+  // Re-selecting the same device (or another device pointing at the same
+  // physical asset) must not re-add or reset it.
+  result = registerAssetId(assets, id1);
+  assert(!result.added, 're-registering the same id a second time should be a no-op');
+
+  // A second device gets its own new id.
+  const id2 = generateAssetId(assets);
+  assert(id2 !== id1, 'two Generate clicks against the same assets registry should never collide');
+  result = registerAssetId(assets, id2);
+  assert(result.added, 'a second, different generated id should also be registered');
+  assets = result.assets;
+
+  const afterSecondSave = JSON.parse(serializeAssetsData(assets));
+  assertEqual(
+    Object.keys(afterSecondSave).sort().join(','),
+    [id1, id2].sort().join(','),
+    'both registered ids should be present after a second save, with nothing dropped',
+  );
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   6. Duplicate-assetId warning (project-wide, non-blocking)
+   ══════════════════════════════════════════════════════════════════ */
+
+// findAssetIdOwner is the pure decision logic behind editor.js's warning —
+// it never touches disk itself (that's runAssetIdCheck/readOtherRoomsDevices
+// in editor.js, browser-only File System Access glue not covered here, same
+// boundary as every other FS-reading part of the editor). What's tested
+// here is exactly what decides whether the warning appears and what it says.
+
+await test('findAssetIdOwner reports nothing when the id is unused', async () => {
+  const rooms = [{ roomId: 's28-107', devices: [{ id: 'PC1', assetId: 'AST-AAAAAA' }] }];
+  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 's28-107', deviceId: 'PC2' });
+  assertEqual(owner, null, 'an id nobody else has should not be reported as a collision');
+});
+
+await test('findAssetIdOwner catches a duplicate within the same room', async () => {
+  const rooms = [{ roomId: 's28-107', devices: [
+    { id: 'PC1', assetId: 'AST-AAAAAA' },
+    { id: 'PC7', assetId: 'AST-ZZZZZZ' },
+  ] }];
+  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 's28-107', deviceId: 'PC1' });
+  assertEqual(JSON.stringify(owner), JSON.stringify({ roomId: 's28-107', deviceId: 'PC7' }), 'PC7 already has this id in the same room');
+});
+
+await test('findAssetIdOwner catches a duplicate in a DIFFERENT room — the case most worth catching', async () => {
+  const rooms = [
+    { roomId: 's28-107', devices: [{ id: 'PC1', assetId: null }] },
+    { roomId: 'gpl', devices: [{ id: 'PC7', assetId: 'AST-ZZZZZZ' }] },
+  ];
+  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 's28-107', deviceId: 'PC1' });
+  assertEqual(JSON.stringify(owner), JSON.stringify({ roomId: 'gpl', deviceId: 'PC7' }), 'a cross-room duplicate (same device-id numbering reused elsewhere) should still be found');
+});
+
+await test('findAssetIdOwner never reports a device against its own current value', async () => {
+  const rooms = [{ roomId: 's28-107', devices: [{ id: 'PC1', assetId: 'AST-ZZZZZZ' }] }];
+  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 's28-107', deviceId: 'PC1' });
+  assertEqual(owner, null, 'the device being edited should never collide with its own already-set value');
+});
+
+await test('findAssetIdOwner is a no-op for a blank id', async () => {
+  const rooms = [{ roomId: 's28-107', devices: [{ id: 'PC1', assetId: '' }] }];
+  const owner = findAssetIdOwner('', rooms, { roomId: 's28-107', deviceId: 'PC2' });
+  assertEqual(owner, null, 'a blank id has nothing to collide with');
+});
+
+await test('a duplicate assetId is never blocked at the persistence layer — both devices keep it on save', async () => {
+  // This is the "warn, don't block" contract: nothing in schema.js
+  // validates assetId against other devices, so a user proceeding past the
+  // warning always succeeds — there is no rejection path to bypass.
+  const data = normalizeRoomData({
+    canvasWidth: 400, canvasHeight: 300, layout: [],
+    devices: [
+      { id: 'PC1', type: 'pc', top: 10, left: 20, assetId: 'AST-SAME01' },
+      { id: 'PC7', type: 'pc', top: 30, left: 40, assetId: 'AST-SAME01' },
+    ],
+  });
+  const saved = JSON.parse(serializeRoomData(data)).devices;
+  assertEqual(saved[0].assetId, 'AST-SAME01', 'the first device should keep the id it was given');
+  assertEqual(saved[1].assetId, 'AST-SAME01', 'the second device should keep the duplicate id too — proceeding anyway must not be silently reverted');
 });
 
 /* ── Report ────────────────────────────────────────────────────────── */

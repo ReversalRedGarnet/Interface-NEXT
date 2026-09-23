@@ -35,7 +35,6 @@ export const ALL_ROOMS = [
   { id: 'S28-104', label: 'S28-104',  campus: 'King George Campus' },
   { id: 'GPL',     label: 'GPL',      campus: 'Lawson Tama Campus' },
   { id: 'MTL',     label: 'MTL',      campus: 'Lawson Tama Campus' },
-  { id: 'TEST-1', label: 'random', campus: 'King George Campus' },
 ];
 
 const DELIMITER = ',';

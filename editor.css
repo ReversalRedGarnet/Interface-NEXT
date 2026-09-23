@@ -139,6 +139,43 @@ body.editor-page {
   width: 80px;
 }
 
+.editor-assetid-row {
+  display: flex;
+  gap: 6px;
+}
+
+.editor-assetid-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+.editor-btn-inline {
+  flex: 0 0 auto;
+  font-family: var(--font-body);
+  font-size: 11px;
+  font-weight: 500;
+  background: var(--surface);
+  color: var(--text-mid);
+  border: 1.5px solid var(--border);
+  padding: 0 10px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  transition: var(--transition);
+}
+.editor-btn-inline:hover {
+  background: var(--usp-blue);
+  border-color: var(--usp-blue);
+  color: var(--bg);
+}
+
+/* Advisory, non-blocking — reuses the existing "minor issue" status color
+   rather than introducing a new accent; nothing here prevents saving. */
+.editor-field-warning {
+  font-size: 11px;
+  color: var(--minor-dark);
+  margin-top: 4px;
+}
+
 .editor-tool-group {
   margin-bottom: 10px;
 }

@@ -124,8 +124,26 @@ than silently failing.
    and it can't be skewed into a non-rectangle. Select an item to edit its
    exact fields (position, size, label, …) in the Properties panel, or
    delete it.
-4. **Save** writes `data/{id}.json` only — editing a room never touches
+4. **Save** writes `data/{id}.json` (and, if step 3 registered a new asset
+   id — see below — `data/assets.json` too). Editing a room never touches
    `rooms/*.html`, `index.html`, or `js/export.js`.
+
+**Asset ID** is an optional field on a selected device, for linking it to
+inventory/asset-tracking info kept outside the room's own layout data.
+Type one in by hand, or click **Generate** to fill in an unused id in the
+form `AST-` + 6 random letters/digits (e.g. `AST-4K9QXZ`) — short, easy to
+read aloud, and visually distinct from device ids (`PC1`, `STAFF-PC`, …) so
+the two are never confused. Leaving it blank is fine; `room.js` doesn't
+read this field at all, same as any other field it doesn't recognize.
+
+Every asset id, wherever it came from, is a key into `data/assets.json` —
+one lookup file shared across every room, mapping `assetId → {type,
+manufacturer, serial, notes}`. Setting an id the editor hasn't seen before
+adds a blank record for it there (`data/assets.json` is created on first
+use if it doesn't exist yet); setting an id that's already a key just
+links the device to that existing record without touching its data. The
+editor never edits `type`/`manufacturer`/`serial`/`notes` themselves — fill
+those in by hand (or with other tooling) once the id exists.
 
 **New Room** is different: a room only shows up on the menu and in CSV
 exports if four things agree (see "Known limitation" below and
