@@ -11,24 +11,25 @@
      color. Named --usp-* below for historical/low-risk reasons (every rule
      in this file already references these names) — there is no USP/brand
      styling left, only these two neutral shades. */
-  --usp-blue:          #171717;
-  --usp-blue-dark:     #000000;
-  --usp-blue-xdark:    #171717;
-  --usp-blue-tint:     #F5F5F5;
-  --usp-blue-mid:      #E5E5E5;
-  --usp-orange:        #171717;
-  --usp-orange-dark:   #000000;
-  --usp-orange-tint:   #F5F5F5;
+  --usp-blue:          #2A2A2A;
+  --usp-blue-dark:     #1A1A1A;
+  --usp-blue-xdark:    #2A2A2A;
+  --usp-blue-tint:     #F1EFEA;
+  --usp-blue-mid:      #E9E7E1;
+  --usp-orange:        #2A2A2A;
+  --usp-orange-dark:   #1A1A1A;
+  --usp-orange-tint:   #F1EFEA;
 
-  /* Neutrals */
-  --bg:                #FFFFFF;
-  --surface:           #FFFFFF;
-  --surface-2:         #F5F5F5;
-  --border:            #E5E5E5;
-  --border-light:      #EFEFEF;
-  --text:              #171717;
-  --text-mid:          #404040;
-  --text-muted:        #737373;
+  /* Neutrals — softened: off-white background instead of pure white, soft
+     near-black text instead of pure black, borders a step lighter. */
+  --bg:                #FAF9F6;
+  --surface:           #FAF9F6;
+  --surface-2:         #F1EFEA;
+  --border:            #E9E7E1;
+  --border-light:      #EFEDE8;
+  --text:              #2A2A2A;
+  --text-mid:          #4A4A4A;
+  --text-muted:        #7A7873;
 
   /* Status — do not change: these are the device working/minor/major/
      unknown colors and are exempt from the neutral palette above. */
@@ -227,7 +228,7 @@ h1 {
 .toolbar-btn:hover {
   background: var(--usp-blue);
   border-color: var(--usp-blue);
-  color: #fff;
+  color: var(--bg);
   box-shadow: none;
 }
 
@@ -634,7 +635,7 @@ h1 {
 .notes-input:focus {
   outline: none;
   border-color: var(--usp-blue);
-  background: #fff;
+  background: var(--bg);
 }
 
 .last-updated {
@@ -665,7 +666,7 @@ h1 {
   transition: var(--transition);
 }
 
-.btn-primary             { background: var(--usp-blue);   color: #fff; }
+.btn-primary             { background: var(--usp-blue);   color: var(--bg); }
 .btn-primary:hover       { background: var(--usp-blue-dark); }
 
 .btn-secondary           { background: var(--surface-2); color: var(--text-muted); border: 1.5px solid var(--border); }
@@ -694,7 +695,7 @@ h1 {
 .back-btn:hover {
   background: var(--usp-blue);
   border-color: var(--usp-blue);
-  color: #fff;
+  color: var(--bg);
 }
 
 /* ── MENU PAGE ── */
