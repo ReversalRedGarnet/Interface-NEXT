@@ -30,11 +30,11 @@ import { loadState, saveState } from './state.js';
 import { formatTimestamp, today } from './format.js';
 
 export const ALL_ROOMS = [
-  { id: 'LIBRARY', label: 'Library',  campus: 'King George Campus' },
-  { id: 'S28-107', label: 'S28-107',  campus: 'King George Campus' },
-  { id: 'S28-104', label: 'S28-104',  campus: 'King George Campus' },
-  { id: 'GPL',     label: 'GPL',      campus: 'Lawson Tama Campus' },
-  { id: 'MTL',     label: 'MTL',      campus: 'Lawson Tama Campus' },
+  { id: 'COMMONS', label: 'Commons',   campus: 'Northgate Site' },
+  { id: 'B2-210',  label: 'B2-210',    campus: 'Northgate Site' },
+  { id: 'B2-204',  label: 'B2-204',    campus: 'Northgate Site' },
+  { id: 'ANNEX',    label: 'Annex Lab', campus: 'Riverside Site' },
+  { id: 'WORKSHOP', label: 'Workshop',  campus: 'Riverside Site' },
 ];
 
 const DELIMITER = ',';

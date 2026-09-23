@@ -1,12 +1,12 @@
-/** menu.js — wiring for index.html: campus toggles, export-all, backup/restore. */
+/** menu.js — wiring for index.html: site toggles, export-all, backup/restore. */
 import { exportAllRooms, exportStateJSON, importStateJSON } from './export.js';
 
 export function initMenuPage() {
-  document.querySelectorAll('.campus-toggle').forEach(btn => {
+  document.querySelectorAll('.site-toggle').forEach(btn => {
     const target = document.getElementById(btn.dataset.target);
     if (!target) return;
 
-    // Room lists start expanded: an intern's whole reason for opening this
+    // Room lists start expanded: a checker's whole reason for opening this
     // page is to get into a room, and the collapsed default cost them a tap
     // on every visit. The toggle is still there for collapsing.
     const setOpen = open => {

@@ -11,12 +11,16 @@
 export const DEFAULT_CANVAS_WIDTH = 1200;
 export const DEFAULT_CANVAS_HEIGHT = 800;
 
-export const DEVICE_TYPES = ['pc', 'staff', 'printer'];
+/** `pc`/`staff`/`printer` are the only types room.js renders specially
+ *  (a printer gets its own icon/button, `staff` gets a wider chip) — the
+ *  rest are just example suggestions. `type` itself is free text (any
+ *  string round-trips fine); this list only feeds the editor's
+ *  autocomplete, it's never an enforced enum. */
+export const DEVICE_TYPES = ['pc', 'staff', 'printer', 'peripheral', 'furniture', 'network gear'];
 
 /** The one standard width every entrance/boundary-opening uses — no
- *  per-instance sizing. Matches the most common real hinge→jamb distance
- *  across data/*.json's existing doors (gpl 90, s28-107 90, mtl 99.7,
- *  s28-104 113 — 90 is both the mode and a clean number). */
+ *  per-instance sizing. A clean, plausible doorway width in the same
+ *  coordinate units the rest of a room's layout uses. */
 export const ENTRANCE_WIDTH = 90;
 
 /**
@@ -33,7 +37,7 @@ export const ENTRANCE_WIDTH = 90;
  * resize handles, no per-instance fields) and presents it everywhere in
  * its own UI as "entrance" — see SHAPE_DISPLAY_NAMES — so from the user's
  * side there is only one "entrance" concept, even though two JSON shapes
- * remain recognized so an existing rect-style entrance (data/library.json)
+ * remain recognized so an existing rect-style entrance (data/commons.json)
  * still loads, renders and edits correctly.
  */
 export const LAYOUT_SHAPES = {
@@ -91,10 +95,22 @@ export function deviceBoxSize(device) {
   return { width: 42, height: 42 };
 }
 
+/** Derives a short id prefix from an arbitrary type string — uppercased,
+ *  non-alphanumerics stripped, so "network gear" becomes "NETWORKGEAR"
+ *  rather than defaulting oddly to "PC" for anything that isn't one of the
+ *  three specially-rendered types. */
+function idPrefixForType(type) {
+  if (type === 'printer') return 'PRINTER';
+  if (type === 'staff') return 'STAFF';
+  if (type === 'pc') return 'PC';
+  const cleaned = String(type || '').toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 10);
+  return cleaned || 'ITEM';
+}
+
 /** Suggests the next free id for a newly-placed device — a starting point,
  *  not enforced; the properties panel lets it be renamed to anything. */
 export function nextDeviceId(devices, type) {
-  const prefix = type === 'printer' ? 'PRINTER' : type === 'staff' ? 'STAFF' : 'PC';
+  const prefix = idPrefixForType(type);
   const used = new Set(devices.map(d => d.id));
   if (type === 'printer' && !used.has(prefix)) return prefix;
   let n = 1;

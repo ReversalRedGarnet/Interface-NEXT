@@ -9,8 +9,8 @@ import path from 'node:path';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const ROOMS = [
-  ['LIBRARY', 'library'], ['S28-107', 's28-107'], ['S28-104', 's28-104'],
-  ['GPL', 'gpl'], ['MTL', 'mtl'],
+  ['COMMONS', 'commons'], ['B2-210', 'b2-210'], ['B2-204', 'b2-204'],
+  ['ANNEX', 'annex'], ['WORKSHOP', 'workshop'],
 ];
 const CHIP = { pc: 42, staff: 52, wide: 64, printer: 88 };
 let problems = 0;

@@ -1,4 +1,4 @@
-/* IT Room Monitor · style.css
+/* Gridkeep · style.css
    Soft white-and-black palette: white surfaces, near-black text, light-gray
    borders/dividers, no accent color anywhere except the four device status
    colors below (working/minor/major/unknown), which are untouched.
@@ -8,17 +8,15 @@
 :root {
   /* Emphasis — the only "color" left once brand accents are gone; used for
      primary buttons, focus rings, and anything that used to carry a brand
-     color. Named --usp-* below for historical/low-risk reasons (every rule
-     in this file already references these names) — there is no USP/brand
-     styling left, only these two neutral shades. */
-  --usp-blue:          #2A2A2A;
-  --usp-blue-dark:     #1A1A1A;
-  --usp-blue-xdark:    #2A2A2A;
-  --usp-blue-tint:     #F1EFEA;
-  --usp-blue-mid:      #E9E7E1;
-  --usp-orange:        #2A2A2A;
-  --usp-orange-dark:   #1A1A1A;
-  --usp-orange-tint:   #F1EFEA;
+     color. There is no brand styling left, only these two neutral shades. */
+  --primary-blue:          #2A2A2A;
+  --primary-blue-dark:     #1A1A1A;
+  --primary-blue-xdark:    #2A2A2A;
+  --primary-blue-tint:     #F1EFEA;
+  --primary-blue-mid:      #E9E7E1;
+  --primary-orange:        #2A2A2A;
+  --primary-orange-dark:   #1A1A1A;
+  --primary-orange-tint:   #F1EFEA;
 
   /* Neutrals — softened: off-white background instead of pure white, soft
      near-black text instead of pure black, borders a step lighter. */
@@ -126,6 +124,12 @@ body {
   text-transform: uppercase;
 }
 
+.site-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.site-footer a:hover { color: var(--text); text-decoration: underline; }
+
 /* ── APP SHELL ── */
 .app {
   max-width: 1280px;
@@ -162,7 +166,7 @@ h1 {
   font-family: var(--font-display);
   font-size: clamp(19px, 2.5vw, 24px);
   font-weight: 700;
-  color: var(--usp-blue-xdark);
+  color: var(--primary-blue-xdark);
   letter-spacing: -0.2px;
 }
 
@@ -177,7 +181,7 @@ h1 {
   font-family: var(--font-body);
   font-size: 10px;
   font-weight: 600;
-  color: var(--usp-orange);
+  color: var(--primary-orange);
   letter-spacing: 0.10em;
   text-transform: uppercase;
   margin-top: 1px;
@@ -226,8 +230,8 @@ h1 {
 }
 
 .toolbar-btn:hover {
-  background: var(--usp-blue);
-  border-color: var(--usp-blue);
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
   color: var(--bg);
   box-shadow: none;
 }
@@ -239,7 +243,7 @@ h1 {
   height: 800px;
   background: var(--surface);
   border: 1.5px solid var(--border);
-  border-top: 3px solid var(--usp-blue);
+  border-top: 3px solid var(--primary-blue);
   border-radius: var(--radius-lg);
   overflow: hidden;
   box-shadow: var(--shadow);
@@ -496,7 +500,7 @@ h1 {
 .popup {
   background: var(--surface);
   border: 1.5px solid var(--border-light);
-  border-top: 4px solid var(--usp-blue);
+  border-top: 4px solid var(--primary-blue);
   border-radius: var(--radius-lg);
   padding: 28px 28px 24px;
   width: 100%;
@@ -537,14 +541,14 @@ h1 {
   font-family: var(--font-display);
   font-size: 15px;
   font-weight: 700;
-  color: var(--usp-blue-xdark);
+  color: var(--primary-blue-xdark);
   margin-bottom: 2px;
 }
 
 .popup-id {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--usp-blue);
+  color: var(--primary-blue);
   font-weight: 500;
   letter-spacing: 0.08em;
   margin-bottom: 18px;
@@ -584,7 +588,7 @@ h1 {
 }
 
 .status-btn:hover {
-  border-color: var(--usp-blue);
+  border-color: var(--primary-blue);
   color: var(--text);
 }
 
@@ -634,7 +638,7 @@ h1 {
 
 .notes-input:focus {
   outline: none;
-  border-color: var(--usp-blue);
+  border-color: var(--primary-blue);
   background: var(--bg);
 }
 
@@ -666,8 +670,8 @@ h1 {
   transition: var(--transition);
 }
 
-.btn-primary             { background: var(--usp-blue);   color: var(--bg); }
-.btn-primary:hover       { background: var(--usp-blue-dark); }
+.btn-primary             { background: var(--primary-blue);   color: var(--bg); }
+.btn-primary:hover       { background: var(--primary-blue-dark); }
 
 .btn-secondary           { background: var(--surface-2); color: var(--text-muted); border: 1.5px solid var(--border); }
 .btn-secondary:hover     { color: var(--text); border-color: var(--text-muted); }
@@ -682,19 +686,19 @@ h1 {
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: 500;
-  color: var(--usp-blue-dark);
+  color: var(--primary-blue-dark);
   text-decoration: none;
   padding: 5px 12px;
-  border: 1.5px solid var(--usp-blue-mid);
+  border: 1.5px solid var(--primary-blue-mid);
   border-radius: var(--radius);
-  background: var(--usp-blue-tint);
+  background: var(--primary-blue-tint);
   transition: var(--transition);
   white-space: nowrap;
 }
 
 .back-btn:hover {
-  background: var(--usp-blue);
-  border-color: var(--usp-blue);
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
   color: var(--bg);
 }
 
@@ -727,7 +731,7 @@ body.menu-page {
   font-family: var(--font-display);
   font-size: clamp(22px, 4vw, 30px);
   font-weight: 700;
-  color: var(--usp-blue-xdark);
+  color: var(--primary-blue-xdark);
   margin-bottom: 6px;
 }
 
@@ -739,7 +743,7 @@ body.menu-page {
 /* campus card grid — align-items:start stops the grid stretching every
    card in a row to match the tallest one, so an unopened card no longer
    visually "grows" when its sibling's room-list expands */
-.campus-grid {
+.site-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
   align-items: start;
@@ -747,7 +751,7 @@ body.menu-page {
   margin-bottom: 36px;
 }
 
-.campus-card {
+.site-card {
   background: var(--surface);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-lg);
@@ -756,12 +760,12 @@ body.menu-page {
   transition: border-color var(--transition), box-shadow var(--transition);
 }
 
-.campus-card:hover {
-  border-color: var(--usp-blue);
+.site-card:hover {
+  border-color: var(--primary-blue);
   box-shadow: 0 6px 22px rgba(0,0,0,.12);
 }
 
-.campus-card-header {
+.site-card-header {
   display: flex;
   align-items: center;
   margin-bottom: 18px;
@@ -769,11 +773,11 @@ body.menu-page {
   border-bottom: 1px solid var(--border-light);
 }
 
-.campus-name {
+.site-name {
   font-family: var(--font-display);
   font-size: 16px;
   font-weight: 700;
-  color: var(--usp-blue-xdark);
+  color: var(--primary-blue-xdark);
 }
 
 .room-list {
@@ -800,17 +804,17 @@ body.menu-page {
 }
 
 .room-link:hover {
-  border-color: var(--usp-blue);
-  background: var(--usp-blue-tint);
-  color: var(--usp-blue-dark);
+  border-color: var(--primary-blue);
+  background: var(--primary-blue-tint);
+  color: var(--primary-blue-dark);
 }
 
 .room-link-icon {
   font-size: 14px;
-  color: var(--usp-blue);
+  color: var(--primary-blue);
 }
 
-.campus-toggle {
+.site-toggle {
   font-family: var(--font-body);
   font-size: 12px;
   font-weight: 500;
@@ -824,10 +828,10 @@ body.menu-page {
   transition: var(--transition);
 }
 
-.campus-toggle:hover {
-  border-color: var(--usp-blue);
-  color: var(--usp-blue-dark);
-  background: var(--usp-blue-tint);
+.site-toggle:hover {
+  border-color: var(--primary-blue);
+  color: var(--primary-blue-dark);
+  background: var(--primary-blue-tint);
 }
 
 /* global export button row */
@@ -838,7 +842,7 @@ body.menu-page {
 }
 
 /* ═══════════════════════════════════════════════════════════════════
-   INTERN SWEEP UI — added July 2026
+   CHECKER SWEEP UI — added July 2026
    Everything below supports the room page's device sweep: keyboard
    focus, quick-mark, progress, note flags, and fitting a 1200px floor
    plan onto a phone. Appended (rather than edited in above) so the
@@ -871,14 +875,14 @@ body.menu-page {
 .toolbar-btn:focus-visible,
 .quick-btn:focus-visible,
 .status-btn:focus-visible,
-.campus-toggle:focus-visible,
+.site-toggle:focus-visible,
 .room-link:focus-visible,
 .back-btn:focus-visible,
 .btn-primary:focus-visible,
 .btn-secondary:focus-visible,
 .btn-danger:focus-visible,
 .popup-close:focus-visible {
-  outline: 3px solid var(--usp-orange);
+  outline: 3px solid var(--primary-orange);
   outline-offset: 2px;
   z-index: 20;
 }
@@ -902,13 +906,13 @@ body.menu-page {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: var(--usp-orange);
+  background: var(--primary-orange);
   border: 1.5px solid #fff;
   box-shadow: 0 1px 2px rgba(0,0,0,.25);
   z-index: 2;
 }
 
-.dot.has-notes { background: var(--usp-orange); }
+.dot.has-notes { background: var(--primary-orange); }
 
 /* ── Unchecked pill + sweep progress bar ── */
 .summary-pill.unchecked {
@@ -931,7 +935,7 @@ body.menu-page {
   display: block;
   height: 100%;
   border-radius: 999px;
-  background: var(--usp-blue);
+  background: var(--primary-blue);
   transition: width .25s ease;
 }
 
@@ -974,7 +978,7 @@ body.menu-page {
   transition: var(--transition);
 }
 
-.quick-btn:hover { border-color: var(--usp-blue); color: var(--text); }
+.quick-btn:hover { border-color: var(--primary-blue); color: var(--text); }
 
 .quick-btn[aria-pressed="true"][data-status="working"] { background: var(--working-bg); border-color: var(--working); color: var(--working-dark); font-weight: 600; }
 .quick-btn[aria-pressed="true"][data-status="minor"]   { background: var(--minor-bg);   border-color: var(--minor);   color: var(--minor-dark);   font-weight: 600; }
@@ -997,7 +1001,7 @@ body.menu-page {
 .room.quick-mode .pc,
 .room.quick-mode .printer { cursor: crosshair; }
 .room.quick-mode {
-  outline: 2px dashed var(--usp-orange);
+  outline: 2px dashed var(--primary-orange);
   outline-offset: 3px;
 }
 

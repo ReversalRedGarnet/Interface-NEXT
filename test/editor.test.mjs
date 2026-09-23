@@ -38,7 +38,7 @@ const {
 } = await import('../js/editor/schema.js');
 const {
   roomFileStem, dataUrlForId, generateRoomHtml,
-  extractIndexRoomStems, extractIndexCampuses, patchIndexHtml,
+  extractIndexRoomStems, extractIndexSites, patchIndexHtml,
   extractAllRoomsIds, patchExportJs, validateNewRoomId,
 } = await import('../js/editor/room-scaffold.js');
 const { render, clientToSvgPoint } = await import('../js/editor/canvas-renderer.js');
@@ -51,9 +51,10 @@ function readJson(rel) {
   return JSON.parse(readFile(rel));
 }
 const crlfToLf = s => s.replace(/\r\n/g, '\n');
-// data/mtl.json happens to lack the trailing newline every other data/*.json
-// file has — a pre-existing quirk, not a schema requirement — so tolerate a
-// missing/extra trailing newline when comparing round-tripped JSON.
+// js/build-grid.js's writeFileSync doesn't append a trailing newline, so any
+// of the 4 grid-based rooms loses theirs the next time it's regenerated —
+// not a schema requirement, so tolerate a missing/extra trailing newline
+// when comparing round-tripped JSON.
 const normalizeTrailingNewline = s => crlfToLf(s).replace(/\n*$/, '\n');
 // Whitespace-only tooling can't reliably preserve trailing spaces on blank
 // lines (invisible, no functional effect); ignore them when comparing the
@@ -71,7 +72,7 @@ function assertEqual(actual, expected, msg) {
   }
 }
 
-const REAL_ROOMS = ['library', 'gpl', 'mtl', 's28-104', 's28-107'];
+const REAL_ROOMS = ['commons', 'annex', 'workshop', 'b2-204', 'b2-210'];
 
 /* ══════════════════════════════════════════════════════════════════
    1. Editing an existing room round-trips correctly
@@ -87,7 +88,7 @@ for (const room of REAL_ROOMS) {
 }
 
 await test('moving a device only changes that device\'s top/left', async () => {
-  const original = readJson('data/s28-107.json');
+  const original = readJson('data/b2-210.json');
   const data = normalizeRoomData(original);
   const before = JSON.stringify(data.devices.find(d => d.id !== 'PC1'));
 
@@ -106,7 +107,7 @@ await test('moving a device only changes that device\'s top/left', async () => {
 });
 
 await test('adding a device assigns a free id and keeps id/type/top/left key order', async () => {
-  const data = normalizeRoomData(readJson('data/s28-107.json'));
+  const data = normalizeRoomData(readJson('data/b2-210.json'));
   const id = nextDeviceId(data.devices, 'pc');
   assertEqual(id, 'PC25', 'expected the next free PC id after PC1..PC24');
 
@@ -120,7 +121,7 @@ await test('adding a device assigns a free id and keeps id/type/top/left key ord
 });
 
 await test('a device label is only written when set, and dropped when cleared', async () => {
-  const data = normalizeRoomData(readJson('data/mtl.json'));
+  const data = normalizeRoomData(readJson('data/workshop.json'));
   const staff = data.devices.find(d => d.id === 'STAFF-PC');
   assert(staff.label === 'Staff', 'fixture assumption changed — STAFF-PC should have a label');
 
@@ -134,7 +135,7 @@ await test('a device label is only written when set, and dropped when cleared', 
 });
 
 await test('deleting a shape removes exactly that entry and nothing else', async () => {
-  const data = normalizeRoomData(readJson('data/gpl.json'));
+  const data = normalizeRoomData(readJson('data/annex.json'));
   const before = data.layout.length;
   const doorIndex = data.layout.findIndex(s => s.type === 'door');
   data.layout.splice(doorIndex, 1);
@@ -174,11 +175,11 @@ await test('snap() rounds to the nearest grid multiple, and passes through when 
    ══════════════════════════════════════════════════════════════════ */
 
 await test('generateRoomHtml matches the real page shell byte-for-byte (modulo id/label/campus/dataUrl)', async () => {
-  const real = readFile('rooms/s28-107.html');
+  const real = readFile('rooms/b2-210.html');
   const generated = generateRoomHtml({
-    id: 'S28-107', label: 'S28-107', campus: 'King George Campus', dataUrl: '../data/s28-107.json',
+    id: 'B2-210', label: 'B2-210', campus: 'Northgate Site', dataUrl: '../data/b2-210.json',
   });
-  assertEqual(normalizeTrailingWs(generated), normalizeTrailingWs(real), 'generated HTML shell does not match the real rooms/s28-107.html');
+  assertEqual(normalizeTrailingWs(generated), normalizeTrailingWs(real), 'generated HTML shell does not match the real rooms/b2-210.html');
 });
 
 await test('dataUrlForId / roomFileStem follow the existing lowercase-id convention', async () => {
@@ -186,45 +187,45 @@ await test('dataUrlForId / roomFileStem follow the existing lowercase-id convent
   assertEqual(dataUrlForId('S28-110'), '../data/s28-110.json', 'dataUrl should point at the lowercased data file');
 });
 
-await test('patchIndexHtml inserts a room-link into an existing campus without touching the rest of the file', async () => {
+await test('patchIndexHtml inserts a room-link into an existing site without touching the rest of the file', async () => {
   const original = readFile('index.html');
-  const patched = patchIndexHtml(original, { id: 'S28-999', label: 'S28-999', campus: 'King George Campus' });
+  const patched = patchIndexHtml(original, { id: 'B2-999', label: 'B2-999', campus: 'Northgate Site' });
 
-  assert(patched.includes('href="rooms/s28-999.html"'), 'new room-link not inserted');
-  assert(patched.indexOf('id="rooms-kg"') < patched.indexOf('href="rooms/s28-999.html"'), 'new link landed outside the King George campus list');
+  assert(patched.includes('href="rooms/b2-999.html"'), 'new room-link not inserted');
+  assert(patched.indexOf('id="rooms-northgate"') < patched.indexOf('href="rooms/b2-999.html"'), 'new link landed outside the Northgate site list');
 
   // Every existing room link must still be present, in the same relative
-  // order — the new one is inserted mid-list (end of King George's campus,
-  // ahead of Lawson Tama's rooms), so compare with it filtered back out.
+  // order — the new one is inserted mid-list (end of Northgate's site,
+  // ahead of Riverside's rooms), so compare with it filtered back out.
   const before = extractIndexRoomStems(original);
   const after = extractIndexRoomStems(patched);
   assertEqual(after.length, before.length + 1, 'expected exactly one new room-link');
-  const afterWithoutNew = after.filter(stem => stem !== 's28-999');
+  const afterWithoutNew = after.filter(stem => stem !== 'b2-999');
   assertEqual(afterWithoutNew.join(','), before.join(','), 'existing room-link order was disturbed');
 });
 
-await test('patchIndexHtml creates a new campus card when the campus does not exist yet', async () => {
+await test('patchIndexHtml creates a new site card when the site does not exist yet', async () => {
   const original = readFile('index.html');
-  const patched = patchIndexHtml(original, { id: 'NEW1', label: 'New Room', campus: 'Northern Campus' });
+  const patched = patchIndexHtml(original, { id: 'NEW1', label: 'New Room', campus: 'Northern Site' });
 
-  assert(patched.includes('<h2 class="campus-name">Northern Campus</h2>'), 'new campus heading not added');
-  assert(patched.includes('href="rooms/new1.html"'), 'new room-link not added under the new campus');
+  assert(patched.includes('<h2 class="site-name">Northern Site</h2>'), 'new site heading not added');
+  assert(patched.includes('href="rooms/new1.html"'), 'new room-link not added under the new site');
 
-  const campuses = extractIndexCampuses(patched);
-  assertEqual(campuses.length, extractIndexCampuses(original).length + 1, 'expected exactly one new campus');
-  assert(campuses.includes('Northern Campus'), 'Northern Campus missing from extracted campus list');
+  const sites = extractIndexSites(patched);
+  assertEqual(sites.length, extractIndexSites(original).length + 1, 'expected exactly one new site');
+  assert(sites.includes('Northern Site'), 'Northern Site missing from extracted site list');
 });
 
 await test('patchExportJs appends to ALL_ROOMS and leaves existing entries untouched', async () => {
   const original = readFile('js/export.js');
   const before = extractAllRoomsIds(original);
-  const patched = patchExportJs(original, { id: 'S28-999', label: 'S28-999', campus: 'King George Campus' });
+  const patched = patchExportJs(original, { id: 'B2-999', label: 'B2-999', campus: 'Northgate Site' });
   const after = extractAllRoomsIds(patched);
 
   assertEqual(after.length, before.length + 1, 'expected exactly one new ALL_ROOMS entry');
   assert(before.every((id, i) => after[i] === id), 'existing ALL_ROOMS entries were reordered or altered');
-  assertEqual(after[after.length - 1], 'S28-999', 'new id not appended to ALL_ROOMS');
-  assert(patched.includes("campus: 'King George Campus'"), 'new entry missing its campus field');
+  assertEqual(after[after.length - 1], 'B2-999', 'new id not appended to ALL_ROOMS');
+  assert(patched.includes("campus: 'Northgate Site'"), 'new entry missing its campus field');
 });
 
 await test('validateNewRoomId rejects an id already used anywhere, and accepts a genuinely free one', async () => {
@@ -235,10 +236,10 @@ await test('validateNewRoomId rejects an id already used anywhere, and accepts a
     exportIds: extractAllRoomsIds(readFile('js/export.js')),
   };
 
-  assert(validateNewRoomId('GPL', registry).length > 0, 'exact-case collision with an existing room was not caught');
-  assert(validateNewRoomId('gpl', registry).length > 0, 'case-insensitive collision (Windows filenames) was not caught');
-  assert(validateNewRoomId('S28-107', registry).length > 0, 'collision with an existing hyphenated id was not caught');
-  assertEqual(validateNewRoomId('S28-999', registry).length, 0, 'a genuinely free id was rejected');
+  assert(validateNewRoomId('ANNEX', registry).length > 0, 'exact-case collision with an existing room was not caught');
+  assert(validateNewRoomId('annex', registry).length > 0, 'case-insensitive collision (Windows filenames) was not caught');
+  assert(validateNewRoomId('B2-210', registry).length > 0, 'collision with an existing hyphenated id was not caught');
+  assertEqual(validateNewRoomId('B2-999', registry).length, 0, 'a genuinely free id was rejected');
   assertEqual(validateNewRoomId('', registry).length, 1, 'an empty id should produce exactly one problem');
   assert(validateNewRoomId('Room 5', registry).length > 0, 'an id with a space should be rejected (unsafe as filename/URL)');
   assert(validateNewRoomId('room/5', registry).length > 0, 'an id with a slash should be rejected');
@@ -254,7 +255,7 @@ await test('end-to-end: creating a new room produces four internally-consistent,
     exportIds: extractAllRoomsIds(exportJs),
   };
 
-  const room = { id: 'S28-110', label: 'S28-110', campus: 'King George Campus' };
+  const room = { id: 'B2-220', label: 'B2-220', campus: 'Northgate Site' };
   assertEqual(validateNewRoomId(room.id, registry).length, 0, 'fixture id unexpectedly collided');
 
   const dataText = serializeRoomData(createBlankRoomData(1200, 800));
@@ -268,17 +269,17 @@ await test('end-to-end: creating a new room produces four internally-consistent,
   assertEqual(parsedData.layout.length, 0, 'a brand-new room should start with no layout shapes');
 
   // 2. rooms/{id}.html — ROOM_META agrees with the data file path and the room's own id/label/campus.
-  assert(roomHtml.includes(`id:      'S28-110'`), 'ROOM_META.id mismatch');
-  assert(roomHtml.includes(`dataUrl: '../data/s28-110.json'`), 'ROOM_META.dataUrl does not point at the generated data file');
-  assert(roomHtml.includes(`campus:  'King George Campus'`), 'ROOM_META.campus mismatch');
+  assert(roomHtml.includes(`id:      'B2-220'`), 'ROOM_META.id mismatch');
+  assert(roomHtml.includes(`dataUrl: '../data/b2-220.json'`), 'ROOM_META.dataUrl does not point at the generated data file');
+  assert(roomHtml.includes(`campus:  'Northgate Site'`), 'ROOM_META.campus mismatch');
 
   // 3. index.html — links to the same file the HTML shell was generated for.
   assert(newIndexHtml.includes(`href="rooms/${roomFileStem(room.id)}.html"`), 'index.html link does not match the generated room HTML filename');
 
   // 4. js/export.js — ALL_ROOMS entry matches the same id/label/campus.
   const allRoomsAfter = extractAllRoomsIds(newExportJs);
-  assert(allRoomsAfter.includes('S28-110'), 'ALL_ROOMS missing the new id');
-  assert(newExportJs.includes("label: 'S28-110', campus: 'King George Campus'"), 'ALL_ROOMS entry fields do not match the room being created');
+  assert(allRoomsAfter.includes('B2-220'), 'ALL_ROOMS missing the new id');
+  assert(newExportJs.includes("label: 'B2-220', campus: 'Northgate Site'"), 'ALL_ROOMS entry fields do not match the room being created');
 });
 
 /* ══════════════════════════════════════════════════════════════════
@@ -343,10 +344,10 @@ await test('dragging a 4-point rectangular outline corner keeps it a rectangle (
   assert(isAxisAlignedRect4(shape.points), 'outline no longer forms a rectangle after the corner drag');
 });
 
-await test('isAxisAlignedRect4 does not misclassify a real non-rectangular outline (library\'s L-shape)', async () => {
-  const libraryOutline = readJson('data/library.json').layout.find(s => s.type === 'outline');
-  assertEqual(libraryOutline.points.length, 6, 'fixture assumption changed — expected the 6-point L-shaped outline');
-  assertEqual(isAxisAlignedRect4(libraryOutline.points), false, 'a 6-point L-shaped outline was misidentified as a lockable rectangle');
+await test('isAxisAlignedRect4 does not misclassify a real non-rectangular outline (commons\' L-shape)', async () => {
+  const commonsOutline = readJson('data/commons.json').layout.find(s => s.type === 'outline');
+  assertEqual(commonsOutline.points.length, 6, 'fixture assumption changed — expected the 6-point L-shaped outline');
+  assertEqual(isAxisAlignedRect4(commonsOutline.points), false, 'a 6-point L-shaped outline was misidentified as a lockable rectangle');
 });
 
 /** Dispatches a synthetic pointer event of the given type (jsdom has no
@@ -488,11 +489,11 @@ await test('door merges into entrance: fixed at ENTRANCE_WIDTH, displayed as "en
   assertEqual(Math.hypot(dx, dy), ENTRANCE_WIDTH, 'a newly-placed entrance should be exactly ENTRANCE_WIDTH wide');
 
   // Only one creatable "entrance" now — the legacy rect-style `entrance`
-  // (data/library.json's) is still recognized (loads/renders/saves fine)
+  // (data/commons.json's) is still recognized (loads/renders/saves fine)
   // but isn't offered for new placement any more.
   assert(PLACEABLE_SHAPE_TYPES.includes('door'), 'the fixed-width entrance (JSON type "door") should still be placeable');
   assert(!PLACEABLE_SHAPE_TYPES.includes('entrance'), 'the legacy resizable-rect entrance should no longer be placeable');
-  assert(LAYOUT_SHAPE_TYPES.includes('entrance'), 'the legacy rect-style entrance should still be a recognized schema type (data/library.json has one)');
+  assert(LAYOUT_SHAPE_TYPES.includes('entrance'), 'the legacy rect-style entrance should still be a recognized schema type (data/commons.json has one)');
 });
 
 await test('a placed entrance has no per-point resize handles — whole-shape move only', async () => {
@@ -504,10 +505,10 @@ await test('a placed entrance has no per-point resize handles — whole-shape mo
   assert(!svg.querySelector('[data-kind="shape-point"]'), 'an entrance should not expose any per-point (resize) handles');
 });
 
-await test('library.json\'s existing rect-style entrance still round-trips (backward compatibility)', async () => {
-  const data = normalizeRoomData(readJson('data/library.json'));
+await test('commons.json\'s existing rect-style entrance still round-trips (backward compatibility)', async () => {
+  const data = normalizeRoomData(readJson('data/commons.json'));
   const entrance = data.layout.find(s => s.type === 'entrance');
-  assert(entrance, 'fixture assumption changed — library.json should still have a rect-style entrance');
+  assert(entrance, 'fixture assumption changed — commons.json should still have a rect-style entrance');
   const saved = JSON.parse(serializeRoomData(data));
   const savedEntrance = saved.layout.find(s => s.type === 'entrance');
   assertEqual(JSON.stringify(savedEntrance), JSON.stringify(entrance), 'the legacy entrance shape changed shape on an untouched round-trip');
@@ -658,38 +659,38 @@ await test('data/assets.json is created/updated correctly as new assetIds get re
 // here is exactly what decides whether the warning appears and what it says.
 
 await test('findAssetIdOwner reports nothing when the id is unused', async () => {
-  const rooms = [{ roomId: 's28-107', devices: [{ id: 'PC1', assetId: 'AST-AAAAAA' }] }];
-  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 's28-107', deviceId: 'PC2' });
+  const rooms = [{ roomId: 'b2-210', devices: [{ id: 'PC1', assetId: 'AST-AAAAAA' }] }];
+  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 'b2-210', deviceId: 'PC2' });
   assertEqual(owner, null, 'an id nobody else has should not be reported as a collision');
 });
 
 await test('findAssetIdOwner catches a duplicate within the same room', async () => {
-  const rooms = [{ roomId: 's28-107', devices: [
+  const rooms = [{ roomId: 'b2-210', devices: [
     { id: 'PC1', assetId: 'AST-AAAAAA' },
     { id: 'PC7', assetId: 'AST-ZZZZZZ' },
   ] }];
-  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 's28-107', deviceId: 'PC1' });
-  assertEqual(JSON.stringify(owner), JSON.stringify({ roomId: 's28-107', deviceId: 'PC7' }), 'PC7 already has this id in the same room');
+  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 'b2-210', deviceId: 'PC1' });
+  assertEqual(JSON.stringify(owner), JSON.stringify({ roomId: 'b2-210', deviceId: 'PC7' }), 'PC7 already has this id in the same room');
 });
 
 await test('findAssetIdOwner catches a duplicate in a DIFFERENT room — the case most worth catching', async () => {
   const rooms = [
-    { roomId: 's28-107', devices: [{ id: 'PC1', assetId: null }] },
-    { roomId: 'gpl', devices: [{ id: 'PC7', assetId: 'AST-ZZZZZZ' }] },
+    { roomId: 'b2-210', devices: [{ id: 'PC1', assetId: null }] },
+    { roomId: 'annex', devices: [{ id: 'PC7', assetId: 'AST-ZZZZZZ' }] },
   ];
-  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 's28-107', deviceId: 'PC1' });
-  assertEqual(JSON.stringify(owner), JSON.stringify({ roomId: 'gpl', deviceId: 'PC7' }), 'a cross-room duplicate (same device-id numbering reused elsewhere) should still be found');
+  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 'b2-210', deviceId: 'PC1' });
+  assertEqual(JSON.stringify(owner), JSON.stringify({ roomId: 'annex', deviceId: 'PC7' }), 'a cross-room duplicate (same device-id numbering reused elsewhere) should still be found');
 });
 
 await test('findAssetIdOwner never reports a device against its own current value', async () => {
-  const rooms = [{ roomId: 's28-107', devices: [{ id: 'PC1', assetId: 'AST-ZZZZZZ' }] }];
-  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 's28-107', deviceId: 'PC1' });
+  const rooms = [{ roomId: 'b2-210', devices: [{ id: 'PC1', assetId: 'AST-ZZZZZZ' }] }];
+  const owner = findAssetIdOwner('AST-ZZZZZZ', rooms, { roomId: 'b2-210', deviceId: 'PC1' });
   assertEqual(owner, null, 'the device being edited should never collide with its own already-set value');
 });
 
 await test('findAssetIdOwner is a no-op for a blank id', async () => {
-  const rooms = [{ roomId: 's28-107', devices: [{ id: 'PC1', assetId: '' }] }];
-  const owner = findAssetIdOwner('', rooms, { roomId: 's28-107', deviceId: 'PC2' });
+  const rooms = [{ roomId: 'b2-210', devices: [{ id: 'PC1', assetId: '' }] }];
+  const owner = findAssetIdOwner('', rooms, { roomId: 'b2-210', deviceId: 'PC2' });
   assertEqual(owner, null, 'a blank id has nothing to collide with');
 });
 

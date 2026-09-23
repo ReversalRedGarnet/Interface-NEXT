@@ -3,59 +3,59 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>IT Room Monitor</title>
+  <title>Gridkeep</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body class="menu-page">
 
   <div class="site-header">
     <div class="site-header-inner">
-      <span class="site-tool">IT Room Monitor</span>
+      <span class="site-tool">Gridkeep</span>
     </div>
   </div>
 
   <div class="menu-app">
 
     <header class="menu-header">
-      <h1>IT Room Monitor</h1>
+      <h1>Gridkeep</h1>
       <p class="subtitle">Pick a room to check its devices. Statuses save as you go.</p>
     </header>
 
-    <div class="campus-grid">
+    <div class="site-grid">
 
-      <!-- King George Campus -->
-      <div class="campus-card">
-        <div class="campus-card-header">
-          <h2 class="campus-name">King George Campus</h2>
+      <!-- Northgate Site -->
+      <div class="site-card">
+        <div class="site-card-header">
+          <h2 class="site-name">Northgate Site</h2>
         </div>
-        <div class="room-list" id="rooms-kg">
-          <a class="room-link" href="rooms/library.html">
-            <span class="room-link-icon" aria-hidden="true">💻</span>Library
+        <div class="room-list" id="rooms-northgate">
+          <a class="room-link" href="rooms/commons.html">
+            <span class="room-link-icon" aria-hidden="true">💻</span>Commons
           </a>
-          <a class="room-link" href="rooms/s28-107.html">
-            <span class="room-link-icon" aria-hidden="true">💻</span>S28-107
+          <a class="room-link" href="rooms/b2-210.html">
+            <span class="room-link-icon" aria-hidden="true">💻</span>B2-210
           </a>
-          <a class="room-link" href="rooms/s28-104.html">
-            <span class="room-link-icon" aria-hidden="true">💻</span>S28-104
+          <a class="room-link" href="rooms/b2-204.html">
+            <span class="room-link-icon" aria-hidden="true">💻</span>B2-204
           </a>
         </div>
-        <button class="campus-toggle" data-target="rooms-kg" aria-controls="rooms-kg" aria-expanded="true">Hide Rooms ▴</button>
+        <button class="site-toggle" data-target="rooms-northgate" aria-controls="rooms-northgate" aria-expanded="true">Hide Rooms ▴</button>
       </div>
 
-      <!-- Lawson Tama Campus -->
-      <div class="campus-card">
-        <div class="campus-card-header">
-          <h2 class="campus-name">Lawson Tama Campus</h2>
+      <!-- Riverside Site -->
+      <div class="site-card">
+        <div class="site-card-header">
+          <h2 class="site-name">Riverside Site</h2>
         </div>
-        <div class="room-list" id="rooms-lt">
-          <a class="room-link" href="rooms/gpl.html">
-            <span class="room-link-icon" aria-hidden="true">💻</span>GPL
+        <div class="room-list" id="rooms-riverside">
+          <a class="room-link" href="rooms/annex.html">
+            <span class="room-link-icon" aria-hidden="true">💻</span>Annex Lab
           </a>
-          <a class="room-link" href="rooms/mtl.html">
-            <span class="room-link-icon" aria-hidden="true">💻</span>MTL
+          <a class="room-link" href="rooms/workshop.html">
+            <span class="room-link-icon" aria-hidden="true">💻</span>Workshop
           </a>
         </div>
-        <button class="campus-toggle" data-target="rooms-lt" aria-controls="rooms-lt" aria-expanded="true">Hide Rooms ▴</button>
+        <button class="site-toggle" data-target="rooms-riverside" aria-controls="rooms-riverside" aria-expanded="true">Hide Rooms ▴</button>
       </div>
 
     </div>
@@ -72,7 +72,7 @@
   <script type="module" src="js/main.js"></script>
 
     <footer class="site-footer">
-    <p>A side project by ReversalRedGarnet (s11225524) · © July-2026</p>
+    <p><a href="https://github.com/ReversalRedGarnet">ReversalRedGarnet</a></p>
   </footer>
 
 </body>

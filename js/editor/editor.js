@@ -15,7 +15,7 @@ import { render } from './canvas-renderer.js';
 import { createToolController } from './tools.js';
 import {
   roomFileStem, dataUrlForId, generateRoomHtml,
-  extractIndexRoomStems, extractIndexCampuses, patchIndexHtml,
+  extractIndexRoomStems, extractIndexSites, patchIndexHtml,
   extractAllRoomsIds, patchExportJs,
   validateNewRoomId,
 } from './room-scaffold.js';
@@ -47,8 +47,8 @@ const newRoomOverlay = $('new-room-overlay');
 const newRoomErrors = $('new-room-errors');
 const nrId = $('nr-id');
 const nrLabel = $('nr-label');
-const nrCampus = $('nr-campus');
-const nrCampusList = $('nr-campus-list');
+const nrSite = $('nr-site');
+const nrSiteList = $('nr-site-list');
 const nrWidth = $('nr-width');
 const nrHeight = $('nr-height');
 
@@ -129,7 +129,7 @@ async function gatherRegistry() {
     roomHtmlStems: roomFiles.filter(n => n.endsWith('.html')).map(n => n.replace(/\.html$/i, '').toLowerCase()),
     indexStems: extractIndexRoomStems(indexHtml),
     exportIds: extractAllRoomsIds(exportJs),
-    campuses: extractIndexCampuses(indexHtml),
+    sites: extractIndexSites(indexHtml),
     indexHtml,
     exportJs,
   };
@@ -312,15 +312,15 @@ async function saveExistingRoom() {
 
 async function openNewRoomDialog() {
   const registry = await gatherRegistry();
-  nrCampusList.innerHTML = '';
-  for (const campus of registry.campuses) {
+  nrSiteList.innerHTML = '';
+  for (const site of registry.sites) {
     const opt = document.createElement('option');
-    opt.value = campus;
-    nrCampusList.appendChild(opt);
+    opt.value = site;
+    nrSiteList.appendChild(opt);
   }
   nrId.value = '';
   nrLabel.value = '';
-  nrCampus.value = '';
+  nrSite.value = '';
   nrWidth.value = 1200;
   nrHeight.value = 800;
   newRoomErrors.textContent = '';
@@ -370,12 +370,12 @@ async function writeNewRoomFiles({ id, label, campus, canvasWidth, canvasHeight 
 async function createNewRoom() {
   const id = nrId.value.trim();
   const label = nrLabel.value.trim() || id;
-  const campus = nrCampus.value.trim();
+  const campus = nrSite.value.trim();
   const canvasWidth = Number(nrWidth.value) || 1200;
   const canvasHeight = Number(nrHeight.value) || 800;
 
   const problems = [];
-  if (!campus) problems.push('Campus is required.');
+  if (!campus) problems.push('Site is required.');
 
   const registry = await gatherRegistry();
   problems.push(...validateNewRoomId(id, registry));
@@ -452,17 +452,17 @@ function textInput(value, onCommit) {
   return input;
 }
 
-function selectInput(options, value, onCommit) {
-  const select = document.createElement('select');
-  for (const opt of options) {
-    const o = document.createElement('option');
-    o.value = opt;
-    o.textContent = opt;
-    if (opt === value) o.selected = true;
-    select.appendChild(o);
-  }
-  select.addEventListener('change', () => onCommit(select.value));
-  return select;
+/** Free text with autocomplete suggestions, not a locked enum — `type` is
+ *  any string; DEVICE_TYPES/`listId` just seeds the dropdown with common
+ *  examples so pc/staff/printer (the three room.js renders specially)
+ *  stay one click away without forcing every device into that set. */
+function autocompleteInput(value, listId, onCommit) {
+  const input = document.createElement('input');
+  input.type = 'text';
+  input.value = value ?? '';
+  input.setAttribute('list', listId);
+  input.addEventListener('change', () => onCommit(input.value.trim()));
+  return input;
 }
 
 function markDirtyRerender() {
@@ -549,7 +549,7 @@ function renderProperties() {
     const device = state.data.devices[index];
     if (!device) { state.selection = null; return; }
     propertiesFields.appendChild(field('Id', textInput(device.id, v => { device.id = v; markDirtyRerender(); })));
-    propertiesFields.appendChild(field('Type', selectInput(DEVICE_TYPES, device.type, v => { device.type = v; markDirtyRerender(); })));
+    propertiesFields.appendChild(field('Type', autocompleteInput(device.type, 'device-type-list', v => { if (v) { device.type = v; markDirtyRerender(); } })));
     propertiesFields.appendChild(field('Top', numberInput(device.top, v => { device.top = v; markDirtyRerender(); })));
     propertiesFields.appendChild(field('Left', numberInput(device.left, v => { device.left = v; markDirtyRerender(); })));
     propertiesFields.appendChild(field('Label (optional)', textInput(device.label || '', v => {
@@ -631,6 +631,15 @@ function armTool(tool, btn) {
   if (!alreadyArmed) btn.classList.add('armed');
 }
 
+function buildDeviceTypeList() {
+  const list = $('device-type-list');
+  DEVICE_TYPES.forEach(type => {
+    const opt = document.createElement('option');
+    opt.value = type;
+    list.appendChild(opt);
+  });
+}
+
 function buildPalette() {
   DEVICE_TYPES.forEach(type => {
     const btn = document.createElement('button');
@@ -698,3 +707,4 @@ window.addEventListener('beforeunload', e => {
 });
 
 buildPalette();
+buildDeviceTypeList();

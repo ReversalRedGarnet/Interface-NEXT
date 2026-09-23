@@ -20,7 +20,7 @@ const STATUS_WORDS = {
   unknown: 'not checked',
 };
 
-/** Statuses an intern can apply with one tap in quick-mark mode. */
+/** Statuses a checker can apply with one tap in quick-mark mode. */
 const QUICK_STATUSES = [
   { status: 'working', label: 'Working' },
   { status: 'minor',   label: 'Minor'   },
@@ -175,7 +175,7 @@ export function initRoomPage(CFG) {
 
   const deviceById = new Map(CFG.devices.map(d => [d.id, d]));
 
-  document.title = `${CFG.label} — Room Monitor`;
+  document.title = `${CFG.label} — Gridkeep`;
   document.getElementById('room-root').innerHTML = `
     <div class="app">
 
@@ -325,7 +325,7 @@ export function initRoomPage(CFG) {
   const entryFor = id => state[stateKey(roomId, id)];
 
   /* ── State writes ──────────────────────────────────────────────
-     Re-read before merging: an intern often has two room tabs open, and the
+     Re-read before merging: a checker often has two room tabs open, and the
      old code wrote back a snapshot taken at page load, silently reverting
      whatever the other tab had saved in the meantime. */
   function mutate(fn) {

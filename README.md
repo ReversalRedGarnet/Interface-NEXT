@@ -1,15 +1,15 @@
-# IT Room Monitor
+# Gridkeep
 
-A floor-plan view of every lab machine in a room. Interns walk the room, tap
-each device, and the status sticks. Reports come out as CSV.
+A floor-plan view of every tracked device in a room. Checkers walk the room,
+tap each device, and the status sticks. Reports come out as CSV.
 
 ## Structure
 ```
-index.html      — campus/room menu (was documented as menu.html; that was wrong)
+index.html      — site/room menu (was documented as menu.html; that was wrong)
 style.css
 js/
   main.js       — entry point (dual-mode: menu page vs room page)
-  menu.js       — menu page: campus toggles, export-all, backup/restore
+  menu.js       — menu page: site toggles, export-all, backup/restore
   room.js       — room page: floor-plan SVG, device rendering, quick-mark,
                   popups, progress, state
   export.js     — CSV reports + JSON state backup/restore
@@ -18,10 +18,12 @@ js/
   build-grid.js — shared PC-grid generator; regenerates the `devices` array
                   in data/*.json (was previously 4 copy-pasted inline loops)
 data/
-  gpl.json, library.json, mtl.json, s28-104.json, s28-107.json
+  annex.json, b2-204.json, b2-210.json, commons.json, workshop.json
   — each room's layout + device positions
+  assets.json — assetId → {type, manufacturer, serial, notes} lookup, shared
+                across every room (see "Editing rooms visually" below)
 rooms/
-  gpl.html, library.html, mtl.html, s28-104.html, s28-107.html
+  annex.html, b2-204.html, b2-210.html, commons.html, workshop.html
   — page shell + a few lines of routing metadata (id/label/campus/back/dataUrl)
 editor.html, editor.css
   — drag-and-drop floor-plan editor; see "Editing rooms visually" below
@@ -37,8 +39,8 @@ js/editor/
                         js/export.js's ALL_ROOMS, and the cross-file
                         id-collision check for a brand-new room
 test/
-  room.test.mjs   — drives room.js in jsdom; asserts on the DOM an intern touches
-  rooms.smoke.mjs — renders all five real rooms; checks bounds and labels
+  room.test.mjs   — drives room.js in jsdom; asserts on the DOM a checker touches
+  rooms.smoke.mjs — renders all five rooms; checks bounds and labels
   editor.test.mjs — schema.js + room-scaffold.js: existing-room round-trip,
                     new-room 4-file generation, id-collision validation
 ```
@@ -62,7 +64,7 @@ npm test
 ```
 
 `test/room.test.mjs` renders a real room in jsdom and clicks through it the way
-an intern would. It's the feedback loop to reach for **before** changing
+a checker would. It's the feedback loop to reach for **before** changing
 `room.js`: it goes red on things that are easy to break silently — a status
 saved under the wrong key, a device that can't be reached by keyboard, a popup
 that swallows focus, one tab's save wiping another's.
@@ -81,8 +83,8 @@ that swallows focus, one tab's save wiping another's.
   coordinate space; it's scaled to fit whatever screen you're on. On a phone,
   switch to Actual size when you need to tap accurately.
 
-## Editing a room's PC grid
-For the 4 grid-based rooms (gpl, mtl, s28-104, s28-107), edit the params in
+## Editing a room's device grid
+For the 4 grid-based rooms (annex, workshop, b2-204, b2-210), edit the params in
 `js/build-grid.js` and re-run:
 ```
 node js/build-grid.js       # or: npm run build-grid
@@ -90,12 +92,15 @@ node js/build-grid.js       # or: npm run build-grid
 This regenerates only the `devices` field of the matching `data/*.json` —
 `layout`, `canvasWidth`, `canvasHeight` are left untouched.
 
-`library.json`'s devices are hand-placed (scattered clusters + staff desks +
-printer), not a regular grid — edit `data/library.json` directly for that one.
+`commons.json`'s devices are hand-placed (scattered clusters + staff desks +
+printer), not a regular grid — edit `data/commons.json` directly for that one.
 
 Device labels longer than 5 characters get a wider chip automatically, so a
 name like `STAFF-PC` isn't clipped. Devices typed `staff` get the wide chip
-regardless.
+regardless. `type` itself is free text — `pc`/`staff`/`printer` are the only
+values room.js renders specially, but the editor's Type field will suggest
+those plus a few generic asset examples (`peripheral`, `furniture`, `network
+gear`); anything else typed in is preserved as-is.
 
 ## Editing rooms visually
 `editor.html` is a drag-and-drop floor-plan editor for `data/*.json` — no more
@@ -152,7 +157,7 @@ exports if four things agree (see "Known limitation" below and
 (case-insensitively, since two ids differing only in case would collide as
 Windows filenames even though `localStorage` keys are case-sensitive):
 `data/{id}.json`, `rooms/{id}.html`, a new link in `index.html` (a new
-campus card too, if the campus doesn't exist yet), and a new entry in
+site card too, if the site doesn't exist yet), and a new entry in
 `ALL_ROOMS`. If a later file in that sequence fails to write, the editor
 reports exactly which files it did write so the rest can be finished by
 hand — there's no way to make four separate file writes atomic in a

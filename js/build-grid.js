@@ -27,21 +27,21 @@ function makeGrid({ startTop, startLeft, rowGap, colGap, rows, cols, blocks = 1,
 }
 
 const ROOM_GRIDS = {
-  gpl: {
-    grid: { startTop: 74, startLeft: 214, rowGap: 122, colGap: 122, rows: 6, cols: 3, blocks: 2, blockGap: 486 },
+  annex: {
+    grid: { startTop: 90, startLeft: 220, rowGap: 120, colGap: 120, rows: 6, cols: 3, blocks: 2, blockGap: 460 },
     extra: [],
   },
-  mtl: {
-    grid: { startTop: 245, startLeft: 312, rowGap: 88, colGap: 89, rows: 6, cols: 3, blocks: 2, blockGap: 354 },
+  workshop: {
+    grid: { startTop: 130, startLeft: 280, rowGap: 90, colGap: 95, rows: 6, cols: 3, blocks: 2, blockGap: 360 },
     // type:'staff' (not 'pc') — the wider chip, so the 8-char label fits.
-    extra: [{ id: 'STAFF-PC', type: 'staff', top: 135, left: 335, label: 'Staff' }],
+    extra: [{ id: 'STAFF-PC', type: 'staff', top: 100, left: 850, label: 'Staff' }],
   },
-  's28-104': {
-    grid: { startTop: 201, startLeft: 274, rowGap: 122, colGap: 122, rows: 4, cols: 6 },
+  'b2-204': {
+    grid: { startTop: 220, startLeft: 300, rowGap: 120, colGap: 120, rows: 4, cols: 6 },
     extra: [],
   },
-  's28-107': {
-    grid: { startTop: 245, startLeft: 274, rowGap: 122, colGap: 122, rows: 4, cols: 6 },
+  'b2-210': {
+    grid: { startTop: 180, startLeft: 250, rowGap: 120, colGap: 120, rows: 4, cols: 6 },
     extra: [],
   },
 };

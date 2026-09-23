@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Floor Plan Editor — IT Room Monitor</title>
+  <title>Floor Plan Editor — Gridkeep</title>
   <link rel="stylesheet" href="style.css">
   <link rel="stylesheet" href="editor.css">
 </head>
@@ -11,7 +11,7 @@
 
   <div class="site-header">
     <div class="site-header-inner">
-      <span class="site-tool">IT Room Monitor — Floor Plan Editor</span>
+      <span class="site-tool">Gridkeep — Floor Plan Editor</span>
     </div>
   </div>
 
@@ -66,6 +66,7 @@
           <h2>Properties</h2>
           <div id="properties-fields"></div>
           <button class="btn-danger" id="btn-delete-selected" hidden>Delete</button>
+          <datalist id="device-type-list"></datalist>
         </section>
 
       </aside>
@@ -96,16 +97,16 @@
 
       <label class="editor-field">
         <span>Room id</span>
-        <input type="text" id="nr-id" placeholder="e.g. S28-110">
+        <input type="text" id="nr-id" placeholder="e.g. B2-210">
       </label>
       <label class="editor-field">
         <span>Label</span>
-        <input type="text" id="nr-label" placeholder="e.g. S28-110">
+        <input type="text" id="nr-label" placeholder="e.g. B2-210">
       </label>
       <label class="editor-field">
-        <span>Campus</span>
-        <input list="nr-campus-list" id="nr-campus" placeholder="e.g. King George Campus">
-        <datalist id="nr-campus-list"></datalist>
+        <span>Site</span>
+        <input list="nr-site-list" id="nr-site" placeholder="e.g. Northgate Site">
+        <datalist id="nr-site-list"></datalist>
       </label>
       <label class="editor-field">
         <span>Canvas size</span>
@@ -128,7 +129,7 @@
   <script type="module" src="js/editor/editor.js"></script>
 
   <footer class="site-footer">
-    <p>A side project by ReversalRedGarnet (s11225524) · © July-2026</p>
+    <p><a href="https://github.com/ReversalRedGarnet">ReversalRedGarnet</a></p>
   </footer>
 
 </body>

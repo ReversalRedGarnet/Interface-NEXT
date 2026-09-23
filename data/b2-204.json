@@ -1,0 +1,198 @@
+{
+  "canvasWidth": 1200,
+  "canvasHeight": 800,
+  "layout": [
+    {
+      "type": "floor",
+      "x": 120,
+      "y": 100,
+      "width": 960,
+      "height": 600
+    },
+    {
+      "type": "wall",
+      "x1": 120,
+      "y1": 100,
+      "x2": 1080,
+      "y2": 100
+    },
+    {
+      "type": "wall",
+      "x1": 1080,
+      "y1": 100,
+      "x2": 1080,
+      "y2": 700
+    },
+    {
+      "type": "wall",
+      "x1": 1080,
+      "y1": 700,
+      "x2": 120,
+      "y2": 700
+    },
+    {
+      "type": "wall",
+      "x1": 120,
+      "y1": 700,
+      "x2": 120,
+      "y2": 190
+    },
+    {
+      "type": "door",
+      "hinge": [
+        120,
+        190
+      ],
+      "jamb": [
+        120,
+        100
+      ]
+    }
+  ],
+  "devices": [
+    {
+      "id": "PC1",
+      "type": "pc",
+      "top": 220,
+      "left": 300
+    },
+    {
+      "id": "PC2",
+      "type": "pc",
+      "top": 220,
+      "left": 420
+    },
+    {
+      "id": "PC3",
+      "type": "pc",
+      "top": 220,
+      "left": 540
+    },
+    {
+      "id": "PC4",
+      "type": "pc",
+      "top": 220,
+      "left": 660
+    },
+    {
+      "id": "PC5",
+      "type": "pc",
+      "top": 220,
+      "left": 780
+    },
+    {
+      "id": "PC6",
+      "type": "pc",
+      "top": 220,
+      "left": 900
+    },
+    {
+      "id": "PC7",
+      "type": "pc",
+      "top": 340,
+      "left": 300
+    },
+    {
+      "id": "PC8",
+      "type": "pc",
+      "top": 340,
+      "left": 420
+    },
+    {
+      "id": "PC9",
+      "type": "pc",
+      "top": 340,
+      "left": 540
+    },
+    {
+      "id": "PC10",
+      "type": "pc",
+      "top": 340,
+      "left": 660
+    },
+    {
+      "id": "PC11",
+      "type": "pc",
+      "top": 340,
+      "left": 780
+    },
+    {
+      "id": "PC12",
+      "type": "pc",
+      "top": 340,
+      "left": 900
+    },
+    {
+      "id": "PC13",
+      "type": "pc",
+      "top": 460,
+      "left": 300
+    },
+    {
+      "id": "PC14",
+      "type": "pc",
+      "top": 460,
+      "left": 420
+    },
+    {
+      "id": "PC15",
+      "type": "pc",
+      "top": 460,
+      "left": 540
+    },
+    {
+      "id": "PC16",
+      "type": "pc",
+      "top": 460,
+      "left": 660
+    },
+    {
+      "id": "PC17",
+      "type": "pc",
+      "top": 460,
+      "left": 780
+    },
+    {
+      "id": "PC18",
+      "type": "pc",
+      "top": 460,
+      "left": 900
+    },
+    {
+      "id": "PC19",
+      "type": "pc",
+      "top": 580,
+      "left": 300
+    },
+    {
+      "id": "PC20",
+      "type": "pc",
+      "top": 580,
+      "left": 420
+    },
+    {
+      "id": "PC21",
+      "type": "pc",
+      "top": 580,
+      "left": 540
+    },
+    {
+      "id": "PC22",
+      "type": "pc",
+      "top": 580,
+      "left": 660
+    },
+    {
+      "id": "PC23",
+      "type": "pc",
+      "top": 580,
+      "left": 780
+    },
+    {
+      "id": "PC24",
+      "type": "pc",
+      "top": 580,
+      "left": 900
+    }
+  ]
+}

@@ -4,10 +4,10 @@
  * four files (this trio + data/{id}.json from schema.js) gets written:
  *
  *   1. rooms/{id}.html — full page shell, window.ROOM_META block
- *   2. index.html       — a new <a class="room-link"> in the right campus
- *                          (or a whole new campus card)
+ *   2. index.html       — a new <a class="room-link"> in the right site
+ *                          (or a whole new site card)
  *   3. js/export.js     — a new entry in ALL_ROOMS, so "Export All Rooms"
- *                          and the CSV campus lookup don't silently skip it
+ *                          and the CSV site lookup don't silently skip it
  *
  * Pure string-in/string-out — no DOM — so this is testable directly under
  * Node and safe to call from editor.js before any file is written.
@@ -24,7 +24,7 @@ function jsStringLiteral(v) {
 }
 
 /** Filename conventions used by every existing room: id is the display
- *  id (e.g. "S28-107"), files are its lowercase form. */
+ *  id (e.g. "B2-210"), files are its lowercase form. */
 export function roomFileStem(id) {
   return String(id).toLowerCase();
 }
@@ -39,7 +39,7 @@ export function roomHtmlFileNameForId(id) {
 
 /* ── 1. rooms/{id}.html ──────────────────────────────────────────── */
 
-/** Matches the shell every existing rooms/*.html uses (see rooms/s28-107.html) — only
+/** Matches the shell every existing rooms/*.html uses (see rooms/b2-210.html) — only
  *  the title and ROOM_META block vary between rooms. */
 export function generateRoomHtml({ id, label, campus, dataUrl }) {
   const url = dataUrl || dataUrlForId(id);
@@ -48,7 +48,7 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(label)} — IT Room Monitor</title>
+  <title>${escapeHtml(label)} — Gridkeep</title>
   <link rel="stylesheet" href="../style.css">
 </head>
 <body>
@@ -65,7 +65,7 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
 
   <div class="site-header">
     <div class="site-header-inner">
-      <span class="site-tool">IT Room Monitor</span>
+      <span class="site-tool">Gridkeep</span>
     </div>
   </div>
 
@@ -73,7 +73,7 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
   <script type="module" src="../js/main.js"></script>
 
   <footer class="site-footer">
-    <p>A side project by ReversalRedGarnet (s11225524) · © July-2026</p>
+    <p><a href="https://github.com/ReversalRedGarnet">ReversalRedGarnet</a></p>
   </footer>
 
 </body>
@@ -135,22 +135,24 @@ export function extractIndexRoomStems(html) {
   return [...html.matchAll(/href="rooms\/([a-z0-9-]+)\.html"/gi)].map(m => m[1].toLowerCase());
 }
 
-/** Existing campus names, in document order. */
-export function extractIndexCampuses(html) {
-  return [...html.matchAll(/<h2 class="campus-name">([^<]*)<\/h2>/g)].map(m => m[1].trim());
+/** Existing site names, in document order. */
+export function extractIndexSites(html) {
+  return [...html.matchAll(/<h2 class="site-name">([^<]*)<\/h2>/g)].map(m => m[1].trim());
 }
 
 /**
- * Inserts a new room-link into the named campus's room-list, or — if that
- * campus doesn't exist yet — appends a whole new campus card. Returns the
- * full updated index.html text.
+ * Inserts a new room-link into the named site's room-list, or — if that
+ * site doesn't exist yet — appends a whole new site card. Returns the
+ * full updated index.html text. `campus` is still the field name here (and
+ * in ROOM_META/ALL_ROOMS below) because that's what room.js/export.js read
+ * — only the presentational "Site" label/markup changed, not the data key.
  */
 export function patchIndexHtml(html, { id, label, campus }) {
   const escLabel = escapeHtml(label);
   const href = `rooms/${roomFileStem(id)}.html`;
   const linkBlock = `\n          <a class="room-link" href="${href}">\n            <span class="room-link-icon" aria-hidden="true">💻</span>${escLabel}\n          </a>\n        `;
 
-  const h2Re = /<h2 class="campus-name">([^<]*)<\/h2>/g;
+  const h2Re = /<h2 class="site-name">([^<]*)<\/h2>/g;
   let m;
   while ((m = h2Re.exec(html))) {
     if (m[1].trim() !== campus) continue;
@@ -166,19 +168,19 @@ export function patchIndexHtml(html, { id, label, campus }) {
     return before + linkBlock + after;
   }
 
-  // Campus not present yet — append a new campus card to .campus-grid.
-  const gridOpenIdx = html.indexOf('<div class="campus-grid">');
-  if (gridOpenIdx === -1) throw new Error('index.html: <div class="campus-grid"> not found');
+  // Site not present yet — append a new site card to .site-grid.
+  const gridOpenIdx = html.indexOf('<div class="site-grid">');
+  if (gridOpenIdx === -1) throw new Error('index.html: <div class="site-grid"> not found');
   const gridCloseIdx = findMatchingTagClose(html, gridOpenIdx, 'div');
 
   const existingListIds = [...html.matchAll(/id="(rooms-[a-z0-9-]+)"/gi)].map(m2 => m2[1].toLowerCase());
-  const slugBase = campus.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'campus';
+  const slugBase = campus.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'site';
   let listId = `rooms-${slugBase}`;
   let n = 2;
   while (existingListIds.includes(listId.toLowerCase())) listId = `rooms-${slugBase}-${n++}`;
 
   const escCampus = escapeHtml(campus);
-  const card = `\n\n      <!-- ${escCampus} -->\n      <div class="campus-card">\n        <div class="campus-card-header">\n          <h2 class="campus-name">${escCampus}</h2>\n        </div>\n        <div class="room-list" id="${listId}">\n          <a class="room-link" href="${href}">\n            <span class="room-link-icon" aria-hidden="true">💻</span>${escLabel}\n          </a>\n        </div>\n        <button class="campus-toggle" data-target="${listId}" aria-controls="${listId}" aria-expanded="true">Hide Rooms ▴</button>\n      </div>\n\n    `;
+  const card = `\n\n      <!-- ${escCampus} -->\n      <div class="site-card">\n        <div class="site-card-header">\n          <h2 class="site-name">${escCampus}</h2>\n        </div>\n        <div class="room-list" id="${listId}">\n          <a class="room-link" href="${href}">\n            <span class="room-link-icon" aria-hidden="true">💻</span>${escLabel}\n          </a>\n        </div>\n        <button class="site-toggle" data-target="${listId}" aria-controls="${listId}" aria-expanded="true">Hide Rooms ▴</button>\n      </div>\n\n    `;
 
   const before = html.slice(0, gridCloseIdx).replace(/\s+$/, '');
   const after = html.slice(gridCloseIdx);

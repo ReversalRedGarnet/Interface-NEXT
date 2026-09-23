@@ -1,7 +1,7 @@
 /**
  * room.test.mjs — feedback loop for the room page.
  *
- * Drives the real js/room.js inside jsdom and asserts on the DOM an intern
+ * Drives the real js/room.js inside jsdom and asserts on the DOM a checker
  * would actually touch. Run:  node test/room.test.mjs
  */
 import { JSDOM } from 'jsdom';
@@ -64,7 +64,7 @@ function assert(cond, msg) { if (!cond) throw new Error(msg); }
 /* ── Regressions: behaviour that must keep working ─────────────── */
 
 await test('renders every device from the data file', async () => {
-  const data = readRoom('library');
+  const data = readRoom('commons');
   const { doc } = await mount(data);
   const nodes = doc.querySelectorAll('[data-id]');
   assert(nodes.length === data.devices.length,
@@ -72,7 +72,7 @@ await test('renders every device from the data file', async () => {
 });
 
 await test('popup save writes ROOMID_DEVICEID and repaints that device', async () => {
-  const { doc, window } = await mount(readRoom('library'));
+  const { doc, window } = await mount(readRoom('commons'));
   const pc = doc.querySelector('[data-id="PC7"]');
   click(pc);
   click(doc.querySelector('#pc-overlay [data-status="major"]'));
@@ -85,7 +85,7 @@ await test('popup save writes ROOMID_DEVICEID and repaints that device', async (
 });
 
 await test('summary counts reflect saved statuses', async () => {
-  const { doc } = await mount(readRoom('library'));
+  const { doc } = await mount(readRoom('commons'));
   for (const [id, status] of [['PC1', 'working'], ['PC2', 'working'], ['PC3', 'minor']]) {
     click(doc.querySelector(`[data-id="${id}"]`));
     click(doc.querySelector(`#pc-overlay [data-status="${status}"]`));
@@ -96,7 +96,7 @@ await test('summary counts reflect saved statuses', async () => {
 });
 
 await test('reset clears this room only', async () => {
-  const { doc, window } = await mount(readRoom('library'), {}, { 'GPL_PC1': { status: 'major' } });
+  const { doc, window } = await mount(readRoom('commons'), {}, { 'ANNEX_PC1': { status: 'major' } });
   click(doc.querySelector('[data-id="PC1"]'));
   click(doc.querySelector('#pc-overlay [data-status="major"]'));
   click(doc.getElementById('pc-save'));
@@ -104,27 +104,27 @@ await test('reset clears this room only', async () => {
   click(doc.getElementById('reset-confirm'));
   const st = readState(window);
   assert(!st['TEST_PC1'], 'room state not cleared');
-  assert(st['GPL_PC1'], 'other room state was destroyed');
+  assert(st['ANNEX_PC1'], 'other room state was destroyed');
 });
 
 await test('a save does not clobber writes made in another tab', async () => {
-  // Intern has two room tabs open. Tab B saves; tab A must not roll it back.
-  const { doc, window } = await mount(readRoom('library'));
+  // Checker has two room tabs open. Tab B saves; tab A must not roll it back.
+  const { doc, window } = await mount(readRoom('commons'));
   const before = readState(window);
   window.localStorage.setItem('it-room-monitor-v1',
-    JSON.stringify({ ...before, 'MTL_PC3': { status: 'major', notes: 'from the other tab' } }));
+    JSON.stringify({ ...before, 'WORKSHOP_PC3': { status: 'major', notes: 'from the other tab' } }));
   click(doc.querySelector('[data-id="PC2"]'));
   click(doc.querySelector('#pc-overlay [data-status="working"]'));
   click(doc.getElementById('pc-save'));
   const st = readState(window);
   assert(st['TEST_PC2']?.status === 'working', 'this tab failed to save');
-  assert(st['MTL_PC3']?.status === 'major', 'the other tab\'s save was wiped out');
+  assert(st['WORKSHOP_PC3']?.status === 'major', 'the other tab\'s save was wiped out');
 });
 
-/* ── Intern-interface symptoms ─────────────────────────────────── */
+/* ── Checker-interface symptoms ────────────────────────────────── */
 
 await test('every device is keyboard-operable', async () => {
-  const { doc } = await mount(readRoom('library'));
+  const { doc } = await mount(readRoom('commons'));
   const bad = [...doc.querySelectorAll('[data-id]')].filter(el => {
     const focusable = el.tagName === 'BUTTON' || el.tabIndex >= 0;
     return !focusable;
@@ -134,7 +134,7 @@ await test('every device is keyboard-operable', async () => {
 });
 
 await test('every device has an accessible name carrying its status', async () => {
-  const { doc } = await mount(readRoom('library'));
+  const { doc } = await mount(readRoom('commons'));
   const pc = doc.querySelector('[data-id="PC5"]');
   const name = pc.getAttribute('aria-label') || '';
   assert(/PC5/.test(name), `aria-label missing device id: "${name}"`);
@@ -142,7 +142,7 @@ await test('every device has an accessible name carrying its status', async () =
 });
 
 await test('opening a device popup moves focus in, closing restores it', async () => {
-  const { doc } = await mount(readRoom('library'));
+  const { doc } = await mount(readRoom('commons'));
   const pc = doc.querySelector('[data-id="PC9"]');
   pc.focus?.();
   click(pc);
@@ -153,7 +153,7 @@ await test('opening a device popup moves focus in, closing restores it', async (
 });
 
 await test('a second printer keeps its own status', async () => {
-  const data = readRoom('library');
+  const data = readRoom('commons');
   data.devices = [...data.devices, { id: 'PRINTER2', type: 'printer', top: 172, left: 720 }];
   const { doc, window } = await mount(data);
   const p2 = doc.querySelector('[data-id="PRINTER2"]');
@@ -170,7 +170,7 @@ await test('a second printer keeps its own status', async () => {
 });
 
 await test('long device labels get the wide chip so text is not clipped', async () => {
-  const { doc } = await mount(readRoom('mtl'));
+  const { doc } = await mount(readRoom('workshop'));
   const staff = doc.querySelector('[data-id="STAFF-PC"]');
   assert(staff, 'STAFF-PC not rendered');
   const label = (staff.textContent || '').trim();
@@ -179,14 +179,14 @@ await test('long device labels get the wide chip so text is not clipped', async 
 });
 
 await test('device labels are HTML-escaped', async () => {
-  const data = readRoom('library');
+  const data = readRoom('commons');
   data.devices = [{ id: 'X1', type: 'pc', top: 10, left: 10, label: '<img src=x onerror=1>' }];
   const { doc } = await mount(data);
   assert(!doc.querySelector('#room img'), 'device label was injected as markup');
 });
 
 await test('progress is visible: how many devices are still unchecked', async () => {
-  const data = readRoom('library');
+  const data = readRoom('commons');
   const { doc } = await mount(data);
   const el = doc.getElementById('count-unchecked');
   assert(el, 'no #count-unchecked indicator on the page');
@@ -195,7 +195,7 @@ await test('progress is visible: how many devices are still unchecked', async ()
 });
 
 await test('devices carrying notes are flagged on the map', async () => {
-  const { doc } = await mount(readRoom('library'));
+  const { doc } = await mount(readRoom('commons'));
   const pc = doc.querySelector('[data-id="PC4"]');
   click(pc);
   click(doc.querySelector('#pc-overlay [data-status="minor"]'));
@@ -207,7 +207,7 @@ await test('devices carrying notes are flagged on the map', async () => {
 });
 
 await test('quick-mark applies a status in one tap, no popup', async () => {
-  const { doc } = await mount(readRoom('library'));
+  const { doc } = await mount(readRoom('commons'));
   const arm = doc.querySelector('#quick-mark [data-status="working"]');
   assert(arm, 'no #quick-mark control in the toolbar');
   click(arm);

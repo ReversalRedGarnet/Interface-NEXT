@@ -1,58 +1,58 @@
 {
   "canvasWidth": 1200,
-  "canvasHeight": 800,
+  "canvasHeight": 850,
   "layout": [
     {
       "type": "floor",
-      "x": 255.4,
-      "y": 66.5,
-      "width": 687,
-      "height": 731.3
+      "x": 170,
+      "y": 20,
+      "width": 860,
+      "height": 810
     },
     {
       "type": "wall",
-      "x1": 255.4,
-      "y1": 66.5,
-      "x2": 820.5,
-      "y2": 66.5
+      "x1": 170,
+      "y1": 20,
+      "x2": 1030,
+      "y2": 20
     },
     {
       "type": "wall",
-      "x1": 920.2,
-      "y1": 66.5,
-      "x2": 942.4,
-      "y2": 66.5
+      "x1": 1030,
+      "y1": 20,
+      "x2": 1030,
+      "y2": 830
     },
     {
       "type": "wall",
-      "x1": 255.4,
-      "y1": 66.5,
-      "x2": 255.4,
-      "y2": 797.8
+      "x1": 1030,
+      "y1": 830,
+      "x2": 170,
+      "y2": 830
     },
     {
       "type": "wall",
-      "x1": 942.4,
-      "y1": 66.5,
-      "x2": 942.4,
-      "y2": 797.8
+      "x1": 170,
+      "y1": 830,
+      "x2": 170,
+      "y2": 700
     },
     {
       "type": "wall",
-      "x1": 255.4,
-      "y1": 797.8,
-      "x2": 942.4,
-      "y2": 797.8
+      "x1": 170,
+      "y1": 610,
+      "x2": 170,
+      "y2": 20
     },
     {
       "type": "door",
       "hinge": [
-        820.5,
-        66.5
+        170,
+        700
       ],
       "jamb": [
-        920.2,
-        66.5
+        170,
+        610
       ]
     }
   ],
@@ -60,225 +60,218 @@
     {
       "id": "PC1",
       "type": "pc",
-      "top": 245,
-      "left": 312
+      "top": 90,
+      "left": 220
     },
     {
       "id": "PC2",
       "type": "pc",
-      "top": 245,
-      "left": 401
+      "top": 90,
+      "left": 340
     },
     {
       "id": "PC3",
       "type": "pc",
-      "top": 245,
-      "left": 490
+      "top": 90,
+      "left": 460
     },
     {
       "id": "PC4",
       "type": "pc",
-      "top": 333,
-      "left": 312
+      "top": 210,
+      "left": 220
     },
     {
       "id": "PC5",
       "type": "pc",
-      "top": 333,
-      "left": 401
+      "top": 210,
+      "left": 340
     },
     {
       "id": "PC6",
       "type": "pc",
-      "top": 333,
-      "left": 490
+      "top": 210,
+      "left": 460
     },
     {
       "id": "PC7",
       "type": "pc",
-      "top": 421,
-      "left": 312
+      "top": 330,
+      "left": 220
     },
     {
       "id": "PC8",
       "type": "pc",
-      "top": 421,
-      "left": 401
+      "top": 330,
+      "left": 340
     },
     {
       "id": "PC9",
       "type": "pc",
-      "top": 421,
-      "left": 490
+      "top": 330,
+      "left": 460
     },
     {
       "id": "PC10",
       "type": "pc",
-      "top": 509,
-      "left": 312
+      "top": 450,
+      "left": 220
     },
     {
       "id": "PC11",
       "type": "pc",
-      "top": 509,
-      "left": 401
+      "top": 450,
+      "left": 340
     },
     {
       "id": "PC12",
       "type": "pc",
-      "top": 509,
-      "left": 490
+      "top": 450,
+      "left": 460
     },
     {
       "id": "PC13",
       "type": "pc",
-      "top": 597,
-      "left": 312
+      "top": 570,
+      "left": 220
     },
     {
       "id": "PC14",
       "type": "pc",
-      "top": 597,
-      "left": 401
+      "top": 570,
+      "left": 340
     },
     {
       "id": "PC15",
       "type": "pc",
-      "top": 597,
-      "left": 490
+      "top": 570,
+      "left": 460
     },
     {
       "id": "PC16",
       "type": "pc",
-      "top": 685,
-      "left": 312
+      "top": 690,
+      "left": 220
     },
     {
       "id": "PC17",
       "type": "pc",
-      "top": 685,
-      "left": 401
+      "top": 690,
+      "left": 340
     },
     {
       "id": "PC18",
       "type": "pc",
-      "top": 685,
-      "left": 490
+      "top": 690,
+      "left": 460
     },
     {
       "id": "PC19",
       "type": "pc",
-      "top": 245,
-      "left": 666
+      "top": 90,
+      "left": 680
     },
     {
       "id": "PC20",
       "type": "pc",
-      "top": 245,
-      "left": 755
+      "top": 90,
+      "left": 800
     },
     {
       "id": "PC21",
       "type": "pc",
-      "top": 245,
-      "left": 844
+      "top": 90,
+      "left": 920
     },
     {
       "id": "PC22",
       "type": "pc",
-      "top": 333,
-      "left": 666
+      "top": 210,
+      "left": 680
     },
     {
       "id": "PC23",
       "type": "pc",
-      "top": 333,
-      "left": 755
+      "top": 210,
+      "left": 800
     },
     {
       "id": "PC24",
       "type": "pc",
-      "top": 333,
-      "left": 844
+      "top": 210,
+      "left": 920
     },
     {
       "id": "PC25",
       "type": "pc",
-      "top": 421,
-      "left": 666
+      "top": 330,
+      "left": 680
     },
     {
       "id": "PC26",
       "type": "pc",
-      "top": 421,
-      "left": 755
+      "top": 330,
+      "left": 800
     },
     {
       "id": "PC27",
       "type": "pc",
-      "top": 421,
-      "left": 844
+      "top": 330,
+      "left": 920
     },
     {
       "id": "PC28",
       "type": "pc",
-      "top": 509,
-      "left": 666
+      "top": 450,
+      "left": 680
     },
     {
       "id": "PC29",
       "type": "pc",
-      "top": 509,
-      "left": 755
+      "top": 450,
+      "left": 800
     },
     {
       "id": "PC30",
       "type": "pc",
-      "top": 509,
-      "left": 844
+      "top": 450,
+      "left": 920
     },
     {
       "id": "PC31",
       "type": "pc",
-      "top": 597,
-      "left": 666
+      "top": 570,
+      "left": 680
     },
     {
       "id": "PC32",
       "type": "pc",
-      "top": 597,
-      "left": 755
+      "top": 570,
+      "left": 800
     },
     {
       "id": "PC33",
       "type": "pc",
-      "top": 597,
-      "left": 844
+      "top": 570,
+      "left": 920
     },
     {
       "id": "PC34",
       "type": "pc",
-      "top": 685,
-      "left": 666
+      "top": 690,
+      "left": 680
     },
     {
       "id": "PC35",
       "type": "pc",
-      "top": 685,
-      "left": 755
+      "top": 690,
+      "left": 800
     },
     {
       "id": "PC36",
       "type": "pc",
-      "top": 685,
-      "left": 844
-    },
-    {
-      "id": "STAFF-PC",
-      "type": "staff",
-      "top": 135,
-      "left": 335,
-      "label": "Staff"
+      "top": 690,
+      "left": 920
     }
   ]
 }

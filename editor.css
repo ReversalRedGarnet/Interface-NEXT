@@ -67,7 +67,7 @@ body.editor-page {
   font-family: var(--font-display);
   font-size: 13px;
   font-weight: 700;
-  color: var(--usp-blue-xdark);
+  color: var(--primary-blue-xdark);
   margin-bottom: 12px;
 }
 
@@ -115,7 +115,7 @@ body.editor-page {
 .editor-field select:focus,
 .editor-field textarea:focus {
   outline: none;
-  border-color: var(--usp-blue);
+  border-color: var(--primary-blue);
   background: var(--bg);
 }
 
@@ -163,8 +163,8 @@ body.editor-page {
   transition: var(--transition);
 }
 .editor-btn-inline:hover {
-  background: var(--usp-blue);
-  border-color: var(--usp-blue);
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
   color: var(--bg);
 }
 
@@ -202,8 +202,8 @@ body.editor-page {
 }
 
 .editor-tool-btn.armed {
-  background: var(--usp-blue);
-  border-color: var(--usp-blue);
+  background: var(--primary-blue);
+  border-color: var(--primary-blue);
   color: var(--bg);
 }
 
@@ -217,7 +217,7 @@ body.editor-page {
 .editor-shape-type {
   font-family: var(--font-mono);
   font-size: 11px;
-  color: var(--usp-blue);
+  color: var(--primary-blue);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -306,11 +306,11 @@ body.editor-page {
 
 .ed-handle {
   fill: var(--bg);
-  stroke: var(--usp-blue);
+  stroke: var(--primary-blue);
   stroke-width: 1.5;
   cursor: grab;
 }
-.ed-handle:hover { fill: var(--usp-blue-tint); }
+.ed-handle:hover { fill: var(--primary-blue-tint); }
 
 .ed-device { cursor: move; }
 .ed-device-body {
@@ -333,12 +333,12 @@ body.editor-page {
 .ed-selected .ed-rect-body,
 .ed-selected .ed-device-body,
 circle.ed-selected {
-  stroke: var(--usp-orange) !important;
+  stroke: var(--primary-orange) !important;
   stroke-width: 3 !important;
 }
 .ed-selected .ed-wall-line,
 .ed-selected .ed-door-leaf {
-  stroke: var(--usp-orange);
+  stroke: var(--primary-orange);
 }
 
 /* ── Footer / status ── */
