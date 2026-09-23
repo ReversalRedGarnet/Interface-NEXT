@@ -1,11 +1,13 @@
 /**
  * main.js — entry point.
- *   • On index.html   → window.ROOM_META is undefined → initMenuPage()
+ *   • On index.html   → window.ROOM_META is undefined → initMenuPage() +
+ *                        initCampusPage() (the birds-eye nav prototype)
  *   • On a room page  → window.ROOM_META is set        → fetch its data
  *                        file and initRoomPage(fullConfig)
  */
 import { initMenuPage } from './menu.js';
 import { initRoomPage } from './room.js';
+import { initCampusPage } from './campus.js';
 
 if (window.ROOM_META) {
   const { dataUrl, ...meta } = window.ROOM_META;
@@ -25,4 +27,5 @@ if (window.ROOM_META) {
     });
 } else {
   initMenuPage();
+  initCampusPage();
 }

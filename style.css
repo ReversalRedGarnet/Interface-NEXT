@@ -828,6 +828,92 @@ body.menu-page {
   border-top: 1px solid var(--border-light);
 }
 
+/* ── CAMPUS VIEW (prototype nav layer) ──
+   Birds-eye building blocks, one level up in scale from a room's own floor
+   plan — same visual language as .floor-room/.floor-label (room.js's
+   drawLayout) rather than inventing a new one. */
+.campus-canvas-wrap {
+  margin-bottom: 28px;
+  border: 1.5px solid var(--border);
+  border-top: 3px solid var(--primary-blue);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+
+.campus-loading {
+  padding: 40px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.campus-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.campus-building {
+  cursor: pointer;
+}
+
+.campus-building-shape {
+  fill: var(--surface-2);
+  stroke: var(--text-mid);
+  stroke-width: 2;
+  transition: var(--transition);
+}
+
+.campus-building:hover .campus-building-shape,
+.campus-building:focus-visible .campus-building-shape {
+  fill: var(--primary-blue-tint);
+  stroke: var(--primary-blue);
+}
+
+.campus-building:focus-visible {
+  outline: none; /* the shape's own stroke change is the focus indicator */
+}
+
+.campus-building-label {
+  font-family: var(--font-display);
+  font-size: 15px;
+  font-weight: 700;
+  fill: var(--primary-blue-xdark);
+}
+
+.campus-building-sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  fill: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+/* the old flat site/room list, kept intact (room-scaffold.js's New Room
+   flow patches this exact markup) but demoted to a collapsed fallback now
+   that the campus view is the primary way in */
+.all-rooms-fallback {
+  margin-bottom: 28px;
+}
+
+.all-rooms-fallback summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-muted);
+  padding: 4px 0;
+}
+
+.all-rooms-fallback summary:hover {
+  color: var(--primary-blue-dark);
+}
+
+.all-rooms-fallback[open] summary {
+  margin-bottom: 16px;
+}
+
 /* ═══════════════════════════════════════════════════════════════════
    CHECKER SWEEP UI — added July 2026
    Everything below supports the room page's device sweep: keyboard

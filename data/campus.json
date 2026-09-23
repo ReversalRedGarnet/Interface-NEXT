@@ -1,0 +1,32 @@
+{
+  "canvasWidth": 1000,
+  "canvasHeight": 460,
+  "buildings": [
+    {
+      "id": "commons-hall",
+      "label": "Commons Hall",
+      "shape": { "x": 60, "y": 180, "width": 220, "height": 200 },
+      "floors": [
+        { "roomId": "commons", "label": "Commons" }
+      ]
+    },
+    {
+      "id": "northgate-tower",
+      "label": "Northgate Tower",
+      "shape": { "x": 380, "y": 60, "width": 200, "height": 340 },
+      "floors": [
+        { "roomId": "b2-210", "label": "B2-210" },
+        { "roomId": "b2-204", "label": "B2-204" }
+      ]
+    },
+    {
+      "id": "riverside-block",
+      "label": "Riverside Block",
+      "shape": { "x": 680, "y": 140, "width": 260, "height": 240 },
+      "floors": [
+        { "roomId": "annex", "label": "Annex Lab" },
+        { "roomId": "workshop", "label": "Workshop" }
+      ]
+    }
+  ]
+}

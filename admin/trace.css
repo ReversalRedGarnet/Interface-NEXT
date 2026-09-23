@@ -1,0 +1,244 @@
+/* trace.css — standalone styling for the internal Campus Trace admin tool.
+   Deliberately independent of the app's own style.css/editor.css: this page
+   is never linked from the app and has no reason to share its design
+   system or inherit rules meant for .menu-page/.editor-page bodies. */
+
+:root {
+  --bg: #1b1d21;
+  --surface: #24262b;
+  --surface-2: #2c2f35;
+  --border: #3a3d44;
+  --text: #e8e9eb;
+  --text-muted: #9a9da3;
+  --accent: #4da3ff;
+  --accent-dark: #2b7fd6;
+  --danger: #e2574c;
+  --radius: 8px;
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+  font-size: 14px;
+}
+
+.trace-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid var(--border);
+}
+
+.trace-header h1 {
+  margin: 0 0 6px;
+  font-size: 19px;
+}
+
+.trace-sub {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12.5px;
+  line-height: 1.6;
+  max-width: 780px;
+}
+
+.trace-sub code {
+  color: var(--text);
+  background: var(--surface-2);
+  padding: 1px 5px;
+  border-radius: 4px;
+}
+
+.trace-app {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 340px;
+  gap: 20px;
+  padding: 20px 24px 40px;
+  align-items: start;
+}
+
+@media (max-width: 900px) {
+  .trace-app { grid-template-columns: 1fr; }
+}
+
+.trace-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+}
+
+.trace-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.trace-file-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: var(--accent);
+  color: #0c1116;
+  font-weight: 600;
+  padding: 8px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+}
+
+.trace-file-btn:hover { background: var(--accent-dark); color: var(--text); }
+
+.trace-status, .trace-hint {
+  color: var(--text-muted);
+  font-size: 12.5px;
+}
+
+.trace-points-count {
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 12px;
+  color: var(--text-muted);
+  margin-left: auto;
+}
+
+.trace-btn {
+  background: var(--surface-2);
+  color: var(--text);
+  border: 1px solid var(--border);
+  padding: 7px 14px;
+  border-radius: var(--radius);
+  cursor: pointer;
+  font-size: 12.5px;
+}
+
+.trace-btn:hover:not(:disabled) { border-color: var(--accent); }
+.trace-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.trace-btn-primary {
+  background: var(--accent);
+  color: #0c1116;
+  font-weight: 600;
+  border-color: var(--accent);
+}
+.trace-btn-primary:hover:not(:disabled) { background: var(--accent-dark); color: var(--text); }
+
+.trace-canvas-wrap {
+  position: relative;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: #000;
+  overflow: auto;
+  max-height: 70vh;
+}
+
+#trace-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  cursor: crosshair;
+}
+
+.trace-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  margin: 0;
+  pointer-events: none;
+}
+
+.trace-side-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.trace-side-block h2 {
+  margin: 0 0 10px;
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.trace-building-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.trace-building-list li {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.trace-building-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.trace-building-name {
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.trace-building-meta {
+  color: var(--text-muted);
+  font-size: 11.5px;
+}
+
+.trace-building-list .trace-btn {
+  padding: 4px 8px;
+  font-size: 11.5px;
+}
+
+.trace-empty-row {
+  color: var(--text-muted);
+  font-size: 12.5px;
+  padding: 8px 0;
+}
+
+.trace-note {
+  background: var(--surface-2);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 10px 12px;
+  font-size: 11.5px;
+  line-height: 1.6;
+  color: var(--text-muted);
+  margin: 0 0 12px;
+}
+
+.trace-note code {
+  color: var(--text);
+}
+
+.trace-export-output {
+  width: 100%;
+  margin-top: 10px;
+  background: #0c0e11;
+  color: #d6f5c9;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-family: ui-monospace, "SF Mono", Consolas, monospace;
+  font-size: 11.5px;
+  padding: 10px;
+  resize: vertical;
+}
+
+.danger { color: var(--danger); }

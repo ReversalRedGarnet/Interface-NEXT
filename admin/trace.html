@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Campus Trace — internal tool</title>
+  <link rel="stylesheet" href="trace.css">
+</head>
+<body>
+
+  <header class="trace-header">
+    <h1>Campus Trace</h1>
+    <p class="trace-sub">
+      Internal admin tool — not linked from the app. Trace building outlines
+      from a drone/aerial photo and export them as <code>data/campus.json</code>-ready
+      JSON. The photo is loaded only into this browser tab (<code>URL.createObjectURL</code>)
+      — it is never uploaded, saved, or embedded into any file.
+    </p>
+  </header>
+
+  <main class="trace-app">
+
+    <section class="trace-panel trace-canvas-panel">
+      <div class="trace-toolbar">
+        <label class="trace-file-btn">
+          📷 Load photo
+          <input type="file" id="photo-input" accept="image/*" hidden>
+        </label>
+        <span class="trace-status" id="trace-status">No photo loaded.</span>
+      </div>
+
+      <div class="trace-canvas-wrap" id="canvas-wrap">
+        <canvas id="trace-canvas" width="800" height="450"></canvas>
+        <p class="trace-empty" id="trace-empty">Load a photo to start tracing.</p>
+      </div>
+
+      <div class="trace-toolbar">
+        <span class="trace-hint">Click to add a point. Need at least 3 points to finish a shape.</span>
+        <span class="trace-points-count" id="points-count">0 points</span>
+        <button type="button" class="trace-btn" id="btn-undo-point" disabled>↶ Undo point</button>
+        <button type="button" class="trace-btn" id="btn-cancel-shape" disabled>✕ Cancel shape</button>
+        <button type="button" class="trace-btn trace-btn-primary" id="btn-finish-shape" disabled>✔ Finish shape…</button>
+      </div>
+    </section>
+
+    <section class="trace-panel trace-side-panel">
+      <div class="trace-side-block">
+        <h2>Buildings traced (<span id="building-count">0</span>)</h2>
+        <ul class="trace-building-list" id="building-list">
+          <li class="trace-empty-row" id="building-list-empty">None yet — finish a shape to add one.</li>
+        </ul>
+      </div>
+
+      <div class="trace-side-block">
+        <h2>Export</h2>
+        <p class="trace-note">
+          <strong>Note:</strong> <code>data/campus.json</code> only supports
+          rectangular building shapes today — each traced outline is exported
+          as its bounding box. <code>roomId</code> values are placeholders
+          (<code>building-slug</code> / <code>building-slug-floor-N</code>);
+          create matching rooms via the drag-and-drop editor and/or edit the
+          <code>roomId</code>s by hand before this will fully work in the app.
+        </p>
+        <button type="button" class="trace-btn trace-btn-primary" id="btn-export">Export JSON</button>
+        <button type="button" class="trace-btn" id="btn-copy" disabled>📋 Copy to clipboard</button>
+        <textarea id="export-output" class="trace-export-output" readonly rows="14" placeholder="Export JSON to see it here."></textarea>
+      </div>
+    </section>
+
+  </main>
+
+  <script type="module" src="trace.js"></script>
+</body>
+</html>

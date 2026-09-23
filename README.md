@@ -5,11 +5,18 @@ tap each device, and the status sticks. Reports come out as CSV.
 
 ## Structure
 ```
-index.html      — site/room menu (was documented as menu.html; that was wrong)
+index.html      — campus view (birds-eye buildings/floors) + the site/room
+                  menu, kept intact as a collapsed fallback (see "Campus
+                  view" below)
 style.css
 js/
-  main.js       — entry point (dual-mode: menu page vs room page)
-  menu.js       — menu page: site toggles, export-all, backup/restore
+  main.js         — entry point (dual-mode: menu page vs room page)
+  menu.js         — menu page: site toggles, export-all, backup/restore
+  campus.js       — campus view: renders data/campus.json as clickable
+                    building blocks, floor-picker overlay for multi-floor
+                    buildings (see "Campus view" below)
+  campus-data.js  — pure logic behind campus.js (normalize/find/decide);
+                    no DOM, same split as schema.js vs canvas-renderer.js
   room.js       — room page: floor-plan SVG, device rendering, quick-mark,
                   popups, progress, state
   export.js     — CSV reports + JSON state backup/restore
@@ -20,6 +27,8 @@ js/
 data/
   annex.json, b2-204.json, b2-210.json, commons.json, workshop.json
   — each room's layout + device positions
+  campus.json — buildings/floors for the campus view; each floor just
+                points at one of the roomIds above (see "Campus view" below)
   assets.json — assetId → {type, manufacturer, serial, notes} lookup, shared
                 across every room (see "Editing rooms visually" below)
 rooms/
@@ -43,7 +52,41 @@ test/
   rooms.smoke.mjs — renders all five rooms; checks bounds and labels
   editor.test.mjs — schema.js + room-scaffold.js: existing-room round-trip,
                     new-room 4-file generation, id-collision validation
+  campus.test.mjs — campus-data.js's pure logic, data/campus.json sanity
+                    checks, and campus.js's rendering/click/keyboard
+                    behaviour driven in jsdom
 ```
+
+## Campus view (prototype)
+`index.html` opens on a birds-eye schematic of buildings (`data/campus.json`),
+one level up in scale from a room's own floor plan. Clicking a building with
+one floor goes straight into that floor's existing room page; a building
+with more than one floor opens a picker first. Every floor is just an
+existing room id — `room.js`, `schema.js`, and the five `data/*.json` room
+files are completely untouched by this layer; it only adds a new page
+section, `data/campus.json`, and `js/campus.js`/`js/campus-data.js`.
+
+The existing site/room menu is still there underneath, collapsed by default
+("Browse all rooms (list view)") — it's what `js/editor/room-scaffold.js`'s
+New Room flow patches when the drag-and-drop editor scaffolds a room, so its
+exact markup (`.site-grid`/`.site-card`/`.room-list`) had to stay intact
+rather than being replaced by the campus view.
+
+`data/campus.json` shape:
+```json
+{
+  "canvasWidth": 1000, "canvasHeight": 460,
+  "buildings": [
+    { "id": "commons-hall", "label": "Commons Hall",
+      "shape": { "x": 60, "y": 180, "width": 220, "height": 200 },
+      "floors": [ { "roomId": "commons", "label": "Commons" } ] }
+  ]
+}
+```
+Seeded with 3 placeholder buildings (mixed single/multi-floor) built from
+the 5 existing rooms — no new room data was invented for this prototype.
+There's no campus-view equivalent of the drag-and-drop editor yet; add or
+move a building by hand-editing `data/campus.json`.
 
 ## Running locally
 The pages use `fetch()` to load each room's JSON and `<script type="module">`,
