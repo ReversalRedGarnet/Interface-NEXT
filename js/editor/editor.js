@@ -7,7 +7,7 @@
  */
 import {
   DEVICE_TYPES, PLACEABLE_SHAPE_TYPES, LAYOUT_SHAPES, shapeDisplayName,
-  normalizeRoomData, createBlankRoomData, serializeRoomData,
+  normalizeRoomData, createBlankRoomData, cloneRoomLayoutOnly, serializeRoomData,
   normalizeAssetsData, serializeAssetsData, generateAssetId, registerAssetId,
   findAssetIdOwner,
 } from './schema.js';
@@ -49,6 +49,7 @@ const nrId = $('nr-id');
 const nrLabel = $('nr-label');
 const nrSite = $('nr-site');
 const nrSiteList = $('nr-site-list');
+const nrCopyFrom = $('nr-copy-from');
 const nrWidth = $('nr-width');
 const nrHeight = $('nr-height');
 
@@ -251,6 +252,15 @@ async function runAssetIdCheck(assetId, deviceIndex, deviceId) {
   renderProperties();
 }
 
+/** Reads and normalizes data/{stem}.json for `id` — shared by loadRoom and
+ *  the New Room "copy layout from" option. Throws on read/parse failure;
+ *  callers decide how to surface that. */
+async function readRoomData(id) {
+  const dataDir = await rootHandle.getDirectoryHandle('data');
+  const text = await readTextFile(dataDir, `${roomFileStem(id)}.json`);
+  return normalizeRoomData(JSON.parse(text));
+}
+
 /* ── Loading / saving an existing room ───────────────────────────── */
 
 async function loadRoom(id, label, campus) {
@@ -318,23 +328,56 @@ async function openNewRoomDialog() {
     opt.value = site;
     nrSiteList.appendChild(opt);
   }
+  nrCopyFrom.innerHTML = '<option value="">— start blank —</option>';
+  for (const entry of parseAllRoomsEntries(registry.exportJs)) {
+    const opt = document.createElement('option');
+    opt.value = entry.id;
+    opt.textContent = `${entry.label} (${entry.campus})`;
+    nrCopyFrom.appendChild(opt);
+  }
   nrId.value = '';
   nrLabel.value = '';
   nrSite.value = '';
   nrWidth.value = 1200;
   nrHeight.value = 800;
+  nrWidth.disabled = false;
+  nrHeight.disabled = false;
   newRoomErrors.textContent = '';
   newRoomOverlay.classList.add('open');
   nrId.focus();
+}
+
+/** Picking a source room locks the canvas-size fields to its own
+ *  canvasWidth/canvasHeight — copied wall/boundary coordinates are only
+ *  meaningful against the canvas they were placed on, so letting the size
+ *  fields drift from the source would silently misplace everything. */
+async function onCopyFromChange() {
+  const sourceId = nrCopyFrom.value;
+  if (!sourceId) {
+    nrWidth.disabled = false;
+    nrHeight.disabled = false;
+    return;
+  }
+  try {
+    const source = await readRoomData(sourceId);
+    nrWidth.value = source.canvasWidth;
+    nrHeight.value = source.canvasHeight;
+    nrWidth.disabled = true;
+    nrHeight.disabled = true;
+  } catch (err) {
+    newRoomErrors.textContent = `Couldn't read the layout to copy from: ${err.message}`;
+    nrCopyFrom.value = '';
+    nrWidth.disabled = false;
+    nrHeight.disabled = false;
+  }
 }
 
 function closeNewRoomDialog() {
   newRoomOverlay.classList.remove('open');
 }
 
-async function writeNewRoomFiles({ id, label, campus, canvasWidth, canvasHeight }, registry) {
+async function writeNewRoomFiles({ id, label, campus, roomData }, registry) {
   const stem = roomFileStem(id);
-  const roomData = createBlankRoomData(canvasWidth, canvasHeight);
   const dataText = serializeRoomData(roomData);
   const roomHtml = generateRoomHtml({ id, label, campus, dataUrl: dataUrlForId(id) });
   const newIndexHtml = patchIndexHtml(registry.indexHtml, { id, label, campus });
@@ -363,8 +406,6 @@ async function writeNewRoomFiles({ id, label, campus, canvasWidth, canvasHeight 
       'The remaining touch-points need to be finished by hand, or re-run once the problem is fixed.',
     );
   }
-
-  return roomData;
 }
 
 async function createNewRoom() {
@@ -373,6 +414,7 @@ async function createNewRoom() {
   const campus = nrSite.value.trim();
   const canvasWidth = Number(nrWidth.value) || 1200;
   const canvasHeight = Number(nrHeight.value) || 800;
+  const copyFromId = nrCopyFrom.value;
 
   const problems = [];
   if (!campus) problems.push('Site is required.');
@@ -385,8 +427,20 @@ async function createNewRoom() {
     return;
   }
 
+  let roomData;
+  if (copyFromId) {
+    try {
+      roomData = cloneRoomLayoutOnly(await readRoomData(copyFromId));
+    } catch (err) {
+      newRoomErrors.textContent = `Couldn't read the layout to copy from: ${err.message}`;
+      return;
+    }
+  } else {
+    roomData = createBlankRoomData(canvasWidth, canvasHeight);
+  }
+
   try {
-    const roomData = await writeNewRoomFiles({ id, label, campus, canvasWidth, canvasHeight }, registry);
+    await writeNewRoomFiles({ id, label, campus, roomData }, registry);
     closeNewRoomDialog();
     await refreshRoomPicker();
 
@@ -577,10 +631,6 @@ function renderProperties() {
     for (const f of ['x1', 'y1', 'x2', 'y2']) {
       propertiesFields.appendChild(field(f, numberInput(shape[f], v => { shape[f] = v; markDirtyRerender(); })));
     }
-  } else if (spec?.kind === 'circle') {
-    for (const f of ['cx', 'cy', 'r']) {
-      propertiesFields.appendChild(field(f, numberInput(shape[f], v => { shape[f] = v; markDirtyRerender(); })));
-    }
   } else if (spec?.kind === 'hinge') {
     // Fixed standard width, no per-instance size fields — drag (or
     // click-then-click) to reposition it as a whole.
@@ -676,6 +726,7 @@ roomPicker.addEventListener('change', () => {
 });
 
 newRoomBtn.addEventListener('click', () => { if (rootHandle) openNewRoomDialog(); });
+nrCopyFrom.addEventListener('change', onCopyFromChange);
 $('new-room-close').addEventListener('click', closeNewRoomDialog);
 $('new-room-cancel').addEventListener('click', closeNewRoomDialog);
 $('new-room-create').addEventListener('click', createNewRoom);

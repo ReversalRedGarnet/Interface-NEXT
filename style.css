@@ -15,8 +15,6 @@
   --primary-blue-tint:     #F1EFEA;
   --primary-blue-mid:      #E9E7E1;
   --primary-orange:        #2A2A2A;
-  --primary-orange-dark:   #1A1A1A;
-  --primary-orange-tint:   #F1EFEA;
 
   /* Neutrals — softened: off-white background instead of pure white, soft
      near-black text instead of pure black, borders a step lighter. */
@@ -293,17 +291,6 @@ h1 {
   fill: var(--surface-2);
   stroke: var(--border);
   stroke-width: 1.5;
-}
-
-.floor-pillar {
-  fill: var(--surface);
-  stroke: var(--border);
-  stroke-width: 1.5;
-}
-
-.floor-pillar-mark {
-  stroke: var(--border);
-  stroke-width: 1;
 }
 
 .floor-fill {
@@ -704,7 +691,7 @@ h1 {
 
 /* ── MENU PAGE ── */
 /* flex column so .site-footer sticks to the bottom of the viewport even
-   when there isn't enough content (e.g. campus cards collapsed) to push
+   when there isn't enough content (e.g. site cards collapsed) to push
    it down naturally */
 body.menu-page {
   padding: 0;
@@ -740,7 +727,7 @@ body.menu-page {
   color: var(--text-muted);
 }
 
-/* campus card grid — align-items:start stops the grid stretching every
+/* site card grid — align-items:start stops the grid stretching every
    card in a row to match the tallest one, so an unopened card no longer
    visually "grows" when its sibling's room-list expands */
 .site-grid {

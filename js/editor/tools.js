@@ -37,7 +37,6 @@ export function cloneShapeGeometry(shape) {
     case 'rect':    return { x: shape.x, y: shape.y, width: shape.width, height: shape.height };
     case 'line':    return { x1: shape.x1, y1: shape.y1, x2: shape.x2, y2: shape.y2 };
     case 'hinge':   return { hinge: [...shape.hinge], jamb: [...shape.jamb] };
-    case 'circle':  return { cx: shape.cx, cy: shape.cy };
     case 'polygon': return { points: shape.points.map(p => [...p]) };
     default:        return {};
   }
@@ -59,10 +58,6 @@ function translateShape(shape, orig, dx, dy, gridSize) {
       shape.hinge = [snap(orig.hinge[0] + dx, gridSize), snap(orig.hinge[1] + dy, gridSize)];
       shape.jamb = [snap(orig.jamb[0] + dx, gridSize), snap(orig.jamb[1] + dy, gridSize)];
       break;
-    case 'circle':
-      shape.cx = snap(orig.cx + dx, gridSize);
-      shape.cy = snap(orig.cy + dy, gridSize);
-      break;
     case 'polygon':
       shape.points = orig.points.map(([x, y]) => [snap(x + dx, gridSize), snap(y + dy, gridSize)]);
       break;
@@ -79,7 +74,6 @@ export function shapeAnchor(shape) {
     case 'rect':    return [shape.x, shape.y];
     case 'line':    return [shape.x1, shape.y1];
     case 'hinge':   return [shape.hinge[0], shape.hinge[1]];
-    case 'circle':  return [shape.cx, shape.cy];
     case 'polygon': return [shape.points[0][0], shape.points[0][1]];
     default:        return null;
   }

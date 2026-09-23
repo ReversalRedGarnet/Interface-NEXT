@@ -120,14 +120,6 @@ function drawLayout(layout, w = 1200, h = 800) {
     parts.push(`<rect x="${wr.x}" y="${wr.y}" width="${wr.width}" height="${wr.height}" class="floor-wallrect"/>`);
   });
 
-  layout.filter(o => o.type === 'pillar').forEach(p => {
-    parts.push(`<circle cx="${p.cx}" cy="${p.cy}" r="${p.r}" class="floor-pillar"/>`);
-    const k = p.r * 0.7;
-    parts.push(`<line x1="${p.cx - k}" y1="${p.cy - k}" x2="${p.cx + k}" y2="${p.cy + k}" class="floor-pillar-mark"/>`);
-    parts.push(`<line x1="${p.cx - k}" y1="${p.cy + k}" x2="${p.cx + k}" y2="${p.cy - k}" class="floor-pillar-mark"/>`);
-    if (p.label) parts.push(`<title>${escapeXML(p.label)}</title>`);
-  });
-
   return `<svg class="room-bg-svg" viewBox="0 0 ${w} ${h}" preserveAspectRatio="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">${parts.join('')}</svg>`;
 }
 

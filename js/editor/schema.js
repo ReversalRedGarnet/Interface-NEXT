@@ -16,7 +16,10 @@ export const DEFAULT_CANVAS_HEIGHT = 800;
  *  rest are just example suggestions. `type` itself is free text (any
  *  string round-trips fine); this list only feeds the editor's
  *  autocomplete, it's never an enforced enum. */
-export const DEVICE_TYPES = ['pc', 'staff', 'printer', 'peripheral', 'furniture', 'network gear'];
+export const DEVICE_TYPES = [
+  'pc', 'staff', 'printer', 'peripheral', 'furniture', 'network gear',
+  'switch', 'router', 'server', 'projector', 'ups',
+];
 
 /** The one standard width every entrance/boundary-opening uses — no
  *  per-instance sizing. A clean, plausible doorway width in the same
@@ -148,6 +151,17 @@ export function cloneRoomData(data) {
     layout: data.layout.map(s => (Array.isArray(s.points) ? { ...s, points: s.points.map(p => [...p]) } : { ...s })),
     devices: data.devices.map(d => ({ ...d })),
   };
+}
+
+/** Starting point for "duplicate this room's layout" (New Room's
+ *  copy-from option): same walls/boundary/rooms/entrances/etc as `data`,
+ *  deep-cloned via cloneRoomData so editing the new room never mutates the
+ *  source, with devices cleared since a duplicate is meant to start
+ *  unpopulated. canvasWidth/canvasHeight carry over too — layout
+ *  coordinates are only meaningful against the canvas size they were
+ *  placed on. */
+export function cloneRoomLayoutOnly(data) {
+  return { ...cloneRoomData(data), devices: [] };
 }
 
 function orderedShape(shape) {

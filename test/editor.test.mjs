@@ -32,7 +32,7 @@ global.window = dom.window;
 global.document = dom.window.document;
 
 const {
-  normalizeRoomData, serializeRoomData, createBlankRoomData, createShape, createDevice, nextDeviceId, snap,
+  normalizeRoomData, serializeRoomData, createBlankRoomData, cloneRoomLayoutOnly, createShape, createDevice, nextDeviceId, snap,
   LAYOUT_SHAPE_TYPES, PLACEABLE_SHAPE_TYPES, ENTRANCE_WIDTH, shapeDisplayName,
   generateAssetId, registerAssetId, normalizeAssetsData, serializeAssetsData, findAssetIdOwner,
 } = await import('../js/editor/schema.js');
@@ -280,6 +280,30 @@ await test('end-to-end: creating a new room produces four internally-consistent,
   const allRoomsAfter = extractAllRoomsIds(newExportJs);
   assert(allRoomsAfter.includes('B2-220'), 'ALL_ROOMS missing the new id');
   assert(newExportJs.includes("label: 'B2-220', campus: 'Northgate Site'"), 'ALL_ROOMS entry fields do not match the room being created');
+});
+
+await test('cloneRoomLayoutOnly copies layout/canvas size but starts with no devices', async () => {
+  const source = normalizeRoomData(readJson('data/commons.json'));
+  assert(source.devices.length > 0, 'fixture assumption changed — commons.json should have devices');
+
+  const copy = cloneRoomLayoutOnly(source);
+  assertEqual(copy.devices.length, 0, 'a layout copy should start with no devices');
+  assertEqual(copy.canvasWidth, source.canvasWidth, 'canvasWidth should carry over from the source');
+  assertEqual(copy.canvasHeight, source.canvasHeight, 'canvasHeight should carry over from the source');
+  assertEqual(JSON.stringify(copy.layout), JSON.stringify(source.layout), 'layout should be copied as-is');
+});
+
+await test('cloneRoomLayoutOnly deep-clones layout so editing the copy never mutates the source', async () => {
+  const source = normalizeRoomData(readJson('data/commons.json'));
+  const outlineBefore = JSON.stringify(source.layout.find(s => s.type === 'outline').points);
+
+  const copy = cloneRoomLayoutOnly(source);
+  const copiedOutline = copy.layout.find(s => s.type === 'outline');
+  copiedOutline.points[0][0] = 9999; // mutate a nested array in the copy
+  copy.layout.find(s => s.type === 'room').x = 9999; // mutate a plain field in the copy
+
+  assertEqual(JSON.stringify(source.layout.find(s => s.type === 'outline').points), outlineBefore, 'mutating the copy\'s outline points changed the source');
+  assert(source.layout.find(s => s.type === 'room').x !== 9999, 'mutating the copy\'s shape fields changed the source');
 });
 
 /* ══════════════════════════════════════════════════════════════════

@@ -33,10 +33,6 @@ export function dataUrlForId(id) {
   return `../data/${roomFileStem(id)}.json`;
 }
 
-export function roomHtmlFileNameForId(id) {
-  return `${roomFileStem(id)}.html`;
-}
-
 /* ── 1. rooms/{id}.html ──────────────────────────────────────────── */
 
 /** Matches the shell every existing rooms/*.html uses (see rooms/b2-210.html) — only
