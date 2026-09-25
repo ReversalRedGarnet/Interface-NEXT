@@ -29,8 +29,10 @@
   .header-inner { align-items: flex-start; }
 
   .workstation-toolbar { gap: var(--space-2); }
+  .toolbar-spacer { display: none; }
   .mode-group, .filter-row { flex: 1 1 100%; }
   .quick-btn, .filter-btn, .toolbar-btn { flex: 1 1 auto; min-height: 40px; }
+  .zoom-hint { display: none; }
 
   .legend { gap: var(--space-3) var(--space-4); margin-top: var(--space-3); }
 

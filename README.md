@@ -172,6 +172,10 @@ Every device carries two independent fields (see "Inspection state vs.
 condition" below): whether it's been looked at, and — only if it has —
 whether it's working. Everything below is built on that.
 
+The toolbar is two tiers on purpose: a primary row for the core "find the
+next thing, check it, move on" loop, and everything administrative
+(undo/export/reset) tucked out of the way until asked for.
+
 - **Tap a device** → the inspector panel (a side panel on desktop, a bottom
   sheet on mobile) shows its id, a 5-way status control (Working/Minor
   Issue/Major Issue/Not Applicable/Not Checked), any linked asset info
@@ -179,34 +183,55 @@ whether it's working. Everything below is built on that.
   and notes. Status changes and notes autosave — there's no Save button —
   and a small **Saved**/**Saving…** indicator next to the device id
   confirms it went through.
-- **⏭ Next Unchecked** → jumps straight to the next device still marked
+- **→ Next Unchecked** → jumps straight to the next device still marked
   Unchecked (row-major: top-to-bottom, then left-to-right, derived from
   each device's own stored position), panning/zooming it into view and
   focusing its status control.
-- **Inspection Mode** (Working/Minor/Major/N/A) → arm a status, then one tap
-  per device instead of opening the inspector each time. A banner makes the
-  active mode impossible to miss; `Esc` exits it. `Undo` steps back through
-  every change, however it was made. Resetting a device back to Not Checked
-  isn't in this mode on purpose — that's a correction, not something you do
-  while sweeping the room, so it stays an inspector/`0`-key action.
-- **Filters** (All/Unchecked/Checked/Not Applicable/Working/Minor/
-  Major/Notes) → non-matching devices fade to ~25% opacity rather than
-  disappearing, so where they sit relative to everything else is never
-  lost.
+- **Inspection Mode** collapses to a single toggle button when off. Clicking
+  it arms Working and reveals the Working/Minor/Major/N/A picker in its
+  place, so one tap per device applies a status instead of opening the
+  inspector each time. A banner makes the active mode impossible to miss;
+  `Esc`, or clicking the active picker button again, turns it off and
+  collapses the picker back down to the toggle button. `Undo` (in the room
+  actions menu — see below) steps back through every change, however it was
+  made. Resetting a device back to Not Checked isn't in this mode on
+  purpose — that's a correction, not something you do while sweeping the
+  room, so it stays an inspector/`0`-key action.
+- **Filters** collapse behind a **Filter** toggle button (its own label
+  shows the active filter, e.g. "Filter: Working", even while collapsed, so
+  an active filter is never silently forgotten). Expanding it reveals
+  All/Unchecked/Checked/Not Applicable/Working/Minor/Major/Notes;
+  non-matching devices fade to ~25% opacity rather than disappearing, so
+  where they sit relative to everything else is never lost. Picking "All"
+  collapses the row back down. (The picker and the filter row each carry
+  their own small caption — "Mark as" / "Filter" — specifically so the two
+  Working/Minor/Major button groups are never ambiguous if both happen to
+  be open at once.)
+- **Room actions** (Undo, Export This Room, Export All Rooms, Reset This
+  Room) live behind a single **⋯** overflow button — administrative actions
+  that don't need to compete visually with the inspect-a-device loop.
 - **Search** (`/` or Ctrl/⌘+K) → matches device id, label, asset id, serial,
   manufacturer, notes, and status, across every room (other rooms' data is
   fetched lazily, only once you actually search). Picking a result in
   another room navigates there and focuses that device automatically.
-- **Zoom/pan** → the floating strip (−/Fit/100%/+/⛶) plus wheel-zoom and
-  drag-to-pan (mouse or touch). This is a view transform only — a device's
-  stored `top`/`left` never changes, no matter how far you've zoomed or
-  panned.
+- **Zoom/pan** → the floating strip (−/Fit/100%/+/⛶) plus drag-to-pan
+  (mouse or touch). This is a view transform only — a device's stored
+  `top`/`left` never changes, no matter how far you've zoomed or panned.
+  Plain mouse-wheel scroll over the floor plan behaves like normal page
+  scroll; **Ctrl+scroll** (**Cmd+scroll** on Mac) zooms instead, matching
+  the browser's own "zoom the page" gesture so an ordinary scroll is never
+  hijacked. A quiet hint next to the zoom controls says so.
 - **Keyboard**: `1`/`2`/`3` mark the selected device Working/Minor/Major,
   `0` resets it to Not Checked, `N` jumps to its notes field, `U` undoes,
   `→` is Next Unchecked, `/` opens search, `F` fits the floor plan to
-  screen, `Esc` exits Inspection Mode or closes whatever dialog is open.
-  Press `?` for the full list on screen — shortcuts are never mandatory or
-  permanently displayed otherwise.
+  screen, `Esc` exits Inspection Mode or closes whatever menu/dialog is
+  open. Press `?` for the full list on screen — shortcuts are never
+  mandatory or permanently displayed otherwise.
+
+No emoji anywhere in the app — every icon is either a plain character
+already used elsewhere (←, →, ↓, ↶, ↺, ⋯, ✕) or a small flat outline SVG
+(`.icon` in controls.css), sized in `em` and colored via `currentColor` so
+it always matches its own button.
 
 ## Inspection state vs. condition
 A device's status is two independent fields, not one:

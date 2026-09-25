@@ -24,6 +24,12 @@
  * its axis-aligned bounding box, matching the real schema exactly.
  */
 
+/** No emoji — self-contained flat outline icons, matching the ones inlined
+ *  in trace.html (kept as plain constants here rather than importing from
+ *  the app's js/ tree, per this file's own self-contained design above). */
+const ICON_CLIPBOARD = '<svg width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linejoin="round"><rect x="4" y="2.5" width="8" height="11" rx="1"/><rect x="6" y="1" width="4" height="2" rx="0.5"/></svg>';
+const ICON_TRASH = '<svg width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"><path d="M2.5 4h11"/><path d="M5.5 4V2.5h5V4"/><path d="M4 4l.6 9.5h6.8L12 4"/></svg>';
+
 const canvas = document.getElementById('trace-canvas');
 const ctx = canvas.getContext('2d');
 const canvasWrap = document.getElementById('canvas-wrap');
@@ -222,8 +228,9 @@ function renderBuildingList() {
     const deleteBtn = document.createElement('button');
     deleteBtn.type = 'button';
     deleteBtn.className = 'trace-btn danger';
-    deleteBtn.textContent = '🗑';
+    deleteBtn.innerHTML = ICON_TRASH;
     deleteBtn.title = 'Delete this building';
+    deleteBtn.setAttribute('aria-label', 'Delete this building');
     deleteBtn.addEventListener('click', () => {
       buildings.splice(i, 1);
       renderBuildingList();
@@ -310,5 +317,5 @@ copyBtn.addEventListener('click', async () => {
     exportOutput.select();
     copyBtn.textContent = 'Select-all instead (clipboard blocked)';
   }
-  setTimeout(() => { copyBtn.textContent = '📋 Copy to clipboard'; }, 1800);
+  setTimeout(() => { copyBtn.innerHTML = `${ICON_CLIPBOARD} Copy to clipboard`; }, 1800);
 });

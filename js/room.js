@@ -85,6 +85,23 @@ const MIN_SCALE = 0.25;
 const MAX_SCALE = 3;
 const PAN_DRAG_THRESHOLD = 3;
 
+/** No emoji anywhere in this file — every icon is either a plain
+ *  typographic character already used elsewhere in the app (←, →, ↓, ↶,
+ *  ↺) or one of these small flat outline SVGs, sized in `em` so they scale
+ *  with whatever text they sit next to. `currentColor` means each one
+ *  picks up its button's own text color for free — no new color values. */
+const ICON_SEARCH = '<svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="9.8" y1="9.8" x2="14" y2="14" stroke-linecap="round"/></svg>';
+const ICON_FULLSCREEN = '<svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 5V1h4"/><path d="M11 1h4v4"/><path d="M15 11v4h-4"/><path d="M5 15H1v-4"/></svg>';
+
+/** Ctrl on Windows/Linux, Cmd on Mac — for the wheel-zoom hint text only;
+ *  the actual key check (e.ctrlKey || e.metaKey) accepts either regardless
+ *  of platform, this is purely about which word to show. Guarded for
+ *  environments (like the test suite) with no `navigator` at all. */
+function zoomModifierLabel() {
+  const platform = (typeof navigator !== 'undefined' && navigator.platform) || '';
+  return /Mac|iPod|iPhone|iPad/.test(platform) ? 'Cmd' : 'Ctrl';
+}
+
 function escapeXML(s) {
   return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
@@ -246,26 +263,41 @@ export function initRoomPage(CFG) {
         </div>
 
         <div class="workstation-toolbar">
-          <button type="button" class="btn-primary" id="btn-next-unchecked">⏭ Next Unchecked</button>
+          <div class="toolbar-row toolbar-primary">
+            <button type="button" class="btn-primary" id="btn-next-unchecked">→ Next Unchecked</button>
+            <button type="button" class="toolbar-btn" id="btn-search">${ICON_SEARCH} Search <span class="kbd">/</span></button>
 
-          <div class="mode-group" id="mode-group" role="group" aria-label="Inspection mode">
-            ${MODE_STATUSES.map(m => `
-              <button type="button" class="quick-btn" data-mode-status="${m.status}" aria-pressed="false">
-                <span class="status-dot ${m.status}"></span>${m.label}
-              </button>`).join('')}
+            <button type="button" class="toolbar-btn" id="btn-mode-toggle" aria-pressed="false">Inspection Mode</button>
+            <div class="mode-group" id="mode-group" role="group" aria-label="Inspection mode: mark status" hidden>
+              <span class="quick-mark-label">Mark as</span>
+              ${MODE_STATUSES.map(m => `
+                <button type="button" class="quick-btn" data-mode-status="${m.status}" aria-pressed="false">
+                  <span class="status-dot ${m.status}"></span>${m.label}
+                </button>`).join('')}
+            </div>
+
+            <button type="button" class="toolbar-btn" id="btn-filter-toggle" aria-expanded="false" aria-controls="filter-row">Filter</button>
+
+            <div class="toolbar-spacer"></div>
+
+            <div class="overflow-wrap" id="overflow-wrap">
+              <button type="button" class="toolbar-btn" id="btn-more" aria-haspopup="true" aria-expanded="false" aria-label="More room actions">⋯</button>
+              <div class="overflow-menu" id="overflow-menu" role="menu" aria-label="Room actions" hidden>
+                <button type="button" class="overflow-item" id="btn-undo" role="menuitem" disabled>↶ Undo</button>
+                <button type="button" class="overflow-item" id="btn-export-room" role="menuitem">↓ Export This Room</button>
+                <button type="button" class="overflow-item" id="btn-export-all" role="menuitem">↓ Export All Rooms</button>
+                <button type="button" class="overflow-item" id="btn-reset" role="menuitem">↺ Reset This Room</button>
+              </div>
+            </div>
+
+            <button type="button" class="toolbar-btn" id="btn-help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">?</button>
           </div>
 
-          <div class="filter-row" id="filter-row" role="group" aria-label="Filter devices">
+          <div class="filter-row" id="filter-row" role="group" aria-label="Filter devices" hidden>
+            <span class="quick-mark-label">Filter</span>
             ${FILTERS.map(f => `
               <button type="button" class="filter-btn" data-filter="${f.key}" aria-pressed="${f.key === 'all'}">${f.label}</button>`).join('')}
           </div>
-
-          <button type="button" class="toolbar-btn" id="btn-search">🔎 Search <span class="kbd">/</span></button>
-          <button type="button" class="toolbar-btn" id="btn-undo" disabled>↶ Undo</button>
-          <button type="button" class="toolbar-btn" id="btn-export-room">⬇ Export This Room</button>
-          <button type="button" class="toolbar-btn" id="btn-export-all">⬇ Export All Rooms</button>
-          <button type="button" class="toolbar-btn" id="btn-reset">↺ Reset This Room</button>
-          <button type="button" class="toolbar-btn" id="btn-help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">?</button>
         </div>
 
         <p class="mode-banner" id="mode-banner" hidden></p>
@@ -278,7 +310,8 @@ export function initRoomPage(CFG) {
             <button type="button" class="toolbar-btn" id="zoom-fit" aria-label="Fit to screen">Fit</button>
             <button type="button" class="toolbar-btn" id="zoom-100" aria-label="Actual size">100%</button>
             <button type="button" class="toolbar-btn" id="zoom-in" aria-label="Zoom in">+</button>
-            <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">⛶</button>
+            <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">${ICON_FULLSCREEN}</button>
+            <span class="zoom-hint">${zoomModifierLabel()}+scroll to zoom</span>
           </div>
 
           <div class="room-viewport" id="room-viewport">
@@ -343,7 +376,8 @@ export function initRoomPage(CFG) {
           <div><dt class="kbd">→</dt><dd>Jump to next unchecked device</dd></div>
           <div><dt class="kbd">/</dt><dd>Search</dd></div>
           <div><dt class="kbd">F</dt><dd>Fit floor plan to screen</dd></div>
-          <div><dt class="kbd">Esc</dt><dd>Exit inspection mode / close dialogs</dd></div>
+          <div><dt class="kbd">${zoomModifierLabel()}+scroll</dt><dd>Zoom the floor plan (plain scroll behaves normally)</dd></div>
+          <div><dt class="kbd">Esc</dt><dd>Exit inspection mode / close menus and dialogs</dd></div>
         </dl>
       </div>
     </div>
@@ -373,6 +407,13 @@ export function initRoomPage(CFG) {
   const modeBtns = document.querySelectorAll('#mode-group .quick-btn');
   const filterBtns = document.querySelectorAll('#filter-row .filter-btn');
   const modeBanner = document.getElementById('mode-banner');
+  const modeToggleBtn = document.getElementById('btn-mode-toggle');
+  const modeGroup = document.getElementById('mode-group');
+  const filterToggleBtn = document.getElementById('btn-filter-toggle');
+  const filterRow = document.getElementById('filter-row');
+  const overflowWrap = document.getElementById('overflow-wrap');
+  const moreBtn = document.getElementById('btn-more');
+  const overflowMenu = document.getElementById('overflow-menu');
   const undoBtn = document.getElementById('btn-undo');
   const roomStatsEl = document.getElementById('room-stats');
   const sweepFillEl = document.getElementById('sweep-fill');
@@ -398,6 +439,7 @@ export function initRoomPage(CFG) {
   let selectedDeviceId = null;
   let activeModeStatus = null;
   let activeFilter = 'all';
+  let filterOpen = false;
   let lastFocused = null;
   let notesSaveTimer = null;
   let saveStatusTimer = null;
@@ -575,13 +617,20 @@ export function initRoomPage(CFG) {
     saveNotesNow(selectedDeviceId, inspectorNotesEl.value.trim());
   }
 
-  /* ── Inspection Mode (build on Quick Mark) ───────────────────── */
+  /* ── Inspection Mode (build on Quick Mark) ───────────────────────
+     Collapsed to a single toggle button when off; clicking it arms
+     Working (the common case) and reveals the Working/Minor/Major/N/A
+     picker in its place. Clicking the already-active picker button again
+     (or Esc) turns it off and collapses back to the toggle button. */
 
   function setMode(status) {
     activeModeStatus = status;
     modeBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.modeStatus === status)));
     room.classList.toggle('quick-mode', !!status);
     if (status) room.dataset.quick = status; else delete room.dataset.quick;
+    modeToggleBtn.hidden = !!status;
+    modeToggleBtn.setAttribute('aria-pressed', String(!!status));
+    modeGroup.hidden = !status;
     if (status) {
       modeBanner.hidden = false;
       modeBanner.dataset.status = status;
@@ -592,7 +641,22 @@ export function initRoomPage(CFG) {
     announce(status ? `Inspection mode on: ${STATUS_WORDS[status]}` : 'Inspection mode off');
   }
 
-  /* ── Filters (fade, never hide — spatial context stays intact) ── */
+  /* ── Filters (fade, never hide — spatial context stays intact) ──
+     Collapsed behind a toggle button; picking "All" also collapses it
+     back, since that's the "I'm done filtering" choice. The toggle
+     button's own label shows the active filter even while collapsed, so
+     a filter left on doesn't get forgotten. */
+
+  function setFilterOpen(open) {
+    filterOpen = open;
+    filterRow.hidden = !open;
+    filterToggleBtn.setAttribute('aria-expanded', String(open));
+  }
+
+  function updateFilterToggleLabel() {
+    const active = FILTERS.find(f => f.key === activeFilter);
+    filterToggleBtn.textContent = activeFilter === 'all' ? 'Filter' : `Filter: ${active ? active.label : activeFilter}`;
+  }
 
   function applyFilterToNode(el) {
     const id = el.dataset.id;
@@ -612,6 +676,8 @@ export function initRoomPage(CFG) {
     activeFilter = key;
     filterBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filter === key)));
     applyFilterToAll();
+    updateFilterToggleLabel();
+    if (key === 'all') setFilterOpen(false);
   }
 
   /* ── Inspector panel ──────────────────────────────────────────── */
@@ -882,11 +948,23 @@ export function initRoomPage(CFG) {
     selectDevice(deviceId);
   });
 
+  modeToggleBtn.addEventListener('click', () => setMode('working'));
   modeBtns.forEach(btn => btn.addEventListener('click', () => {
     setMode(activeModeStatus === btn.dataset.modeStatus ? null : btn.dataset.modeStatus);
   }));
 
+  filterToggleBtn.addEventListener('click', () => setFilterOpen(!filterOpen));
   filterBtns.forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter)));
+
+  function setOverflowOpen(open) {
+    overflowMenu.hidden = !open;
+    moreBtn.setAttribute('aria-expanded', String(open));
+  }
+  moreBtn.addEventListener('click', () => setOverflowOpen(overflowMenu.hidden));
+  overflowMenu.addEventListener('click', e => { if (e.target.closest('button')) setOverflowOpen(false); });
+  document.addEventListener('click', e => {
+    if (!overflowMenu.hidden && !overflowWrap.contains(e.target)) setOverflowOpen(false);
+  });
 
   document.getElementById('btn-next-unchecked').addEventListener('click', goToNextUnchecked);
   undoBtn.addEventListener('click', undoLast);
@@ -905,7 +983,12 @@ export function initRoomPage(CFG) {
     else viewport.requestFullscreen?.();
   });
 
+  // Plain wheel scroll over the floor plan behaves like normal page scroll
+  // (we don't touch the event at all) — zoom only kicks in with Ctrl/Cmd
+  // held, matching the browser's own "zoom the page" gesture so it never
+  // hijacks an ordinary scroll.
   viewport.addEventListener('wheel', e => {
+    if (!(e.ctrlKey || e.metaKey)) return;
     e.preventDefault();
     const rect = viewport.getBoundingClientRect();
     const factor = e.deltaY < 0 ? 1.1 : 0.9;
@@ -955,6 +1038,8 @@ export function initRoomPage(CFG) {
     if (e.key === 'Escape') {
       const anyOpen = [resetOverlay, searchOverlay, helpOverlay].some(o => o.classList.contains('open'));
       if (anyOpen) { closeOverlay(resetOverlay); closeSearch(); closeOverlay(helpOverlay); }
+      else if (!overflowMenu.hidden) setOverflowOpen(false);
+      else if (filterOpen) setFilterOpen(false);
       else if (activeModeStatus) setMode(null);
       return;
     }

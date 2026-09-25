@@ -75,6 +75,18 @@
   color: var(--text-secondary);
 }
 
+/* ── Inline icons ──
+   Every icon in the app is either a plain character already in use
+   elsewhere (←, →, ↓, ↶, ↺, ⋯, ✕) or one of these small flat outline
+   SVGs — no emoji anywhere. Sized in `em` so an icon always matches its
+   own button's font-size, colored via `currentColor` so it always matches
+   its own button's text color — no new color values anywhere. */
+.icon {
+  display: inline-block;
+  vertical-align: -0.15em;
+  flex-shrink: 0;
+}
+
 /* ── Primary/secondary/danger actions (popups, dialogs) ── */
 .popup-actions {
   display: flex;

@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "test": "node test/state.test.mjs && node test/room-logic.test.mjs && node test/export.test.mjs && node test/room.test.mjs && node test/rooms.smoke.mjs && node test/editor.test.mjs && node test/campus.test.mjs",
+    "test": "node test/state.test.mjs && node test/room-logic.test.mjs && node test/export.test.mjs && node test/room.test.mjs && node test/rooms.smoke.mjs && node test/editor.test.mjs && node test/campus.test.mjs && node test/no-emoji.test.mjs",
     "build-grid": "node js/build-grid.js",
     "serve": "node js/serve.js"
   },

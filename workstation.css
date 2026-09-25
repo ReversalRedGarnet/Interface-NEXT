@@ -14,19 +14,42 @@
   white-space: nowrap;
 }
 
+/* Two rows: the primary controls (core inspect-a-device loop) always
+   visible, then the filter row underneath, shown only when toggled open —
+   collapsed by default so it doesn't compete for attention with the
+   primary row. */
 .workstation-toolbar {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.toolbar-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-  margin-top: var(--space-3);
+}
+
+/* Pushes the overflow menu + help button to the row's right edge,
+   separating admin/help controls from the core-loop controls on the
+   left without a visible divider. */
+.toolbar-spacer {
+  flex: 1 1 auto;
 }
 
 .mode-group,
 .filter-row {
   display: flex;
+  align-items: center;
   gap: var(--space-1);
   flex-wrap: wrap;
+}
+
+.mode-group[hidden],
+.filter-row[hidden] {
+  display: none;
 }
 
 .filter-btn {
@@ -37,6 +60,71 @@
   background: var(--focus);
   border-color: var(--focus);
   color: var(--surface);
+}
+
+/* Inspection Mode toggle (collapsed/off state) and the Filter disclosure
+   button both read as pressed/expanded via aria-* rather than a color
+   change of their own — the mode picker and filter row appearing (or the
+   button's own label changing for Filter) already say "this is active". */
+#btn-mode-toggle[aria-pressed="true"] {
+  background: var(--surface-muted);
+  border-color: var(--line-strong);
+}
+
+#btn-filter-toggle[aria-expanded="true"] {
+  background: var(--surface-muted);
+  border-color: var(--line-strong);
+}
+
+/* ── Room actions overflow menu — administrative actions (undo, export,
+   reset) tucked away from the core inspect-a-device loop. ── */
+.overflow-wrap {
+  position: relative;
+}
+
+.overflow-menu {
+  position: absolute;
+  top: calc(100% + var(--space-1));
+  right: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 200px;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-control);
+  box-shadow: var(--shadow-elevated);
+  padding: var(--space-1);
+}
+
+.overflow-menu[hidden] {
+  display: none;
+}
+
+.overflow-item {
+  display: block;
+  width: 100%;
+  text-align: left;
+  padding: var(--space-2) var(--space-3);
+  background: transparent;
+  border: 1.5px solid transparent;
+  border-radius: var(--radius-control);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.overflow-item:hover:not(:disabled) {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.overflow-item:disabled {
+  color: var(--text-muted);
+  cursor: default;
 }
 
 .kbd {
@@ -161,6 +249,17 @@
 }
 .zoom-controls .toolbar-btn {
   padding: var(--space-1) var(--space-2);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.zoom-hint {
+  align-self: center;
+  font-size: var(--text-meta);
+  color: var(--text-muted);
+  white-space: nowrap;
+  padding: 0 var(--space-1);
 }
 
 /* Dragging to pan should show a grab cursor, not the device crosshair,

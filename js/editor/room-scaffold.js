@@ -23,6 +23,12 @@ function jsStringLiteral(v) {
   return `'${String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
 }
 
+/** Matches the `.room-link-icon` markup index.html and campus.js already
+ *  use byte-for-byte — a new room's link must render identically to every
+ *  existing one. No emoji anywhere in the app; this is a flat outline
+ *  "monitor" glyph sized in `em`/colored via `currentColor`. */
+const ROOM_LINK_ICON = '<svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="14" height="9" rx="1"/><line x1="5.5" y1="14" x2="10.5" y2="14" stroke-linecap="round"/><line x1="8" y1="11" x2="8" y2="14" stroke-linecap="round"/></svg>';
+
 /** Filename conventions used by every existing room: id is the display
  *  id (e.g. "B2-210"), files are its lowercase form. */
 export function roomFileStem(id) {
@@ -155,7 +161,7 @@ export function extractIndexSites(html) {
 export function patchIndexHtml(html, { id, label, campus }) {
   const escLabel = escapeHtml(label);
   const href = `rooms/${roomFileStem(id)}.html`;
-  const linkBlock = `\n          <a class="room-link" href="${href}">\n            <span class="room-link-icon" aria-hidden="true">💻</span>${escLabel}\n          </a>\n        `;
+  const linkBlock = `\n          <a class="room-link" href="${href}">\n            <span class="room-link-icon" aria-hidden="true">${ROOM_LINK_ICON}</span>${escLabel}\n          </a>\n        `;
 
   const h2Re = /<h2 class="site-name">([^<]*)<\/h2>/g;
   let m;
@@ -185,7 +191,7 @@ export function patchIndexHtml(html, { id, label, campus }) {
   while (existingListIds.includes(listId.toLowerCase())) listId = `rooms-${slugBase}-${n++}`;
 
   const escCampus = escapeHtml(campus);
-  const card = `\n\n      <!-- ${escCampus} -->\n      <div class="site-card">\n        <div class="site-card-header">\n          <h2 class="site-name">${escCampus}</h2>\n        </div>\n        <div class="room-list" id="${listId}">\n          <a class="room-link" href="${href}">\n            <span class="room-link-icon" aria-hidden="true">💻</span>${escLabel}\n          </a>\n        </div>\n        <button class="site-toggle" data-target="${listId}" aria-controls="${listId}" aria-expanded="true">Hide Rooms ▴</button>\n      </div>\n\n    `;
+  const card = `\n\n      <!-- ${escCampus} -->\n      <div class="site-card">\n        <div class="site-card-header">\n          <h2 class="site-name">${escCampus}</h2>\n        </div>\n        <div class="room-list" id="${listId}">\n          <a class="room-link" href="${href}">\n            <span class="room-link-icon" aria-hidden="true">${ROOM_LINK_ICON}</span>${escLabel}\n          </a>\n        </div>\n        <button class="site-toggle" data-target="${listId}" aria-controls="${listId}" aria-expanded="true">Hide Rooms ▴</button>\n      </div>\n\n    `;
 
   const before = html.slice(0, gridCloseIdx).replace(/\s+$/, '');
   const after = html.slice(gridCloseIdx);

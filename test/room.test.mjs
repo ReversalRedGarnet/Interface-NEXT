@@ -62,6 +62,15 @@ function input(el) {
 function key(doc, k) {
   doc.dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: k, bubbles: true }));
 }
+function wheel(el, opts = {}) {
+  const win = el.ownerDocument.defaultView;
+  el.dispatchEvent(new win.WheelEvent('wheel', {
+    bubbles: true, cancelable: true,
+    deltaY: opts.deltaY ?? -100,
+    ctrlKey: !!opts.ctrlKey,
+    metaKey: !!opts.metaKey,
+  }));
+}
 function readState(window) {
   return JSON.parse(window.localStorage.getItem('it-room-monitor-v1') || '{}');
 }
@@ -259,11 +268,25 @@ await test('devices carrying notes are flagged on the map', async () => {
 
 /* ── Inspection Mode (built on the old Quick Mark) ──────────────── */
 
+await test('Inspection Mode is collapsed to a single toggle button when off, and expands to the picker when armed', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const toggle = doc.getElementById('btn-mode-toggle');
+  const group = doc.getElementById('mode-group');
+  assert(!toggle.hidden, 'the collapsed toggle button should be visible when Inspection Mode is off');
+  assert(group.hidden, 'the Working/Minor/Major/N/A picker should not be visible when Inspection Mode is off');
+
+  click(toggle);
+  assert(toggle.hidden, 'the toggle button should hide once Inspection Mode is armed');
+  assert(!group.hidden, 'the picker should appear once Inspection Mode is armed');
+  assert(doc.querySelector('#mode-group [data-mode-status="working"]').getAttribute('aria-pressed') === 'true',
+    'clicking the toggle button should arm Working by default');
+});
+
 await test('Inspection Mode applies a status in one tap, with no inspector opening', async () => {
   const { doc } = await mount(readRoom('commons'));
+  click(doc.getElementById('btn-mode-toggle'));
   const arm = doc.querySelector('#mode-group [data-mode-status="working"]');
   assert(arm, 'no Inspection Mode control in the toolbar');
-  click(arm);
   assert(arm.getAttribute('aria-pressed') === 'true', 'Inspection Mode did not arm');
   assert(!doc.getElementById('mode-banner').hidden, 'the mode banner should be visible while armed — the mode must be obvious, not just a pressed button');
 
@@ -276,6 +299,8 @@ await test('Inspection Mode applies a status in one tap, with no inspector openi
   click(arm);
   assert(arm.getAttribute('aria-pressed') === 'false', 'Inspection Mode did not disarm');
   assert(doc.getElementById('mode-banner').hidden, 'the mode banner should hide once disarmed');
+  assert(!doc.getElementById('btn-mode-toggle').hidden, 'disarming should collapse the picker back to the toggle button');
+  assert(doc.getElementById('mode-group').hidden, 'the picker should hide again once disarmed');
   click(doc.querySelector('[data-id="PC12"]'));
   assert(!doc.getElementById('inspector-content').hidden, 'the inspector should open normally once Inspection Mode is off');
 });
@@ -285,17 +310,99 @@ await test('Inspection Mode offers a Not Applicable choice but no "Clear" — re
   const statuses = [...doc.querySelectorAll('#mode-group [data-mode-status]')].map(b => b.dataset.modeStatus);
   assert(statuses.join(',') === 'working,minor,major,not-applicable', `expected working,minor,major,not-applicable — got ${statuses.join(',')}`);
 
+  click(doc.getElementById('btn-mode-toggle'));
   click(doc.querySelector('#mode-group [data-mode-status="not-applicable"]'));
   click(doc.querySelector('[data-id="PC10"]'));
   assert(readState(window)['TEST_PC10']?.inspectionState === 'not-applicable', 'Inspection Mode\'s N/A button should mark the clicked device not-applicable');
 });
 
+await test('switching between statuses within an already-armed Inspection Mode does not collapse the picker', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  click(doc.getElementById('btn-mode-toggle')); // arms "working"
+  click(doc.querySelector('#mode-group [data-mode-status="minor"]'));
+  assert(!doc.getElementById('mode-group').hidden, 'switching to a different status should keep the picker open');
+  assert(doc.querySelector('#mode-group [data-mode-status="minor"]').getAttribute('aria-pressed') === 'true', 'minor should now be armed');
+  assert(doc.querySelector('#mode-group [data-mode-status="working"]').getAttribute('aria-pressed') === 'false', 'working should no longer be armed');
+});
+
+await test('the Mark-as picker and the Filter row are labelled distinctly even when both are visible at once', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  click(doc.getElementById('btn-mode-toggle'));
+  click(doc.getElementById('btn-filter-toggle'));
+  const modeLabel = doc.querySelector('#mode-group .quick-mark-label')?.textContent;
+  const filterLabel = doc.querySelector('#filter-row .quick-mark-label')?.textContent;
+  assert(modeLabel && filterLabel && modeLabel !== filterLabel,
+    `expected two distinct captions when both groups are open, got "${modeLabel}" and "${filterLabel}"`);
+});
+
 await test('Escape exits Inspection Mode', async () => {
   const { doc } = await mount(readRoom('commons'));
+  click(doc.getElementById('btn-mode-toggle'));
   click(doc.querySelector('#mode-group [data-mode-status="major"]'));
   key(doc, 'Escape');
   assert(doc.querySelector('#mode-group [data-mode-status="major"]').getAttribute('aria-pressed') === 'false',
     'Escape should exit Inspection Mode');
+  assert(!doc.getElementById('btn-mode-toggle').hidden, 'Escape should collapse the picker back to the toggle button');
+});
+
+/* ── Filter row: collapsed by default, toggled via a "Filter" button ── */
+
+await test('the filter row is collapsed by default and opens/closes via the Filter toggle', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const toggle = doc.getElementById('btn-filter-toggle');
+  const row = doc.getElementById('filter-row');
+  assert(row.hidden, 'the filter row should be collapsed by default');
+  assert(toggle.getAttribute('aria-expanded') === 'false', 'the toggle should report collapsed via aria-expanded');
+
+  click(toggle);
+  assert(!row.hidden, 'clicking Filter should reveal the filter row');
+  assert(toggle.getAttribute('aria-expanded') === 'true', 'the toggle should report expanded via aria-expanded');
+
+  click(toggle);
+  assert(row.hidden, 'clicking Filter again should collapse the row');
+});
+
+await test('picking a specific filter keeps the row open and updates the toggle\'s own label; picking All collapses it', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  click(doc.getElementById('btn-filter-toggle'));
+  click(doc.querySelector('#filter-row [data-filter="working"]'));
+  const toggle = doc.getElementById('btn-filter-toggle');
+  assert(!doc.getElementById('filter-row').hidden, 'picking a non-All filter should leave the row open');
+  assert(/Working/.test(toggle.textContent), `expected the toggle's own label to name the active filter, got "${toggle.textContent}"`);
+
+  click(doc.querySelector('#filter-row [data-filter="all"]'));
+  assert(doc.getElementById('filter-row').hidden, 'picking All should collapse the filter row back down');
+  assert(toggle.textContent.trim() === 'Filter', `expected the toggle to reset to a plain "Filter" label, got "${toggle.textContent}"`);
+});
+
+/* ── Room actions overflow menu ────────────────────────────────────── */
+
+await test('room actions (Undo/Export/Reset) live behind a single overflow menu that opens, closes on outside click, and closes after choosing an action', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const moreBtn = doc.getElementById('btn-more');
+  const menu = doc.getElementById('overflow-menu');
+  assert(menu.hidden, 'the overflow menu should be closed by default');
+  for (const id of ['btn-undo', 'btn-export-room', 'btn-export-all', 'btn-reset']) {
+    assert(doc.getElementById(id).closest('#overflow-menu'), `#${id} should live inside the overflow menu`);
+  }
+
+  click(moreBtn);
+  assert(!menu.hidden, 'clicking the ⋯ button should open the overflow menu');
+
+  click(doc.body);
+  assert(menu.hidden, 'clicking outside the overflow menu should close it');
+
+  click(moreBtn);
+  click(doc.getElementById('btn-reset'));
+  assert(menu.hidden, 'choosing an action from the overflow menu should close it');
+  assert(doc.getElementById('reset-overlay').classList.contains('open'), 'the reset action itself should still have run (opened its confirmation)');
+});
+
+await test('Escape closes the overflow menu before it would exit Inspection Mode', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  click(doc.getElementById('btn-more'));
+  key(doc, 'Escape');
+  assert(doc.getElementById('overflow-menu').hidden, 'Escape should close an open overflow menu');
 });
 
 /* ── Next Unchecked ──────────────────────────────────────────────── */
@@ -404,6 +511,26 @@ await test('zoom controls run without throwing and only ever transform .room, ne
   }
   assert(JSON.stringify(data.devices) === before, 'zoom controls must never mutate device coordinates');
   assert(doc.getElementById('room').style.transform.includes('scale'), '.room should carry a scale() transform after zoom controls run');
+});
+
+await test('plain wheel scroll over the floor plan does not zoom — it behaves like normal page scroll', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const before = doc.getElementById('room').style.transform;
+  wheel(doc.getElementById('room-viewport'), { deltaY: -100 });
+  assert(doc.getElementById('room').style.transform === before,
+    `a plain wheel scroll should not change the zoom transform (was "${before}", now "${doc.getElementById('room').style.transform}")`);
+});
+
+await test('Ctrl+wheel zooms the floor plan (Cmd+wheel does too)', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const before = doc.getElementById('room').style.transform;
+  wheel(doc.getElementById('room-viewport'), { deltaY: -100, ctrlKey: true });
+  assert(doc.getElementById('room').style.transform !== before, 'Ctrl+wheel should change the zoom transform');
+
+  const { doc: doc2 } = await mount(readRoom('commons'));
+  const before2 = doc2.getElementById('room').style.transform;
+  wheel(doc2.getElementById('room-viewport'), { deltaY: -100, metaKey: true });
+  assert(doc2.getElementById('room').style.transform !== before2, 'Cmd (metaKey)+wheel should change the zoom transform too');
 });
 
 /* ── Save-status indicator ──────────────────────────────────────── */

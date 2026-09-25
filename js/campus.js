@@ -66,7 +66,7 @@ export async function initCampusPage() {
     pickerBody.textContent = `${building.floors.length} floors — pick one to check its devices.`;
     pickerList.innerHTML = building.floors.map(f => `
       <a class="room-link" href="${roomHref(f.roomId)}">
-        <span class="room-link-icon" aria-hidden="true">🏢</span>${escapeHTML(f.label)}
+        <span class="room-link-icon" aria-hidden="true"><svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="14" height="9" rx="1"/><line x1="5.5" y1="14" x2="10.5" y2="14" stroke-linecap="round"/><line x1="8" y1="11" x2="8" y2="14" stroke-linecap="round"/></svg></span>${escapeHTML(f.label)}
       </a>`).join('');
     overlay.classList.add('open');
   }

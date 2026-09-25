@@ -242,3 +242,5 @@ body {
 }
 
 .danger { color: var(--danger); }
+
+.trace-btn svg { vertical-align: -2px; }
