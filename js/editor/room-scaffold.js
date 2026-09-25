@@ -52,6 +52,7 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
   <link rel="stylesheet" href="../navigation.css">
   <link rel="stylesheet" href="../floor-plan.css">
   <link rel="stylesheet" href="../status.css">
+  <link rel="stylesheet" href="../workstation.css">
   <link rel="stylesheet" href="../overlays.css">
   <link rel="stylesheet" href="../responsive.css">
 </head>

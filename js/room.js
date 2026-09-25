@@ -1,18 +1,24 @@
 /**
- * room.js — everything needed to render and drive a single room page.
- * Call initRoomPage(CFG) once CFG (metadata + layout + devices) is ready.
+ * room.js — the room page as a workstation: an always-visible inspector
+ * panel (not a modal) drives ordinary device inspection, with Next
+ * Unchecked, Inspection Mode, filters, search, zoom/pan, and keyboard
+ * shortcuts all built on top of the same status/notes storage as before.
  *
- * Interface: one function. Everything a caller needs to know is that CFG
- * carries { id, label, campus, back, canvasWidth, canvasHeight, layout,
- * devices } and that #room-root exists. Statuses, notes, keyboard access,
- * scaling and persistence all sit behind that.
+ * Call initRoomPage(CFG) once CFG (metadata + layout + devices + the
+ * project-wide assets.json lookup) is ready. Modals are reserved for
+ * destructive/one-off actions (reset this room) — never for inspecting a
+ * single device, which is what the inspector panel is for.
  */
 import { loadState, saveState, stateKey } from './state.js';
 import { formatDate } from './format.js';
-import { exportRoom, exportAllRooms } from './export.js';
+import { exportRoom, exportAllRooms, ALL_ROOMS } from './export.js';
+import {
+  orderDevicesForInspection, findNextUnchecked, computeStats,
+  matchesFilter, matchesSearch, buildSearchHaystack,
+} from './room-logic.js';
 
-/** Spoken/written status wording — one place, so the map, the pills and the
- *  screen-reader labels can never disagree with each other. */
+/** Spoken/written status wording — one place, so the map, the stats line
+ *  and the screen-reader labels can never disagree with each other. */
 const STATUS_WORDS = {
   working: 'working',
   minor:   'minor issue',
@@ -20,13 +26,40 @@ const STATUS_WORDS = {
   unknown: 'not checked',
 };
 
-/** Statuses a checker can apply with one tap in quick-mark mode. */
-const QUICK_STATUSES = [
+/** Status options the inspector offers — printers only ever have two
+ *  meaningful states, same distinction the old per-kind popups made. */
+const PC_STATUS_OPTIONS = [
   { status: 'working', label: 'Working' },
-  { status: 'minor',   label: 'Minor'   },
-  { status: 'major',   label: 'Major'   },
-  { status: 'clear',   label: 'Clear'   },
+  { status: 'minor',   label: 'Minor Issue' },
+  { status: 'major',   label: 'Major Issue' },
+  { status: 'unknown', label: 'Unchecked' },
 ];
+const PRINTER_STATUS_OPTIONS = [
+  { status: 'working', label: 'Working' },
+  { status: 'major',   label: 'Not Working' },
+];
+
+/** Inspection Mode's status choices — applies to whatever's clicked next,
+ *  same four choices the old Quick Mark offered. */
+const MODE_STATUSES = [
+  { status: 'working', label: 'Working' },
+  { status: 'minor',   label: 'Minor' },
+  { status: 'major',   label: 'Major' },
+  { status: 'clear',   label: 'Clear' },
+];
+
+const FILTERS = [
+  { key: 'all',       label: 'All' },
+  { key: 'unchecked', label: 'Unchecked' },
+  { key: 'working',   label: 'Working' },
+  { key: 'minor',     label: 'Minor' },
+  { key: 'major',     label: 'Major' },
+  { key: 'notes',     label: 'Notes' },
+];
+
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 3;
+const PAN_DRAG_THRESHOLD = 3;
 
 function escapeXML(s) {
   return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
@@ -160,113 +193,133 @@ export function initRoomPage(CFG) {
   const roomId = CFG.id;
   const W = CFG.canvasWidth || 1200;
   const H = CFG.canvasHeight || 800;
+  const assets = CFG.assets && typeof CFG.assets === 'object' ? CFG.assets : {};
 
   /** Read cache. Every *write* re-reads first (see `mutate`) so a second tab
    *  can't be rolled back by this page's stale snapshot. */
   let state = loadState();
 
   const deviceById = new Map(CFG.devices.map(d => [d.id, d]));
+  const orderedDevices = orderDevicesForInspection(CFG.devices);
 
   document.title = `${CFG.label} — Gridkeep`;
   document.getElementById('room-root').innerHTML = `
-    <div class="app">
+    <div class="app workstation-app">
 
       <header>
         <div class="header-inner">
           <div class="header-title">
             <a href="${escapeHTML(CFG.back)}" class="back-btn">← Menu</a>
-            <span class="header-icon">⬡</span>
             <div>
               <h1>${escapeHTML(CFG.label)}</h1>
               <p class="campus-crumb">${escapeHTML(CFG.campus)}</p>
             </div>
           </div>
-          <div class="status-summary">
-            <span class="summary-pill working"   id="count-working">0 Working</span>
-            <span class="summary-pill minor"     id="count-minor">0 Minor</span>
-            <span class="summary-pill major"     id="count-major">0 Major</span>
-            <span class="summary-pill unchecked" id="count-unchecked">0 unchecked</span>
-          </div>
+          <p class="room-stats" id="room-stats"></p>
         </div>
         <div class="sweep">
           <div class="sweep-bar"><span class="sweep-fill" id="sweep-fill" style="width:0%"></span></div>
-          <p class="subtitle" id="sweep-text">Tap a device to update it — or pick a status under Quick mark and tap straight through the room.</p>
         </div>
+
+        <div class="workstation-toolbar">
+          <button type="button" class="btn-primary" id="btn-next-unchecked">⏭ Next Unchecked</button>
+
+          <div class="mode-group" id="mode-group" role="group" aria-label="Inspection mode">
+            ${MODE_STATUSES.map(m => `
+              <button type="button" class="quick-btn" data-mode-status="${m.status}" aria-pressed="false">
+                ${m.status === 'clear' ? '' : `<span class="status-dot ${m.status}"></span>`}${m.label}
+              </button>`).join('')}
+          </div>
+
+          <div class="filter-row" id="filter-row" role="group" aria-label="Filter devices">
+            ${FILTERS.map(f => `
+              <button type="button" class="filter-btn" data-filter="${f.key}" aria-pressed="${f.key === 'all'}">${f.label}</button>`).join('')}
+          </div>
+
+          <button type="button" class="toolbar-btn" id="btn-search">🔎 Search <span class="kbd">/</span></button>
+          <button type="button" class="toolbar-btn" id="btn-undo" disabled>↶ Undo</button>
+          <button type="button" class="toolbar-btn" id="btn-export-room">⬇ Export This Room</button>
+          <button type="button" class="toolbar-btn" id="btn-export-all">⬇ Export All Rooms</button>
+          <button type="button" class="toolbar-btn" id="btn-reset">↺ Reset This Room</button>
+          <button type="button" class="toolbar-btn" id="btn-help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">?</button>
+        </div>
+
+        <p class="mode-banner" id="mode-banner" hidden></p>
       </header>
 
-      <div class="toolbar">
-        <div class="quick-mark" id="quick-mark" role="group" aria-label="Quick mark">
-          <span class="quick-mark-label">Quick mark</span>
-          ${QUICK_STATUSES.map(q => `
-            <button type="button" class="quick-btn" data-status="${q.status}" aria-pressed="false">
-              ${q.status === 'clear' ? '' : `<span class="status-dot ${q.status}"></span>`}${q.label}
-            </button>`).join('')}
+      <div class="workstation" id="workstation">
+        <div class="floor-pane">
+          <div class="zoom-controls" id="zoom-controls">
+            <button type="button" class="toolbar-btn" id="zoom-out" aria-label="Zoom out">−</button>
+            <button type="button" class="toolbar-btn" id="zoom-fit" aria-label="Fit to screen">Fit</button>
+            <button type="button" class="toolbar-btn" id="zoom-100" aria-label="Actual size">100%</button>
+            <button type="button" class="toolbar-btn" id="zoom-in" aria-label="Zoom in">+</button>
+            <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">⛶</button>
+          </div>
+
+          <div class="room-viewport" id="room-viewport">
+            <div class="room" id="room" style="width:${W}px;height:${H}px">
+              ${buildFloorPlanHTML(CFG)}
+              ${buildDeviceHTML(CFG.devices)}
+            </div>
+          </div>
+
+          <p class="visually-hidden" role="status" aria-live="polite" id="room-live"></p>
+
+          <div class="legend">
+            <div class="legend-item"><span class="dot working"></span>Working</div>
+            <div class="legend-item"><span class="dot minor"></span>Minor Issue</div>
+            <div class="legend-item"><span class="dot major"></span>Major Issue</div>
+            <div class="legend-item"><span class="dot unknown"></span>Unknown</div>
+            <div class="legend-item"><span class="dot has-notes"></span>Has a note</div>
+          </div>
         </div>
-        <button class="toolbar-btn" id="btn-undo" disabled>↶ Undo</button>
-        <button class="toolbar-btn" id="btn-zoom">⤢ Actual size</button>
-        <button class="toolbar-btn" id="btn-export-room">⬇ Export This Room</button>
-        <button class="toolbar-btn" id="btn-export-all">⬇ Export All Rooms</button>
-        <button class="toolbar-btn" id="btn-reset">↺ Reset This Room</button>
-      </div>
 
-      <div class="room-viewport" id="room-viewport">
-        <div class="room" id="room" style="width:${W}px;height:${H}px">
-          ${buildFloorPlanHTML(CFG)}
-          ${buildDeviceHTML(CFG.devices)}
-        </div>
-      </div>
-
-      <p class="visually-hidden" role="status" aria-live="polite" id="room-live"></p>
-
-      <div class="legend">
-        <div class="legend-item"><span class="dot working"></span>Working</div>
-        <div class="legend-item"><span class="dot minor"></span>Minor Issue</div>
-        <div class="legend-item"><span class="dot major"></span>Major Issue</div>
-        <div class="legend-item"><span class="dot unknown"></span>Unknown</div>
-        <div class="legend-item"><span class="dot has-notes"></span>Has a note</div>
+        <aside class="inspector-panel" id="inspector-panel" aria-label="Device inspector">
+          <p class="inspector-empty" id="inspector-empty">Select a device to inspect it, or press <span class="kbd">→</span> for the next unchecked one.</p>
+          <div class="inspector-content" id="inspector-content" hidden>
+            <div class="inspector-head">
+              <h3 id="inspector-device-id"></h3>
+              <span class="save-status" id="save-status"></span>
+            </div>
+            <div class="status-grid" id="inspector-status-grid"></div>
+            <div class="inspector-meta" id="inspector-meta"></div>
+            <label class="notes-label" for="inspector-notes">Notes (optional)</label>
+            <textarea id="inspector-notes" class="notes-input" rows="4" placeholder="Describe the issue…"></textarea>
+            <p class="last-updated" id="inspector-last-updated"></p>
+          </div>
+        </aside>
       </div>
 
     </div>
 
-    <!-- PC popup -->
-    <div class="overlay" id="pc-overlay" role="dialog" aria-modal="true" aria-labelledby="pc-popup-title">
-      <div class="popup">
-        <button class="popup-close" id="pc-close" aria-label="Close">✕</button>
-        <h3 class="popup-title" id="pc-popup-title">Update Status</h3>
-        <p class="popup-id" id="popup-id"></p>
-        <div class="status-grid">
-          <button class="status-btn" data-status="working"><span class="status-dot working"></span>Working</button>
-          <button class="status-btn" data-status="minor"><span class="status-dot minor"></span>Minor Issue</button>
-          <button class="status-btn" data-status="major"><span class="status-dot major"></span>Major Issue</button>
-          <button class="status-btn" data-status="unknown"><span class="status-dot unknown"></span>Unknown</button>
-        </div>
-        <label class="notes-label" for="pc-notes">Notes (optional)</label>
-        <textarea id="pc-notes" class="notes-input" rows="3" placeholder="Describe the issue…"></textarea>
-        <p class="last-updated" id="pc-last-updated"></p>
-        <div class="popup-actions">
-          <button class="btn-primary" id="pc-save">Save</button>
-          <button class="btn-secondary" id="pc-cancel">Cancel</button>
-        </div>
+    <!-- Search -->
+    <div class="overlay" id="search-overlay" role="dialog" aria-modal="true" aria-labelledby="search-title">
+      <div class="popup popup-search">
+        <button class="popup-close" id="search-close" aria-label="Close">✕</button>
+        <h3 class="popup-title" id="search-title">Search</h3>
+        <input type="text" id="search-input" class="notes-input" placeholder="Device id, asset id, serial, manufacturer, notes…">
+        <div class="search-results" id="search-results"></div>
       </div>
     </div>
 
-    <!-- Printer popup -->
-    <div class="overlay" id="printer-overlay" role="dialog" aria-modal="true" aria-labelledby="printer-popup-title">
+    <!-- Keyboard shortcuts -->
+    <div class="overlay" id="help-overlay" role="dialog" aria-modal="true" aria-labelledby="help-title">
       <div class="popup">
-        <button class="popup-close" id="printer-close" aria-label="Close">✕</button>
-        <h3 class="popup-title" id="printer-popup-title">Printer Status</h3>
-        <p class="popup-id" id="printer-popup-id"></p>
-        <div class="status-grid printer-grid">
-          <button class="status-btn" data-status="working"><span class="status-dot working"></span>Working</button>
-          <button class="status-btn" data-status="major"><span class="status-dot major"></span>Not Working</button>
-        </div>
-        <label class="notes-label" for="printer-notes">Notes (optional)</label>
-        <textarea id="printer-notes" class="notes-input" rows="3" placeholder="Describe the issue…"></textarea>
-        <p class="last-updated" id="printer-last-updated"></p>
-        <div class="popup-actions">
-          <button class="btn-primary" id="printer-save">Save</button>
-          <button class="btn-secondary" id="printer-cancel">Cancel</button>
-        </div>
+        <button class="popup-close" id="help-close" aria-label="Close">✕</button>
+        <h3 class="popup-title" id="help-title">Keyboard shortcuts</h3>
+        <dl class="shortcut-list">
+          <div><dt class="kbd">1</dt><dd>Mark selected device Working</dd></div>
+          <div><dt class="kbd">2</dt><dd>Mark selected device Minor</dd></div>
+          <div><dt class="kbd">3</dt><dd>Mark selected device Major</dd></div>
+          <div><dt class="kbd">0</dt><dd>Clear selected device's status</dd></div>
+          <div><dt class="kbd">N</dt><dd>Add/edit note on selected device</dd></div>
+          <div><dt class="kbd">U</dt><dd>Undo last status change</dd></div>
+          <div><dt class="kbd">→</dt><dd>Jump to next unchecked device</dd></div>
+          <div><dt class="kbd">/</dt><dd>Search</dd></div>
+          <div><dt class="kbd">F</dt><dd>Fit floor plan to screen</dd></div>
+          <div><dt class="kbd">Esc</dt><dd>Exit inspection mode / close dialogs</dd></div>
+        </dl>
       </div>
     </div>
 
@@ -287,34 +340,48 @@ export function initRoomPage(CFG) {
   const room = document.getElementById('room');
   const viewport = document.getElementById('room-viewport');
   const liveEl = document.getElementById('room-live');
-  const pcOverlay = document.getElementById('pc-overlay');
-  const printerOverlay = document.getElementById('printer-overlay');
   const resetOverlay = document.getElementById('reset-overlay');
-  const popupIdEl = document.getElementById('popup-id');
-  const printerIdEl = document.getElementById('printer-popup-id');
-  const pcNotesEl = document.getElementById('pc-notes');
-  const pcLastUpdated = document.getElementById('pc-last-updated');
-  const printerNotesEl = document.getElementById('printer-notes');
-  const printerLastUp = document.getElementById('printer-last-updated');
-  const statusBtns = document.querySelectorAll('#pc-overlay .status-btn');
-  const printerBtns = document.querySelectorAll('#printer-overlay .status-btn');
-  const quickBtns = document.querySelectorAll('#quick-mark .quick-btn');
+  const searchOverlay = document.getElementById('search-overlay');
+  const helpOverlay = document.getElementById('help-overlay');
+  const searchInput = document.getElementById('search-input');
+  const searchResultsEl = document.getElementById('search-results');
+  const modeBtns = document.querySelectorAll('#mode-group .quick-btn');
+  const filterBtns = document.querySelectorAll('#filter-row .filter-btn');
+  const modeBanner = document.getElementById('mode-banner');
   const undoBtn = document.getElementById('btn-undo');
-  const zoomBtn = document.getElementById('btn-zoom');
+  const roomStatsEl = document.getElementById('room-stats');
+  const sweepFillEl = document.getElementById('sweep-fill');
+  const inspectorEmpty = document.getElementById('inspector-empty');
+  const inspectorContent = document.getElementById('inspector-content');
+  const inspectorDeviceIdEl = document.getElementById('inspector-device-id');
+  const inspectorStatusGrid = document.getElementById('inspector-status-grid');
+  const inspectorMetaEl = document.getElementById('inspector-meta');
+  const inspectorNotesEl = document.getElementById('inspector-notes');
+  const inspectorLastUpdated = document.getElementById('inspector-last-updated');
+  const saveStatusEl = document.getElementById('save-status');
+  const zoomOutBtn = document.getElementById('zoom-out');
+  const zoomInBtn = document.getElementById('zoom-in');
+  const zoomFitBtn = document.getElementById('zoom-fit');
+  const zoom100Btn = document.getElementById('zoom-100');
+  const zoomFullscreenBtn = document.getElementById('zoom-fullscreen');
 
   /** id → node, so repainting one device never re-scans the DOM. */
   const nodeById = new Map(
     [...room.querySelectorAll('[data-id]')].map(el => [el.dataset.id, el]),
   );
 
-  let activeDeviceId = null;
-  let selectedStatus = null;
-  let quickStatus = null;
+  let selectedDeviceId = null;
+  let activeModeStatus = null;
+  let activeFilter = 'all';
   let lastFocused = null;
+  let notesSaveTimer = null;
+  let saveStatusTimer = null;
+  let otherRoomsCache = null;
   const undoStack = [];
 
   const announce = msg => { liveEl.textContent = msg; };
-  const entryFor = id => state[stateKey(roomId, id)];
+  const entryFor = (id, ofRoomId = roomId) => state[stateKey(ofRoomId, id)];
+  const statusOf = device => entryFor(device.id)?.status || 'unknown';
 
   /* ── State writes ──────────────────────────────────────────────
      Re-read before merging: a checker often has two room tabs open, and the
@@ -325,6 +392,13 @@ export function initRoomPage(CFG) {
     fn(fresh);
     saveState(fresh);
     state = fresh;
+  }
+
+  /* ── Save-status indicator ────────────────────────────────────── */
+  function flashSaveStatus() {
+    saveStatusEl.textContent = 'Saving…';
+    clearTimeout(saveStatusTimer);
+    saveStatusTimer = setTimeout(() => { saveStatusEl.textContent = 'Saved'; }, 200);
   }
 
   /* ── Painting ──────────────────────────────────────────────── */
@@ -344,30 +418,18 @@ export function initRoomPage(CFG) {
     el.setAttribute('aria-label', `${kind}${name}, ${STATUS_WORDS[status] || STATUS_WORDS.unknown}${note}`);
     if (entry?.notes) el.setAttribute('title', entry.notes);
     else el.removeAttribute('title');
+    applyFilterToNode(el);
   }
 
   function paintAll() {
     CFG.devices.forEach(d => paint(d.id));
   }
 
-  function updateSummary() {
-    let w = 0, m = 0, maj = 0, unchecked = 0;
-    CFG.devices.forEach(({ id }) => {
-      const s = entryFor(id)?.status;
-      if (s === 'working') w++;
-      else if (s === 'minor') m++;
-      else if (s === 'major') maj++;
-      else unchecked++;
-    });
-    const total = CFG.devices.length;
-    const checked = total - unchecked;
-    document.getElementById('count-working').textContent = `${w} Working`;
-    document.getElementById('count-minor').textContent = `${m} Minor`;
-    document.getElementById('count-major').textContent = `${maj} Major`;
-    document.getElementById('count-unchecked').textContent = `${unchecked} unchecked`;
-    document.getElementById('sweep-fill').style.width = total ? `${(checked / total) * 100}%` : '0%';
-    document.getElementById('sweep-text').textContent =
-      `${checked} of ${total} devices checked${unchecked ? ` — ${unchecked} to go` : ' — room complete'}`;
+  function updateStatsUI() {
+    const stats = computeStats(CFG.devices, statusOf);
+    roomStatsEl.textContent =
+      `${stats.total} devices · ${stats.inspected} inspected · ${stats.unchecked} remaining · ${stats.issues} issue${stats.issues === 1 ? '' : 's'}`;
+    sweepFillEl.style.width = stats.total ? `${(stats.inspected / stats.total) * 100}%` : '0%';
   }
 
   /* ── Entry writes ──────────────────────────────────────────── */
@@ -376,13 +438,13 @@ export function initRoomPage(CFG) {
     const key = stateKey(roomId, deviceId);
     mutate(s => { s[key] = { status, notes, updatedAt: new Date().toISOString() }; });
     paint(deviceId);
-    updateSummary();
+    updateStatsUI();
   }
 
   function clearEntry(deviceId) {
     mutate(s => { delete s[stateKey(roomId, deviceId)]; });
     paint(deviceId);
-    updateSummary();
+    updateStatsUI();
   }
 
   function resetRoom() {
@@ -390,40 +452,28 @@ export function initRoomPage(CFG) {
     undoStack.length = 0;
     refreshUndo();
     paintAll();
-    updateSummary();
+    updateStatsUI();
+    if (selectedDeviceId) renderInspector();
+    flashSaveStatus();
     announce(`${CFG.label} reset`);
   }
 
-  /* ── Quick mark ────────────────────────────────────────────────
-     A room is 24–37 machines. Popup-per-device is 4 taps each; quick mark
-     makes a sweep one tap per device, with Undo as the safety net. */
-
-  function refreshUndo() {
-    undoBtn.disabled = undoStack.length === 0;
-    undoBtn.textContent = undoStack.length ? `↶ Undo (${undoStack.length})` : '↶ Undo';
-  }
-
-  function setQuick(status) {
-    quickStatus = status;
-    quickBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.status === status)));
-    room.classList.toggle('quick-mode', !!status);
-    if (status) room.dataset.quick = status; else delete room.dataset.quick;
-    announce(status
-      ? `Quick mark ${status === 'clear' ? 'clear' : STATUS_WORDS[status]} on — tap devices to apply`
-      : 'Quick mark off');
-  }
-
-  function quickApply(deviceId) {
+  /** The one place any status change goes through — Inspection Mode
+   *  clicks, inspector status buttons, and keyboard shortcuts (1/2/3/0)
+   *  all call this, so Undo always sees every kind of change. */
+  function applyStatus(deviceId, status, opts = {}) {
     undoStack.push({ deviceId, previous: entryFor(deviceId) ?? null });
     refreshUndo();
-    if (quickStatus === 'clear') {
+    if (status === 'clear') {
       clearEntry(deviceId);
-      announce(`${deviceId} cleared`);
+      if (!opts.silent) announce(`${deviceId} cleared`);
     } else {
-      const keep = entryFor(deviceId)?.notes || '';
-      saveEntry(deviceId, quickStatus, keep);
-      announce(`${deviceId} marked ${STATUS_WORDS[quickStatus]}`);
+      const notes = entryFor(deviceId)?.notes || '';
+      saveEntry(deviceId, status, notes);
+      if (!opts.silent) announce(`${deviceId} marked ${STATUS_WORDS[status] || status}`);
     }
+    flashSaveStatus();
+    if (selectedDeviceId === deviceId) renderInspector({ keepFocus: true });
   }
 
   function undoLast() {
@@ -432,17 +482,310 @@ export function initRoomPage(CFG) {
     if (!last) return;
     if (last.previous) {
       mutate(s => { s[stateKey(roomId, last.deviceId)] = last.previous; });
-      paint(last.deviceId);
-      updateSummary();
     } else {
-      clearEntry(last.deviceId);
+      mutate(s => { delete s[stateKey(roomId, last.deviceId)]; });
     }
+    paint(last.deviceId);
+    updateStatsUI();
+    flashSaveStatus();
+    if (selectedDeviceId === last.deviceId) renderInspector({ keepFocus: true });
     announce(`Undid ${last.deviceId}`);
   }
 
+  function refreshUndo() {
+    undoBtn.disabled = undoStack.length === 0;
+    undoBtn.textContent = undoStack.length ? `↶ Undo (${undoStack.length})` : '↶ Undo';
+  }
+
+  /* ── Notes ─────────────────────────────────────────────────── */
+
+  function saveNotesNow(deviceId, notes) {
+    const status = entryFor(deviceId)?.status || 'unknown';
+    mutate(s => { s[stateKey(roomId, deviceId)] = { status, notes, updatedAt: new Date().toISOString() }; });
+    paint(deviceId);
+    updateStatsUI();
+    flashSaveStatus();
+  }
+
+  function scheduleNotesSave(deviceId, notes) {
+    clearTimeout(notesSaveTimer);
+    saveStatusEl.textContent = 'Saving…';
+    notesSaveTimer = setTimeout(() => saveNotesNow(deviceId, notes), 400);
+  }
+
+  function flushNotesSave() {
+    if (!notesSaveTimer || !selectedDeviceId) return;
+    clearTimeout(notesSaveTimer);
+    notesSaveTimer = null;
+    saveNotesNow(selectedDeviceId, inspectorNotesEl.value.trim());
+  }
+
+  /* ── Inspection Mode (build on Quick Mark) ───────────────────── */
+
+  function setMode(status) {
+    activeModeStatus = status;
+    modeBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.modeStatus === status)));
+    room.classList.toggle('quick-mode', !!status);
+    if (status) room.dataset.quick = status; else delete room.dataset.quick;
+    if (status) {
+      modeBanner.hidden = false;
+      modeBanner.dataset.status = status;
+      modeBanner.textContent = status === 'clear'
+        ? 'INSPECTION MODE — clearing. Click a device to clear it. Esc to exit.'
+        : `INSPECTION MODE — marking ${STATUS_WORDS[status]}. Click a device to apply. Esc to exit.`;
+    } else {
+      modeBanner.hidden = true;
+    }
+    announce(status ? `Inspection mode on: ${status === 'clear' ? 'clear' : STATUS_WORDS[status]}` : 'Inspection mode off');
+  }
+
+  /* ── Filters (fade, never hide — spatial context stays intact) ── */
+
+  function applyFilterToNode(el) {
+    const id = el.dataset.id;
+    const device = deviceById.get(id);
+    if (!device) return;
+    const entry = entryFor(id);
+    const match = matchesFilter(entry?.status || 'unknown', !!entry?.notes, activeFilter);
+    el.classList.toggle('filtered-out', !match);
+  }
+
+  function applyFilterToAll() {
+    nodeById.forEach(el => applyFilterToNode(el));
+  }
+
+  function setFilter(key) {
+    activeFilter = key;
+    filterBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.filter === key)));
+    applyFilterToAll();
+  }
+
+  /* ── Inspector panel ──────────────────────────────────────────── */
+
+  function statusOptionsFor(device) {
+    return device.type === 'printer' ? PRINTER_STATUS_OPTIONS : PC_STATUS_OPTIONS;
+  }
+
+  function renderInspector(opts = {}) {
+    const device = selectedDeviceId && deviceById.get(selectedDeviceId);
+    if (!device) {
+      inspectorEmpty.hidden = false;
+      inspectorContent.hidden = true;
+      return;
+    }
+    inspectorEmpty.hidden = true;
+    inspectorContent.hidden = false;
+
+    const entry = entryFor(device.id);
+    const status = entry?.status || 'unknown';
+
+    inspectorDeviceIdEl.textContent = `${roomId} › ${deviceLabel(device)}`;
+
+    inspectorStatusGrid.innerHTML = statusOptionsFor(device).map(opt => `
+      <button type="button" class="status-btn${opt.status === status ? ' selected' : ''}" data-status="${opt.status}">
+        <span class="status-dot ${opt.status}"></span>${opt.label}
+      </button>`).join('');
+    inspectorStatusGrid.querySelectorAll('.status-btn').forEach(btn => {
+      btn.addEventListener('click', () => applyStatus(device.id, btn.dataset.status));
+    });
+
+    const assetRecord = device.assetId ? assets[device.assetId] : null;
+    const metaRows = [];
+    if (device.assetId) metaRows.push(`<div><span>Asset ID</span><span class="mono">${escapeHTML(device.assetId)}</span></div>`);
+    if (assetRecord?.manufacturer) metaRows.push(`<div><span>Manufacturer</span><span>${escapeHTML(assetRecord.manufacturer)}</span></div>`);
+    if (assetRecord?.serial) metaRows.push(`<div><span>Serial</span><span class="mono">${escapeHTML(assetRecord.serial)}</span></div>`);
+    inspectorMetaEl.innerHTML = metaRows.join('');
+    inspectorMetaEl.hidden = metaRows.length === 0;
+
+    if (document.activeElement !== inspectorNotesEl) inspectorNotesEl.value = entry?.notes || '';
+    inspectorLastUpdated.textContent = entry?.updatedAt ? `Updated ${formatDate(entry.updatedAt)}` : '';
+    // Only a *fresh* selection resets the save-status text — re-renders
+    // triggered by applyStatus/undo must leave whatever flashSaveStatus()
+    // just set (e.g. "Saving…") alone, or it'd be overwritten instantly.
+    if (opts.resetSaveStatus) saveStatusEl.textContent = 'Saved';
+
+    if (opts.focusStatus) {
+      const btn = inspectorStatusGrid.querySelector('.status-btn.selected') || inspectorStatusGrid.querySelector('.status-btn');
+      btn?.focus();
+    } else if (opts.keepFocus) {
+      // leave focus wherever it already is (e.g. mid-typing in notes)
+    }
+  }
+
+  /** The one place selection happens — every entry point (a plain click,
+   *  Next Unchecked, a search result) ends up here. */
+  function selectDevice(deviceId, opts = {}) {
+    if (selectedDeviceId && selectedDeviceId !== deviceId) flushNotesSave();
+    if (selectedDeviceId) nodeById.get(selectedDeviceId)?.classList.remove('selected');
+    selectedDeviceId = deviceId;
+    nodeById.get(deviceId)?.classList.add('selected');
+    renderInspector({ focusStatus: opts.focusStatus !== false, resetSaveStatus: true });
+  }
+
+  /* ── Zoom / pan — a view transform only; device coordinates never change ── */
+  let view = { scale: 1, x: 0, y: 0 };
+
+  function clampScale(s) { return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)); }
+
+  function computeFitScale() {
+    const available = viewport.clientWidth || W;
+    return Math.min(1, available / W);
+  }
+
+  function clampPanAxis(pos, scaledSize, viewSize) {
+    if (scaledSize <= viewSize) return 0;
+    return Math.min(0, Math.max(viewSize - scaledSize, pos));
+  }
+
+  function clampPan(x, y, scale) {
+    const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
+    return {
+      x: clampPanAxis(x, W * scale, vw),
+      y: clampPanAxis(y, H * scale, vh),
+    };
+  }
+
+  function applyView() {
+    room.style.transformOrigin = 'top left';
+    room.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+  }
+
+  function setView(scale, x, y) {
+    view.scale = clampScale(scale);
+    const clamped = clampPan(x, y, view.scale);
+    view.x = clamped.x;
+    view.y = clamped.y;
+    applyView();
+  }
+
+  function zoomAt(viewportX, viewportY, newScale) {
+    newScale = clampScale(newScale);
+    const roomX = (viewportX - view.x) / view.scale;
+    const roomY = (viewportY - view.y) / view.scale;
+    setView(newScale, viewportX - roomX * newScale, viewportY - roomY * newScale);
+  }
+
+  function zoomByFactor(factor) {
+    const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
+    zoomAt(vw / 2, vh / 2, view.scale * factor);
+  }
+
+  function fitToScreen() { setView(computeFitScale(), 0, 0); }
+  function actualSize() { setView(1, 0, 0); }
+
+  /** Approximate chip center — good enough to center a device on screen;
+   *  exact chip size varies by type/label and isn't worth tracking here. */
+  function deviceCenter(device) {
+    return [(Number(device.left) || 0) + 21, (Number(device.top) || 0) + 21];
+  }
+
+  /**
+   * Shared by every entry point that needs to bring a possibly-off-screen
+   * device into view: Next Unchecked and search results. A plain click
+   * doesn't need this — the device was already visible, or it wouldn't
+   * have been clickable.
+   */
+  function focusDevice(deviceId, opts = {}) {
+    const device = deviceById.get(deviceId);
+    if (!device) return;
+    const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
+    const targetScale = Math.max(view.scale, Math.min(1, computeFitScale() * 1.4));
+    const [cx, cy] = deviceCenter(device);
+    setView(targetScale, vw / 2 - cx * targetScale, vh / 2 - cy * targetScale);
+    if (opts.select !== false) selectDevice(deviceId, opts);
+  }
+
+  /* ── Next Unchecked ───────────────────────────────────────────── */
+
+  function goToNextUnchecked() {
+    const next = findNextUnchecked(orderedDevices, d => statusOf(d) === 'unknown', selectedDeviceId);
+    if (!next) { announce('Every device is inspected.'); return; }
+    focusDevice(next.id);
+  }
+
+  /* ── Search (in-room + other rooms) ──────────────────────────── */
+
+  async function loadOtherRooms() {
+    if (otherRoomsCache) return otherRoomsCache;
+    const others = ALL_ROOMS.filter(r => r.id !== roomId);
+    const loaded = await Promise.all(others.map(async r => {
+      const stem = String(r.id).toLowerCase();
+      try {
+        const res = await fetch(`../data/${stem}.json`);
+        if (!res.ok) return null;
+        const data = await res.json();
+        return { id: r.id, label: r.label, stem, devices: Array.isArray(data.devices) ? data.devices : [] };
+      } catch {
+        return null;
+      }
+    }));
+    otherRoomsCache = loaded.filter(Boolean);
+    return otherRoomsCache;
+  }
+
+  function searchIndex(rooms) {
+    const rows = [];
+    const indexRoom = (rid, rlabel, stem, devices) => {
+      devices.forEach(d => {
+        const entry = state[stateKey(rid, d.id)];
+        const statusWord = STATUS_WORDS[entry?.status || 'unknown'];
+        const assetRecord = d.assetId ? assets[d.assetId] : null;
+        const haystack = buildSearchHaystack({
+          roomId: rid, roomLabel: rlabel, device: d,
+          statusWord, notes: entry?.notes, assetRecord,
+        });
+        rows.push({ roomId: rid, roomLabel: rlabel, stem, device: d, haystack, sameRoom: rid === roomId });
+      });
+    };
+    indexRoom(roomId, CFG.label, null, CFG.devices);
+    rooms.forEach(r => indexRoom(r.id, r.label, r.stem, r.devices));
+    return rows;
+  }
+
+  function renderSearchResults(query) {
+    const rows = searchIndex(otherRoomsCache || []);
+    const matches = query.trim() ? rows.filter(r => matchesSearch(r.haystack, query)).slice(0, 30) : [];
+    if (!query.trim()) {
+      searchResultsEl.innerHTML = '<p class="search-hint">Type to search devices across every room.</p>';
+      return;
+    }
+    if (!matches.length) {
+      searchResultsEl.innerHTML = '<p class="search-hint">No matches.</p>';
+      return;
+    }
+    searchResultsEl.innerHTML = matches.map((m, i) => `
+      <button type="button" class="search-result" data-index="${i}">
+        <span class="search-result-device">${escapeHTML(deviceLabel(m.device))}</span>
+        <span class="search-result-room">${escapeHTML(m.roomLabel)}</span>
+      </button>`).join('');
+    searchResultsEl.querySelectorAll('.search-result').forEach(btn => {
+      btn.addEventListener('click', () => selectSearchResult(matches[Number(btn.dataset.index)]));
+    });
+  }
+
+  function selectSearchResult(match) {
+    closeSearch();
+    if (!match.sameRoom) {
+      window.location.href = `../rooms/${match.stem}.html?focus=${encodeURIComponent(match.device.id)}`;
+      return;
+    }
+    focusDevice(match.device.id);
+  }
+
+  function openSearch() {
+    openOverlay(searchOverlay, searchInput);
+    searchInput.value = '';
+    renderSearchResults('');
+    loadOtherRooms().then(() => renderSearchResults(searchInput.value));
+  }
+  function closeSearch() { closeOverlay(searchOverlay); }
+
+  searchInput?.addEventListener('input', () => renderSearchResults(searchInput.value));
+
   /* ── Overlays + focus ──────────────────────────────────────────
-     Focus is moved into the dialog on open and returned to the device that
-     opened it on close, so a keyboard sweep doesn't lose its place. */
+     Focus is moved into the dialog on open and returned to whatever
+     opened it on close. Reserved for reset confirmation, search, and the
+     shortcuts help — never for ordinary device inspection. */
 
   function focusables(overlay) {
     return [...overlay.querySelectorAll('button, textarea, [href], input, select')]
@@ -471,58 +814,8 @@ export function initRoomPage(CFG) {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 
-  [pcOverlay, printerOverlay, resetOverlay].forEach(o =>
+  [resetOverlay, searchOverlay, helpOverlay].forEach(o =>
     o.addEventListener('keydown', e => trapTab(e, o)));
-
-  function openPcPopup(deviceId) {
-    activeDeviceId = deviceId;
-    const entry = entryFor(deviceId);
-    selectedStatus = entry?.status || 'unknown';
-    popupIdEl.textContent = `${roomId} › ${deviceId}`;
-    pcNotesEl.value = entry?.notes || '';
-    pcLastUpdated.textContent = entry?.updatedAt ? `Updated ${formatDate(entry.updatedAt)}` : '';
-    statusBtns.forEach(b => b.classList.toggle('selected', b.dataset.status === selectedStatus));
-    openOverlay(pcOverlay, [...statusBtns].find(b => b.dataset.status === selectedStatus));
-  }
-
-  function closePcPopup() {
-    closeOverlay(pcOverlay);
-    activeDeviceId = selectedStatus = null;
-  }
-
-  function openPrinterPopup(deviceId) {
-    activeDeviceId = deviceId;
-    const entry = entryFor(deviceId);
-    selectedStatus = entry?.status || 'unknown';
-    printerIdEl.textContent = `${roomId} › ${deviceId}`;
-    printerNotesEl.value = entry?.notes || '';
-    printerLastUp.textContent = entry?.updatedAt ? `Updated ${formatDate(entry.updatedAt)}` : '';
-    printerBtns.forEach(b => b.classList.toggle('selected', b.dataset.status === selectedStatus));
-    openOverlay(printerOverlay, [...printerBtns].find(b => b.dataset.status === selectedStatus));
-  }
-
-  function closePrinterPopup() {
-    closeOverlay(printerOverlay);
-    activeDeviceId = selectedStatus = null;
-  }
-
-  /* ── Fit-to-screen ─────────────────────────────────────────────
-     The floor plan is a fixed 1200×800-ish coordinate space. Rather than
-     rewriting every device position as a percentage, scale the whole canvas
-     and let the viewport own the height — so the room fits a phone screen
-     without horizontal scrolling, and "Actual size" still gives 1:1. */
-  let fitMode = true;
-
-  function applyScale() {
-    const available = viewport.clientWidth || W;
-    const k = fitMode ? Math.min(1, available / W) : 1;
-    room.style.transformOrigin = 'top left';
-    room.style.transform = `scale(${k})`;
-    viewport.style.height = `${Math.round(H * k)}px`;
-    viewport.classList.toggle('actual-size', !fitMode);
-    zoomBtn.textContent = fitMode ? '⤢ Actual size' : '⤢ Fit to screen';
-    zoomBtn.setAttribute('aria-pressed', String(!fitMode));
-  }
 
   /* ── Events ────────────────────────────────────────────────── */
 
@@ -531,50 +824,62 @@ export function initRoomPage(CFG) {
     const el = e.target.closest?.('[data-id]');
     if (!el || !room.contains(el)) return;
     const deviceId = el.dataset.id;
-    if (quickStatus) { quickApply(deviceId); return; }
-    if (el.dataset.kind === 'printer') openPrinterPopup(deviceId);
-    else openPcPopup(deviceId);
+    if (activeModeStatus) { applyStatus(deviceId, activeModeStatus); return; }
+    selectDevice(deviceId);
   });
 
-  quickBtns.forEach(btn => btn.addEventListener('click', () => {
-    setQuick(quickStatus === btn.dataset.status ? null : btn.dataset.status);
+  modeBtns.forEach(btn => btn.addEventListener('click', () => {
+    setMode(activeModeStatus === btn.dataset.modeStatus ? null : btn.dataset.modeStatus);
   }));
 
+  filterBtns.forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter)));
+
+  document.getElementById('btn-next-unchecked').addEventListener('click', goToNextUnchecked);
   undoBtn.addEventListener('click', undoLast);
 
-  zoomBtn.addEventListener('click', () => { fitMode = !fitMode; applyScale(); });
-
-  statusBtns.forEach(btn => btn.addEventListener('click', () => {
-    selectedStatus = btn.dataset.status;
-    statusBtns.forEach(b => b.classList.toggle('selected', b === btn));
-  }));
-
-  printerBtns.forEach(btn => btn.addEventListener('click', () => {
-    selectedStatus = btn.dataset.status;
-    printerBtns.forEach(b => b.classList.toggle('selected', b === btn));
-  }));
-
-  document.getElementById('pc-save').addEventListener('click', () => {
-    if (activeDeviceId && selectedStatus) {
-      saveEntry(activeDeviceId, selectedStatus, pcNotesEl.value.trim());
-      announce(`${activeDeviceId} saved as ${STATUS_WORDS[selectedStatus]}`);
-    }
-    closePcPopup();
+  inspectorNotesEl.addEventListener('input', () => {
+    if (selectedDeviceId) scheduleNotesSave(selectedDeviceId, inspectorNotesEl.value.trim());
   });
-  document.getElementById('pc-close').addEventListener('click', closePcPopup);
-  document.getElementById('pc-cancel').addEventListener('click', closePcPopup);
-  pcOverlay.addEventListener('click', e => { if (e.target === pcOverlay) closePcPopup(); });
+  inspectorNotesEl.addEventListener('blur', flushNotesSave);
 
-  document.getElementById('printer-save').addEventListener('click', () => {
-    if (activeDeviceId && selectedStatus) {
-      saveEntry(activeDeviceId, selectedStatus, printerNotesEl.value.trim());
-      announce(`${activeDeviceId} saved as ${STATUS_WORDS[selectedStatus]}`);
-    }
-    closePrinterPopup();
+  zoomOutBtn.addEventListener('click', () => zoomByFactor(0.8));
+  zoomInBtn.addEventListener('click', () => zoomByFactor(1.25));
+  zoomFitBtn.addEventListener('click', fitToScreen);
+  zoom100Btn.addEventListener('click', actualSize);
+  zoomFullscreenBtn.addEventListener('click', () => {
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    else viewport.requestFullscreen?.();
   });
-  document.getElementById('printer-close').addEventListener('click', closePrinterPopup);
-  document.getElementById('printer-cancel').addEventListener('click', closePrinterPopup);
-  printerOverlay.addEventListener('click', e => { if (e.target === printerOverlay) closePrinterPopup(); });
+
+  viewport.addEventListener('wheel', e => {
+    e.preventDefault();
+    const rect = viewport.getBoundingClientRect();
+    const factor = e.deltaY < 0 ? 1.1 : 0.9;
+    zoomAt(e.clientX - rect.left, e.clientY - rect.top, view.scale * factor);
+  }, { passive: false });
+
+  let panDrag = null;
+  viewport.addEventListener('pointerdown', e => {
+    if (e.target.closest?.('[data-id]')) return;
+    if (e.button !== undefined && e.button !== 0) return;
+    panDrag = { startX: e.clientX, startY: e.clientY, origX: view.x, origY: view.y, moved: false };
+  });
+  window.addEventListener('pointermove', e => {
+    if (!panDrag) return;
+    const dx = e.clientX - panDrag.startX, dy = e.clientY - panDrag.startY;
+    if (Math.hypot(dx, dy) > PAN_DRAG_THRESHOLD) panDrag.moved = true;
+    if (!panDrag.moved) return;
+    setView(view.scale, panDrag.origX + dx, panDrag.origY + dy);
+  });
+  window.addEventListener('pointerup', () => { panDrag = null; });
+
+  document.getElementById('btn-search').addEventListener('click', openSearch);
+  document.getElementById('search-close').addEventListener('click', closeSearch);
+  searchOverlay.addEventListener('click', e => { if (e.target === searchOverlay) closeSearch(); });
+
+  document.getElementById('btn-help').addEventListener('click', () => openOverlay(helpOverlay));
+  document.getElementById('help-close').addEventListener('click', () => closeOverlay(helpOverlay));
+  helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) closeOverlay(helpOverlay); });
 
   document.getElementById('btn-reset').addEventListener('click', () => openOverlay(resetOverlay));
   document.getElementById('reset-confirm').addEventListener('click', () => { resetRoom(); closeOverlay(resetOverlay); });
@@ -585,26 +890,65 @@ export function initRoomPage(CFG) {
   document.getElementById('btn-export-all').addEventListener('click', () => exportAllRooms());
 
   document.addEventListener('keydown', e => {
-    if (e.key !== 'Escape') return;
-    const anyOpen = [pcOverlay, printerOverlay, resetOverlay].some(o => o.classList.contains('open'));
-    if (anyOpen) { closePcPopup(); closePrinterPopup(); closeOverlay(resetOverlay); }
-    else if (quickStatus) setQuick(null);
+    if (e.key === '?') { e.preventDefault(); openOverlay(helpOverlay); return; }
+    if ((e.key === '/' && !e.ctrlKey && !e.metaKey) || (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey))) {
+      const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+      if (typing) return;
+      e.preventDefault();
+      openSearch();
+      return;
+    }
+    if (e.key === 'Escape') {
+      const anyOpen = [resetOverlay, searchOverlay, helpOverlay].some(o => o.classList.contains('open'));
+      if (anyOpen) { closeOverlay(resetOverlay); closeSearch(); closeOverlay(helpOverlay); }
+      else if (activeModeStatus) setMode(null);
+      return;
+    }
+
+    const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
+    if (typing) return;
+
+    if (e.key === 'ArrowRight') { e.preventDefault(); goToNextUnchecked(); return; }
+    if (e.key.toLowerCase() === 'f') { e.preventDefault(); fitToScreen(); return; }
+    if (e.key.toLowerCase() === 'u') { e.preventDefault(); undoLast(); return; }
+    if (!selectedDeviceId) return;
+    if (e.key === '1') { e.preventDefault(); applyStatus(selectedDeviceId, 'working'); return; }
+    if (e.key === '2') { e.preventDefault(); applyStatus(selectedDeviceId, 'minor'); return; }
+    if (e.key === '3') { e.preventDefault(); applyStatus(selectedDeviceId, 'major'); return; }
+    if (e.key === '0') { e.preventDefault(); applyStatus(selectedDeviceId, 'clear'); return; }
+    if (e.key.toLowerCase() === 'n') { e.preventDefault(); inspectorNotesEl.focus(); return; }
   });
 
   // Another tab saved something — pick it up instead of showing stale colours.
   window.addEventListener('storage', () => {
     state = loadState();
     paintAll();
-    updateSummary();
+    updateStatsUI();
+    if (selectedDeviceId) renderInspector({ keepFocus: true });
   });
 
-  window.addEventListener('resize', applyScale);
+  window.addEventListener('resize', () => {
+    if (view.scale === computeFitScale()) fitToScreen();
+    else setView(view.scale, view.x, view.y);
+  });
   if (typeof ResizeObserver === 'function') {
-    new ResizeObserver(applyScale).observe(viewport);
+    new ResizeObserver(() => setView(view.scale, view.x, view.y)).observe(viewport);
   }
 
   paintAll();
-  updateSummary();
+  applyFilterToAll();
+  updateStatsUI();
   refreshUndo();
-  applyScale();
+  renderInspector();
+  fitToScreen();
+
+  const focusParam = new URLSearchParams(window.location.search).get('focus');
+  if (focusParam && deviceById.has(focusParam)) {
+    focusDevice(focusParam);
+    if (window.history?.replaceState) {
+      const url = new URL(window.location.href);
+      url.searchParams.delete('focus');
+      window.history.replaceState(null, '', url);
+    }
+  }
 }

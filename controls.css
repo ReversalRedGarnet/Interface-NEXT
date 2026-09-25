@@ -11,9 +11,9 @@
  */
 
 /* ── Shared button base ──
-   .editor-tool-btn/.editor-btn-inline are declared here (not in
-   editor.css) specifically so the editor's buttons are never a separate
-   style — controls.css loads on every page, including editor.html. */
+   .editor-tool-btn/.editor-btn-inline/.filter-btn are declared here (not
+   in editor.css/workstation.css) specifically so those pages' buttons are
+   never a separate style — controls.css loads on every page. */
 .toolbar-btn,
 .btn-primary,
 .btn-secondary,
@@ -23,7 +23,8 @@
 .site-toggle,
 .back-btn,
 .editor-tool-btn,
-.editor-btn-inline {
+.editor-btn-inline,
+.filter-btn {
   font-family: var(--font-body);
   font-size: var(--text-body);
   font-weight: 500;
@@ -38,7 +39,8 @@
 .status-btn,
 .site-toggle,
 .editor-tool-btn,
-.editor-btn-inline {
+.editor-btn-inline,
+.filter-btn {
   background: var(--surface);
   color: var(--text-secondary);
   border: 1.5px solid var(--line);

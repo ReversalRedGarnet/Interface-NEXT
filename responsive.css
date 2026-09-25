@@ -18,25 +18,42 @@
   }
 }
 
-/* ── Room page — small screens ── */
+/* ── Room page — small screens ──
+   The inspector switches from a docked side panel to a bottom sheet: same
+   content (item 1 asks for exactly that), just re-anchored to the bottom
+   of the viewport, above everything else, over a shorter floor-plan pane
+   so there's still room to see the sheet without scrolling the page. */
 @media (max-width: 700px) {
   .app { padding: var(--space-4) var(--space-3) var(--space-8); }
 
   .header-inner { align-items: flex-start; }
 
-  .status-summary { gap: var(--space-2); }
-  .summary-pill { padding: var(--space-1) var(--space-2); }
-
-  .toolbar { gap: var(--space-2); }
-  .toolbar-btn { flex: 1 1 auto; min-height: 40px; }
-
-  .quick-mark { flex: 1 1 100%; justify-content: flex-start; }
-  .quick-btn { flex: 1 1 auto; justify-content: center; min-height: 40px; }
+  .workstation-toolbar { gap: var(--space-2); }
+  .mode-group, .filter-row { flex: 1 1 100%; }
+  .quick-btn, .filter-btn, .toolbar-btn { flex: 1 1 auto; min-height: 40px; }
 
   .legend { gap: var(--space-3) var(--space-4); margin-top: var(--space-3); }
 
   .popup { padding: var(--space-4); }
   .status-btn { min-height: 44px; }
+
+  .workstation { flex-direction: column; }
+  .floor-pane { width: 100%; }
+  .room-viewport { height: 45vh; }
+
+  .inspector-panel {
+    position: fixed;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100%;
+    flex: none;
+    max-height: 45vh;
+    overflow-y: auto;
+    border-radius: var(--radius-panel) var(--radius-panel) 0 0;
+    box-shadow: var(--shadow-elevated);
+    z-index: 400;
+  }
 }
 
 /* ── Editor page — small screens ── */

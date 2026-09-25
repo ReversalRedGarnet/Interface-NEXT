@@ -226,19 +226,17 @@
   flex-shrink: 0;
 }
 
-/* ── Fit-to-screen viewport ──
+/* ── Zoom/pan viewport ──
    The floor plan keeps its fixed coordinate space (every device position
-   in data/*.json stays valid); the canvas is scaled as a whole and the
-   viewport owns the resulting height. */
+   in data/*.json stays valid) — only .room's transform (translate+scale)
+   changes. Unlike the old fit-only mode, the viewport now needs its own
+   fixed height: it's a clipped window you pan/zoom within, not a box that
+   grows to match the content's scaled size. */
 .room-viewport {
   position: relative;
   width: 100%;
+  height: min(70vh, 640px);
   overflow: hidden;
-}
-
-.room-viewport.actual-size {
-  overflow: auto;
-  -webkit-overflow-scrolling: touch;
 }
 
 .room-viewport .room {

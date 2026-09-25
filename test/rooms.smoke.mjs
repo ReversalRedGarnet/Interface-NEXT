@@ -47,8 +47,8 @@ for (const [id, file] of ROOMS) {
     }
   });
 
-  const unchecked = doc.getElementById('count-unchecked')?.textContent;
-  console.log(`${issues.length ? 'FAIL' : ' ok '}  ${id.padEnd(8)} ${nodes.length} devices · "${unchecked}"`);
+  const stats = doc.getElementById('room-stats')?.textContent;
+  console.log(`${issues.length ? 'FAIL' : ' ok '}  ${id.padEnd(8)} ${nodes.length} devices · "${stats}"`);
   issues.forEach(i => console.log(`        → ${i}`));
   problems += issues.length;
 }

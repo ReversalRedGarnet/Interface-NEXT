@@ -1,0 +1,227 @@
+/**
+ * workstation.css — the room page as a workstation: the always-visible
+ * inspector panel, Inspection Mode's banner, the filter row, search, the
+ * zoom/pan control strip, and the compact stats line. Every value here
+ * comes from tokens.css; nothing here invents a new color/radius/spacing
+ * value the rest of the system doesn't already use.
+ */
+
+/* ── Header stats + toolbar ── */
+.room-stats {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.workstation-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.mode-group,
+.filter-row {
+  display: flex;
+  gap: var(--space-1);
+  flex-wrap: wrap;
+}
+
+.filter-btn {
+  padding: var(--space-1) var(--space-2);
+}
+
+.filter-btn[aria-pressed="true"] {
+  background: var(--focus);
+  border-color: var(--focus);
+  color: var(--surface);
+}
+
+.kbd {
+  display: inline-block;
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  background: var(--surface-muted);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: 0 6px;
+  line-height: 1.6;
+}
+
+/* ── Inspection Mode banner — the mode must be obvious, not just a
+   pressed button somewhere in a toolbar. ── */
+.mode-banner {
+  margin-top: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-control);
+  font-size: var(--text-body);
+  font-weight: 600;
+  border: 1.5px solid var(--line);
+  background: var(--surface-muted);
+  color: var(--text);
+}
+.mode-banner[data-status="working"] { background: var(--status-working-bg);   border-color: var(--status-working);   color: var(--status-working-strong); }
+.mode-banner[data-status="minor"]   { background: var(--status-minor-bg);     border-color: var(--status-minor);     color: var(--status-minor-strong); }
+.mode-banner[data-status="major"]   { background: var(--status-major-bg);     border-color: var(--status-major);     color: var(--status-major-strong); }
+.mode-banner[data-status="clear"]   { background: var(--status-unchecked-bg); border-color: var(--status-unchecked); color: var(--status-unchecked-strong); }
+
+/* ── Filters fade non-matching devices; they never disappear — spatial
+   context (what's near what) has to survive a filter. ── */
+.filtered-out {
+  opacity: 0.25;
+}
+
+/* ── Selected-device highlight (persists while the inspector has it
+   open, independent of hover/focus-visible) ── */
+.pc.selected,
+.printer.selected {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  z-index: 15;
+}
+
+/* ── Workstation layout: floor plan + inspector side by side ── */
+.workstation {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-4);
+}
+
+.floor-pane {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+}
+
+.inspector-panel {
+  width: 320px;
+  flex: 0 0 320px;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-panel);
+  padding: var(--space-4);
+}
+
+.inspector-empty {
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  line-height: 1.6;
+}
+
+.inspector-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.inspector-head h3 {
+  font-size: var(--text-section-title);
+}
+
+.save-status {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.inspector-meta {
+  font-size: var(--text-meta);
+  color: var(--text-muted);
+  margin: var(--space-2) 0 var(--space-3);
+  border-top: 1px solid var(--line);
+  padding-top: var(--space-2);
+}
+
+.inspector-meta div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding: 2px 0;
+}
+
+.mono { font-family: var(--font-mono); }
+
+/* ── Floating zoom/pan control strip ── */
+.zoom-controls {
+  position: absolute;
+  top: var(--space-2);
+  right: var(--space-2);
+  z-index: 50;
+  display: flex;
+  gap: var(--space-1);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: var(--space-1);
+}
+.zoom-controls .toolbar-btn {
+  padding: var(--space-1) var(--space-2);
+}
+
+/* Dragging to pan should show a grab cursor, not the device crosshair,
+   over empty floor-plan background. */
+.room-viewport { cursor: grab; }
+.room-viewport:active { cursor: grabbing; }
+
+/* ── Search ── */
+.popup-search { max-width: 480px; }
+
+.search-results {
+  max-height: 320px;
+  overflow-y: auto;
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.search-result {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  width: 100%;
+  text-align: left;
+  background: var(--surface-muted);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-control);
+  padding: var(--space-2) var(--space-3);
+  cursor: pointer;
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  color: var(--text);
+  transition: var(--transition);
+}
+.search-result:hover { border-color: var(--line-strong); }
+
+.search-result-room {
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+}
+
+.search-hint {
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  padding: var(--space-2) 0;
+}
+
+/* ── Keyboard shortcuts help ── */
+.shortcut-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+.shortcut-list > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+.shortcut-list dd {
+  color: var(--text-secondary);
+  font-size: var(--text-body);
+}

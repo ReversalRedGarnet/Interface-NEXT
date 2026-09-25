@@ -9,19 +9,26 @@ index.html      — campus view (birds-eye buildings/floors) + the site/room
                   menu, kept intact as a collapsed fallback (see "Campus
                   view" below)
 tokens.css, base.css, layout.css, controls.css, navigation.css,
-floor-plan.css, status.css, overlays.css, responsive.css
+floor-plan.css, status.css, workstation.css, overlays.css, responsive.css
   — the visual system, split by concern (see "Visual system" below);
     loaded in that order on every page except admin/trace.html
 js/
-  main.js         — entry point (dual-mode: menu page vs room page)
+  main.js         — entry point (dual-mode: menu page vs room page); also
+                    fetches the project-wide data/assets.json for the room
+                    page's inspector/search (tolerant of it being missing)
   menu.js         — menu page: site toggles, export-all, backup/restore
   campus.js       — campus view: renders data/campus.json as clickable
                     building blocks, floor-picker overlay for multi-floor
                     buildings (see "Campus view" below)
   campus-data.js  — pure logic behind campus.js (normalize/find/decide);
                     no DOM, same split as schema.js vs canvas-renderer.js
-  room.js       — room page: floor-plan SVG, device rendering, quick-mark,
-                  popups, progress, state
+  room.js       — the room page as a workstation: floor-plan SVG, device
+                  rendering, the inspector panel, Inspection Mode, Next
+                  Unchecked, filters, search, zoom/pan (see "Room
+                  workstation" below)
+  room-logic.js — pure logic behind room.js (inspection order, next-
+                  unchecked, stats, filter/search matching); no DOM, same
+                  split as campus-data.js/schema.js
   export.js     — CSV reports + JSON state backup/restore
   state.js      — localStorage read/write helpers
   format.js     — date formatting helpers
@@ -51,7 +58,11 @@ js/editor/
                         js/export.js's ALL_ROOMS, and the cross-file
                         id-collision check for a brand-new room
 test/
-  room.test.mjs   — drives room.js in jsdom; asserts on the DOM a checker touches
+  room-logic.test.mjs — room-logic.js's pure logic: inspection order,
+                        next-unchecked, stats, filter/search matching
+  room.test.mjs   — drives room.js in jsdom; asserts on the DOM a checker
+                    touches (inspector, Inspection Mode, filters, search,
+                    zoom/pan, keyboard shortcuts, save-status)
   rooms.smoke.mjs — renders all five rooms; checks bounds and labels
   editor.test.mjs — schema.js + room-scaffold.js: existing-room round-trip,
                     new-room 4-file generation, id-collision validation
@@ -141,22 +152,49 @@ npm test
 `test/room.test.mjs` renders a real room in jsdom and clicks through it the way
 a checker would. It's the feedback loop to reach for **before** changing
 `room.js`: it goes red on things that are easy to break silently — a status
-saved under the wrong key, a device that can't be reached by keyboard, a popup
-that swallows focus, one tab's save wiping another's.
+saved under the wrong key, a device that can't be reached by keyboard, a
+device that can't be re-selected in the inspector, one tab's save wiping
+another's. `test/room-logic.test.mjs` covers the pure decision logic
+(inspection order, next-unchecked, filter/search matching) directly, with
+no DOM at all.
 
-## Using a room page
-- **Tap a device** → popup with status + notes. Keyboard works too: devices are
-  buttons, so Tab reaches them and Enter/Space opens the popup. Focus returns
-  to the device you came from when the popup closes.
-- **Quick mark** → arm a status in the toolbar, then one tap per device instead
-  of four. `Undo` steps back through the sweep; `Esc` disarms.
-- **Progress bar / "N unchecked"** → what's left in this room, so a half-finished
-  sweep is obvious.
-- **Orange corner dot** → that device has a note attached. Hover (or a screen
-  reader) reads the note without opening anything.
-- **Fit to screen / Actual size** → the floor plan is a fixed 1200×800-ish
-  coordinate space; it's scaled to fit whatever screen you're on. On a phone,
-  switch to Actual size when you need to tap accurately.
+## Room workstation
+The room page's inspector panel is always on screen — never a popup — so
+inspecting a device never interrupts seeing the floor plan. Nothing about
+what a status *is* or how it's stored changed; this is all interaction on
+top of the same `state.js`-backed localStorage entries as before.
+
+- **Tap a device** → the inspector panel (a side panel on desktop, a bottom
+  sheet on mobile) shows its id, status control, any linked asset info
+  (asset id/serial/manufacturer, read-only — set via the editor, not here),
+  and notes. Status changes and notes autosave — there's no Save button —
+  and a small **Saved**/**Saving…** indicator next to the device id
+  confirms it went through.
+- **⏭ Next Unchecked** → jumps straight to the next uninspected device (row-
+  major: top-to-bottom, then left-to-right, derived from each device's own
+  stored position), panning/zooming it into view and focusing its status
+  control.
+- **Inspection Mode** (Working/Minor/Major/Clear) → arm a status, then one
+  tap per device instead of opening the inspector each time. A banner makes
+  the active mode impossible to miss; `Esc` exits it. `Undo` steps back
+  through every status change, however it was made.
+- **Filters** (All/Unchecked/Working/Minor/Major/Notes) → non-matching
+  devices fade to ~25% opacity rather than disappearing, so where they sit
+  relative to everything else is never lost.
+- **Search** (`/` or Ctrl/⌘+K) → matches device id, label, asset id, serial,
+  manufacturer, notes, and status, across every room (other rooms' data is
+  fetched lazily, only once you actually search). Picking a result in
+  another room navigates there and focuses that device automatically.
+- **Zoom/pan** → the floating strip (−/Fit/100%/+/⛶) plus wheel-zoom and
+  drag-to-pan (mouse or touch). This is a view transform only — a device's
+  stored `top`/`left` never changes, no matter how far you've zoomed or
+  panned.
+- **Keyboard**: `1`/`2`/`3`/`0` set the selected device's status (Working/
+  Minor/Major/clear), `N` jumps to its notes field, `U` undoes, `→` is Next
+  Unchecked, `/` opens search, `F` fits the floor plan to screen, `Esc`
+  exits Inspection Mode or closes whatever dialog is open. Press `?` for
+  the full list on screen — shortcuts are never mandatory or permanently
+  displayed otherwise.
 
 ## Editing a room's device grid
 For the 4 grid-based rooms (annex, workshop, b2-204, b2-210), edit the params in
