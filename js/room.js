@@ -269,37 +269,6 @@ export function initRoomPage(CFG) {
         <div class="sweep">
           <div class="sweep-bar"><span class="sweep-fill" id="sweep-fill" style="width:0%"></span></div>
         </div>
-
-        <div class="workstation-toolbar">
-          <div class="toolbar-row toolbar-primary">
-            <button type="button" class="btn-primary" id="btn-next-unchecked">→ Next Unchecked</button>
-            <button type="button" class="toolbar-btn" id="btn-search">${ICON_SEARCH} Search <span class="kbd">/</span></button>
-
-            <button type="button" class="toolbar-btn" id="btn-mode-toggle" aria-pressed="false">Inspection Mode</button>
-
-            <button type="button" class="toolbar-btn" id="btn-filter-toggle" aria-expanded="false" aria-controls="filter-row">Filter</button>
-
-            <div class="toolbar-spacer"></div>
-
-            <div class="overflow-wrap" id="overflow-wrap">
-              <button type="button" class="toolbar-btn" id="btn-more" aria-haspopup="true" aria-expanded="false" aria-label="More room actions">⋯</button>
-              <div class="overflow-menu floating-panel" id="overflow-menu" role="menu" aria-label="Room actions" hidden>
-                <button type="button" class="overflow-item" id="btn-undo" role="menuitem" disabled>↶ Undo</button>
-                <button type="button" class="overflow-item" id="btn-export-room" role="menuitem">↓ Export This Room</button>
-                <button type="button" class="overflow-item" id="btn-export-all" role="menuitem">↓ Export All Rooms</button>
-                <button type="button" class="overflow-item" id="btn-reset" role="menuitem">↺ Reset This Room</button>
-              </div>
-            </div>
-
-            <button type="button" class="toolbar-btn" id="btn-help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">?</button>
-          </div>
-
-          <div class="filter-row floating-panel" id="filter-row" role="group" aria-label="Filter devices" hidden>
-            <span class="quick-mark-label">Filter</span>
-            ${FILTERS.map(f => `
-              <button type="button" class="filter-btn" data-filter="${f.key}" aria-pressed="${f.key === 'all'}">${f.label}</button>`).join('')}
-          </div>
-        </div>
       </header>
 
       <div class="workstation" id="workstation">
@@ -309,62 +278,95 @@ export function initRoomPage(CFG) {
               ${buildFloorPlanHTML(CFG)}
               ${buildDeviceHTML(CFG.devices)}
             </div>
-
-            <div class="zoom-controls" id="zoom-controls">
-              <button type="button" class="toolbar-btn" id="zoom-out" aria-label="Zoom out">−</button>
-              <button type="button" class="toolbar-btn" id="zoom-fit" aria-label="Fit to screen">Fit</button>
-              <button type="button" class="toolbar-btn" id="zoom-100" aria-label="Actual size">100%</button>
-              <button type="button" class="toolbar-btn" id="zoom-in" aria-label="Zoom in">+</button>
-              <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">${ICON_FULLSCREEN}</button>
-              <span class="zoom-hint">${zoomModifierLabel()}+scroll to zoom</span>
-            </div>
           </div>
 
           <p class="visually-hidden" role="status" aria-live="polite" id="room-live"></p>
         </div>
 
-        <aside class="inspector-panel" id="inspector-panel" aria-label="Device inspector">
-          <p class="quick-mark-label inspector-panel-label">Inspector</p>
-          <div class="inspector-scroll">
+        <!-- Every control that used to live in a horizontal toolbar above
+             the floor plan now lives here instead, as distinct labelled
+             sections rather than one flat wall of buttons — see
+             workstation.css's .sidebar-section rule for the shared
+             divider/spacing between them. On narrow screens this whole
+             panel becomes a collapsible bottom sheet (see .sheet-handle /
+             #btn-sheet-toggle below and responsive.css). -->
+        <aside class="inspector-panel" id="inspector-panel" aria-label="Room controls">
+          <button type="button" class="site-toggle sheet-handle" id="btn-sheet-toggle" aria-expanded="false" aria-controls="inspector-scroll"></button>
 
-            <!-- Inspection Mode's active UI — replaces the normal inspector
-                 content below while armed; the toolbar's toggle button is
-                 still the entry point (see setMode()). -->
-            <div class="sidebar-mode" id="sidebar-mode" hidden>
-              <div class="mode-group floating-panel" id="mode-group" role="group" aria-label="Inspection mode: mark status">
-                <span class="quick-mark-label">Mark as</span>
-                ${MODE_STATUSES.map(m => `
-                  <button type="button" class="quick-btn" data-mode-status="${m.status}" aria-pressed="false">
-                    <span class="status-dot ${m.status}"></span>${m.label}
-                  </button>`).join('')}
-              </div>
-              <div class="mode-banner" id="mode-banner">
-                <span class="mode-banner-text" id="mode-banner-text"></span>
-                <button type="button" class="mode-banner-exit" id="btn-mode-exit" title="Exit Inspection Mode (Esc)">Exit</button>
+          <div class="inspector-scroll" id="inspector-scroll">
+
+            <!-- 1. Primary actions — the core inspect-a-device loop, most
+                 prominent and needing no label of its own. -->
+            <div class="sidebar-section sidebar-primary" id="sidebar-primary">
+              <button type="button" class="btn-primary sidebar-block-btn" id="btn-next-unchecked">→ Next Unchecked</button>
+              <button type="button" class="toolbar-btn sidebar-block-btn" id="btn-search">${ICON_SEARCH} Search <span class="kbd">/</span></button>
+            </div>
+
+            <!-- 2. View — the zoom/pan strip, grouped since it controls the
+                 adjacent canvas directly. -->
+            <div class="sidebar-section sidebar-view" id="sidebar-view">
+              <p class="quick-mark-label sidebar-section-label">View</p>
+              <div class="zoom-controls" id="zoom-controls">
+                <button type="button" class="toolbar-btn" id="zoom-out" aria-label="Zoom out">−</button>
+                <button type="button" class="toolbar-btn" id="zoom-fit" aria-label="Fit to screen">Fit</button>
+                <button type="button" class="toolbar-btn" id="zoom-100" aria-label="Actual size">100%</button>
+                <button type="button" class="toolbar-btn" id="zoom-in" aria-label="Zoom in">+</button>
+                <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">${ICON_FULLSCREEN}</button>
+                <span class="zoom-hint">${zoomModifierLabel()}+scroll to zoom</span>
               </div>
             </div>
 
-            <div id="inspector-normal">
-              <p class="inspector-empty" id="inspector-empty">Select a device to inspect it, or press <span class="kbd">→</span> for the next unchecked one.</p>
-              <div class="inspector-content" id="inspector-content" hidden>
-                <div class="inspector-head">
-                  <h3 id="inspector-device-id"></h3>
-                  <span class="save-status" id="save-status"></span>
+            <!-- 3. Inspection Mode — the toggle is the entry point; once
+                 armed, the Mark-as picker + banner appear right below it in
+                 this same section (see setMode()). -->
+            <div class="sidebar-section sidebar-inspection-mode" id="sidebar-inspection-mode">
+              <p class="quick-mark-label sidebar-section-label">Inspection Mode</p>
+              <button type="button" class="toolbar-btn sidebar-block-btn" id="btn-mode-toggle" aria-pressed="false">Inspection Mode</button>
+              <div class="sidebar-mode" id="sidebar-mode" hidden>
+                <div class="mode-group floating-panel" id="mode-group" role="group" aria-label="Inspection mode: mark status">
+                  <span class="quick-mark-label">Mark as</span>
+                  ${MODE_STATUSES.map(m => `
+                    <button type="button" class="quick-btn" data-mode-status="${m.status}" aria-pressed="false">
+                      <span class="status-dot ${m.status}"></span>${m.label}
+                    </button>`).join('')}
                 </div>
-                <div class="status-grid" id="inspector-status-grid"></div>
-                <div class="inspector-meta" id="inspector-meta"></div>
-                <label class="notes-label" for="inspector-notes">Notes (optional)</label>
-                <textarea id="inspector-notes" class="notes-input" rows="4" placeholder="Describe the issue…"></textarea>
-                <p class="last-updated" id="inspector-last-updated"></p>
+                <div class="mode-banner" id="mode-banner">
+                  <span class="mode-banner-text" id="mode-banner-text"></span>
+                  <button type="button" class="mode-banner-exit" id="btn-mode-exit" title="Exit Inspection Mode (Esc)">Exit</button>
+                </div>
               </div>
             </div>
 
-            <!-- Legend + stats — always available regardless of Inspector/
-                 Inspection-Mode state, kept as its own clearly separate,
+            <!-- 4. Secondary actions — used less often than the primary
+                 loop, so visually lighter/smaller (see workstation.css). -->
+            <div class="sidebar-section sidebar-secondary" id="sidebar-secondary">
+              <p class="quick-mark-label sidebar-section-label">More</p>
+              <div class="sidebar-secondary-row">
+                <button type="button" class="toolbar-btn" id="btn-filter-toggle" aria-expanded="false" aria-controls="filter-row">Filter</button>
+                <div class="overflow-wrap" id="overflow-wrap">
+                  <button type="button" class="toolbar-btn" id="btn-more" aria-haspopup="true" aria-expanded="false" aria-label="More room actions">⋯</button>
+                  <div class="overflow-menu floating-panel" id="overflow-menu" role="menu" aria-label="Room actions" hidden>
+                    <button type="button" class="overflow-item" id="btn-undo" role="menuitem" disabled>↶ Undo</button>
+                    <button type="button" class="overflow-item" id="btn-export-room" role="menuitem">↓ Export This Room</button>
+                    <button type="button" class="overflow-item" id="btn-export-all" role="menuitem">↓ Export All Rooms</button>
+                    <button type="button" class="overflow-item" id="btn-reset" role="menuitem">↺ Reset This Room</button>
+                  </div>
+                </div>
+                <button type="button" class="toolbar-btn" id="btn-help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">?</button>
+              </div>
+              <div class="filter-row floating-panel" id="filter-row" role="group" aria-label="Filter devices" hidden>
+                <span class="quick-mark-label">Filter</span>
+                ${FILTERS.map(f => `
+                  <button type="button" class="filter-btn" data-filter="${f.key}" aria-pressed="${f.key === 'all'}">${f.label}</button>`).join('')}
+              </div>
+            </div>
+
+            <!-- 5. Legend + stats — always available regardless of
+                 Inspector/Inspection-Mode state, its own clearly separate,
                  collapsible sub-section rather than blended into either. -->
-            <div class="sidebar-legend" id="sidebar-legend">
-              <button type="button" class="site-toggle sidebar-legend-toggle" id="btn-legend-toggle" aria-expanded="true" aria-controls="legend-stats-body"></button>
-              <div class="legend-stats-body" id="legend-stats-body">
+            <div class="sidebar-section sidebar-legend" id="sidebar-legend">
+              <button type="button" class="site-toggle sidebar-legend-toggle" id="btn-legend-toggle" aria-expanded="false" aria-controls="legend-stats-body"></button>
+              <div class="legend-stats-body" id="legend-stats-body" hidden>
                 <p class="room-stats" id="room-stats"></p>
                 <div class="legend">
                   <div class="legend-item"><span class="dot working"></span>Working</div>
@@ -373,6 +375,25 @@ export function initRoomPage(CFG) {
                   <div class="legend-item"><span class="dot unchecked"></span>Not Checked</div>
                   <div class="legend-item"><span class="dot not-applicable"></span>Not Applicable</div>
                   <div class="legend-item"><span class="dot has-notes"></span>Has a note</div>
+                </div>
+              </div>
+            </div>
+
+            <!-- 6. Inspector — ordinary device-detail content, as before. -->
+            <div class="sidebar-section sidebar-inspector" id="sidebar-inspector">
+              <div id="inspector-normal">
+                <p class="quick-mark-label sidebar-section-label">Inspector</p>
+                <p class="inspector-empty" id="inspector-empty">Select a device to inspect it, or press <span class="kbd">→</span> for the next unchecked one.</p>
+                <div class="inspector-content" id="inspector-content" hidden>
+                  <div class="inspector-head">
+                    <h3 id="inspector-device-id"></h3>
+                    <span class="save-status" id="save-status"></span>
+                  </div>
+                  <div class="status-grid" id="inspector-status-grid"></div>
+                  <div class="inspector-meta" id="inspector-meta"></div>
+                  <label class="notes-label" for="inspector-notes">Notes (optional)</label>
+                  <textarea id="inspector-notes" class="notes-input" rows="4" placeholder="Describe the issue…"></textarea>
+                  <p class="last-updated" id="inspector-last-updated"></p>
                 </div>
               </div>
             </div>
@@ -446,6 +467,8 @@ export function initRoomPage(CFG) {
   const inspectorNormal = document.getElementById('inspector-normal');
   const legendToggleBtn = document.getElementById('btn-legend-toggle');
   const legendStatsBody = document.getElementById('legend-stats-body');
+  const inspectorPanel = document.getElementById('inspector-panel');
+  const sheetToggleBtn = document.getElementById('btn-sheet-toggle');
   const filterToggleBtn = document.getElementById('btn-filter-toggle');
   const filterRow = document.getElementById('filter-row');
   const overflowWrap = document.getElementById('overflow-wrap');
@@ -681,6 +704,9 @@ export function initRoomPage(CFG) {
     if (status) {
       modeBanner.dataset.status = status;
       modeBannerText.textContent = `INSPECTION MODE — marking ${STATUS_WORDS[status]}. Click a device to apply.`;
+      // On mobile the sidebar is a collapsible sheet — arming the mode is
+      // exactly the moment its picker/banner need to actually be seen.
+      setSheetOpen(true);
     }
     announce(status ? `Inspection mode on: ${STATUS_WORDS[status]}` : 'Inspection mode off');
   }
@@ -694,6 +720,17 @@ export function initRoomPage(CFG) {
     legendStatsBody.hidden = !open;
     legendToggleBtn.setAttribute('aria-expanded', String(open));
     legendToggleBtn.textContent = open ? 'Legend & Stats ▴' : 'Legend & Stats ▾';
+  }
+
+  /* ── Mobile bottom sheet ──────────────────────────────────────────
+     Below 700px the whole sidebar (now six sections deep) collapses to a
+     small handle by default so the floor plan stays the dominant thing on
+     screen — see responsive.css. Above 700px this is a no-op: .sheet-handle
+     is display:none and .sheet-open has no rule outside the media query. */
+  function setSheetOpen(open) {
+    inspectorPanel.classList.toggle('sheet-open', open);
+    sheetToggleBtn.setAttribute('aria-expanded', String(open));
+    sheetToggleBtn.textContent = open ? 'Controls & Inspector ▴' : 'Controls & Inspector ▾';
   }
 
   /* ── Filters (fade, never hide — spatial context stays intact) ──
@@ -795,6 +832,9 @@ export function initRoomPage(CFG) {
     selectedDeviceId = deviceId;
     nodeById.get(deviceId)?.classList.add('selected');
     renderInspector({ focusStatus: opts.focusStatus !== false, resetSaveStatus: true });
+    // Same reasoning as arming Inspection Mode above — selecting a device
+    // is meaningless if the sheet holding its inspector is collapsed.
+    setSheetOpen(true);
   }
 
   /* ── Zoom / pan — a view transform only; device coordinates never change ── */
@@ -1030,6 +1070,7 @@ export function initRoomPage(CFG) {
   filterBtns.forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter)));
 
   legendToggleBtn.addEventListener('click', () => setLegendOpen(legendStatsBody.hidden));
+  sheetToggleBtn.addEventListener('click', () => setSheetOpen(sheetToggleBtn.getAttribute('aria-expanded') !== 'true'));
 
   function setOverflowOpen(open) {
     overflowMenu.hidden = !open;
@@ -1154,7 +1195,12 @@ export function initRoomPage(CFG) {
   updateStatsUI();
   refreshUndo();
   renderInspector();
-  setLegendOpen(true);
+  // Six sections now compete for sidebar space (see the SIDEBAR ORGANIZATION
+  // restructure) — Legend & Stats defaults to collapsed so it doesn't push
+  // the Inspector below the fold; the mobile sheet defaults collapsed too,
+  // for the same "don't overwhelm the screen" reason (see setSheetOpen).
+  setLegendOpen(false);
+  setSheetOpen(false);
   fitToScreen();
 
   const focusParam = new URLSearchParams(window.location.search).get('focus');

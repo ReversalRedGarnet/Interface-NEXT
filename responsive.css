@@ -19,19 +19,25 @@
 }
 
 /* ── Room page — small screens ──
-   The inspector switches from a docked side panel to a bottom sheet: same
-   content (item 1 asks for exactly that), just re-anchored to the bottom
-   of the viewport, above everything else, over a shorter floor-plan pane
-   so there's still room to see the sheet without scrolling the page. */
+   The sidebar (six sections deep — Primary actions, View, Inspection
+   Mode, Secondary actions, Legend & Stats, Inspector) switches from a
+   docked side panel to a bottom sheet, same content, just re-anchored to
+   the bottom of the viewport. Unlike the old single-purpose inspector,
+   this sheet now holds every control the room page has, so it defaults
+   COLLAPSED to a small handle (see .sheet-handle / setSheetOpen() in
+   room.js) rather than staying permanently open — the floor plan stays
+   the dominant thing on screen until the checker actually pulls the
+   sheet up, and selecting a device or arming Inspection Mode opens it
+   automatically so nothing relocated here becomes harder to reach. */
 @media (max-width: 700px) {
   .app { padding: var(--space-4) var(--space-3) var(--space-8); }
 
   .header-inner { align-items: flex-start; }
 
-  .workstation-toolbar { gap: var(--space-2); }
-  .toolbar-spacer { display: none; }
+  .sidebar-primary { flex-direction: row; }
+  .sidebar-block-btn { width: auto; }
   .mode-group, .filter-row { flex: 1 1 100%; }
-  .quick-btn, .filter-btn, .toolbar-btn { flex: 1 1 auto; min-height: 40px; }
+  .quick-btn, .filter-btn, .toolbar-btn, .site-toggle, .sidebar-block-btn { flex: 1 1 auto; min-height: 40px; }
   .zoom-hint { display: none; }
 
   .legend { gap: var(--space-3) var(--space-4); margin-top: var(--space-3); }
@@ -44,10 +50,13 @@
   .room-viewport { height: 45vh; }
 
   /* The desktop app-shell's left-border divider doesn't apply once the
-     inspector stops sitting beside the floor plan — it becomes a bottom
+     sidebar stops sitting beside the floor plan — it becomes a bottom
      sheet instead, so the divider moves to its top edge, and the
      shadow (already part of the base .floating-panel-style elevation)
-     does the rest of the "floating above the page" work. */
+     does the rest of the "floating above the page" work. Collapsed by
+     default (max-height just enough for the handle) — .sheet-open (see
+     setSheetOpen() in room.js) is what actually reveals the six sections
+     underneath. */
   .inspector-panel {
     position: fixed;
     left: 0;
@@ -55,12 +64,24 @@
     bottom: 0;
     width: 100%;
     flex: none;
-    max-height: 45vh;
+    max-height: 72px;
+    overflow: hidden;
     border-left: none;
     border-top: var(--border-divider);
     border-radius: var(--radius-panel) var(--radius-panel) 0 0;
     box-shadow: var(--shadow-elevated);
     z-index: 400;
+    transition: max-height var(--transition);
+  }
+
+  .inspector-panel.sheet-open {
+    max-height: 45vh;
+  }
+
+  .sheet-handle {
+    display: block;
+    width: 100%;
+    margin-bottom: var(--space-2);
   }
 }
 

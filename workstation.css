@@ -31,29 +31,16 @@
   color: var(--text-muted);
 }
 
-/* Two rows: the primary controls (core inspect-a-device loop) always
-   visible, then the filter row underneath, shown only when toggled open —
-   collapsed by default so it doesn't compete for attention with the
-   primary row. */
-.workstation-toolbar {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-2);
-  margin-top: var(--space-3);
-}
-
+/* .toolbar-row is shared with issues.html's own filter row — kept here
+   (not room.js-specific) even though the room page's old horizontal
+   toolbar that used to combine it with .toolbar-primary/.toolbar-spacer is
+   gone; every room-page control now lives in the sidebar instead (see
+   .sidebar-section below). */
 .toolbar-row {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: var(--space-2);
-}
-
-/* Pushes the overflow menu + help button to the row's right edge,
-   separating admin/help controls from the core-loop controls on the
-   left without a visible divider. */
-.toolbar-spacer {
-  flex: 1 1 auto;
 }
 
 .mode-group,
@@ -230,14 +217,15 @@
   z-index: 15;
 }
 
-/* ── App-shell: floor plan and inspector as two distinct regions, not one
-   flat horizontal flow. The header/toolbar bars above stay full-width —
-   this split is specifically the content area below them. `stretch`
-   (rather than the old `flex-start`) makes both regions share the taller
-   one's height, which is what lets the inspector scroll independently
-   instead of growing the whole page; the divider between them is the
-   inspector's own left border, not a gap, so it reads as one seam rather
-   than a gap plus a border. ── */
+/* ── App-shell: floor plan and sidebar as two distinct regions, not one
+   flat horizontal flow. The header stays full-width above — this split is
+   specifically the content area below it; every control that used to live
+   in a toolbar between the two now lives inside the sidebar itself (see
+   .sidebar-section below). `stretch` (rather than the old `flex-start`)
+   makes both regions share the taller one's height, which is what lets
+   the sidebar scroll independently instead of growing the whole page; the
+   divider between them is the sidebar's own left border, not a gap, so it
+   reads as one seam rather than a gap plus a border. ── */
 .workstation {
   display: flex;
   align-items: stretch;
@@ -261,18 +249,73 @@
   padding: var(--space-4);
 }
 
-.inspector-panel-label {
-  display: block;
-  margin: 0 0 var(--space-3);
+/* Mobile-only bottom-sheet handle — see .sheet-handle in responsive.css
+   for its display:block/sizing; hidden here so it takes no space and
+   isn't reachable above the 700px breakpoint. */
+.sheet-handle {
+  display: none;
 }
 
-/* The label stays put; everything below it scrolls on its own if the
-   inspector's own content (a long note, several asset-meta rows) is
-   taller than the panel — never the whole page. */
+/* Everything scrolls together as one region — six sections deep, each its
+   own clearly separated group (see .sidebar-section) rather than a single
+   pinned header over an undifferentiated scroll area. */
 .inspector-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+
+/* ── Sidebar sections — Primary actions / View / Inspection Mode /
+   Secondary actions / Legend & Stats / Inspector, each visually distinct
+   via a divider rather than blended into one wall of controls. Only
+   sections after the first get the divider — the first sits right under
+   the panel's own top edge and needs no separator above it. */
+.sidebar-section + .sidebar-section {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--border-divider);
+}
+
+.sidebar-section-label {
+  display: block;
+  margin: 0 0 var(--space-2);
+}
+
+.sidebar-primary {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.sidebar-block-btn {
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* Filter / overflow (⋯) / help — used less often than the primary loop
+   above, so a size step down (still --text-meta, the same size .kbd and
+   .save-status already use for de-emphasized text) reads as visually
+   lighter without inventing a new value. */
+.sidebar-secondary-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+.sidebar-secondary-row > * {
+  flex: 1 1 auto;
+}
+.sidebar-secondary-row .toolbar-btn {
+  padding: var(--space-1) var(--space-2);
+  font-size: var(--text-meta);
+}
+/* #btn-more is nested a level deeper, inside .overflow-wrap — that wrapper
+   is the actual flex item (via the rule above), so its own button needs to
+   fill it explicitly rather than getting a flex-basis of its own. */
+.overflow-wrap .toolbar-btn {
+  width: 100%;
 }
 
 .inspector-empty {
@@ -318,18 +361,11 @@
 .mono { font-family: var(--font-mono); }
 
 /* ── Sidebar Legend + Stats — its own clearly separate, collapsible
-   sub-section within the inspector sidebar (never blended into the
-   Inspector/Inspection-Mode content above it), reusing the exact same
-   disclosure look .site-toggle already has elsewhere (navigation.css) so
-   it reads as an extension of the existing system, not a new one. Always
-   present regardless of which of #sidebar-mode/#inspector-normal is
-   showing above it. */
-.sidebar-legend {
-  margin-top: var(--space-4);
-  padding-top: var(--space-3);
-  border-top: var(--border-divider);
-}
-
+   sub-section (divider comes from the shared .sidebar-section rule above),
+   reusing the exact same disclosure look .site-toggle already has
+   elsewhere (navigation.css) so it reads as an extension of the existing
+   system, not a new one. Defaults collapsed (see setLegendOpen(false) in
+   room.js) now that five other sections share the sidebar with it. */
 .legend-stats-body {
   display: flex;
   flex-direction: column;
@@ -339,24 +375,15 @@
 
 .legend-stats-body[hidden] { display: none; }
 
-/* ── Floating zoom/pan control strip ──
-   Anchored to the floor-plan viewport's OWN bottom-right corner (it's a
-   child of #room-viewport, not #floor-pane) — never the top edge, which
-   used to sit right on the seam with the inspector sidebar and read as
-   ambiguously belonging to neither region. It's a sibling of #room, not
-   inside it, so panning/zooming the floor plan never moves the controls
-   themselves. */
+/* ── Zoom/pan control strip — now grouped in the sidebar's own "View"
+   section (see .sidebar-view in room.js's markup) since it directly
+   controls the adjacent canvas, rather than floating over the canvas
+   itself. */
 .zoom-controls {
-  position: absolute;
-  bottom: var(--space-2);
-  right: var(--space-2);
-  z-index: 50;
   display: flex;
+  flex-wrap: wrap;
+  align-items: center;
   gap: var(--space-1);
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-control);
-  padding: var(--space-1);
 }
 .zoom-controls .toolbar-btn {
   padding: var(--space-1) var(--space-2);
@@ -366,11 +393,9 @@
 }
 
 .zoom-hint {
-  align-self: center;
+  flex: 1 1 100%;
   font-size: var(--text-meta);
   color: var(--text-muted);
-  white-space: nowrap;
-  padding: 0 var(--space-1);
 }
 
 /* Dragging to pan should show a grab cursor, not the device crosshair,

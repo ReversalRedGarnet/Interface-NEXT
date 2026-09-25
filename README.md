@@ -118,8 +118,8 @@ hairlines.
   keep it soft today.
 - Structural dividers: `--border-divider` (`2px solid var(--line-strong)`)
   is the one token for boundaries between whole regions of the page — the
-  inspector sidebar's divider, panel/card edges, the site header/footer
-  rules, the room header's toolbar-bottom divider, list-group headings.
+  sidebar's own divider and its six internal section dividers, panel/card
+  edges, the site header/footer rules, list-group headings.
   Bold and high-contrast on purpose, not a faint hairline, but still built
   from an existing color token (`--line-strong`), never a new one. Ordinary
   control borders (buttons, inputs, chips, per-item cards like a search
@@ -226,15 +226,20 @@ The room page's inspector panel is always on screen — never a popup — so
 inspecting a device never interrupts seeing the floor plan.
 
 On desktop, the room body is an app-shell: the floor plan (most of the
-width) and the inspector (a fixed 320px sidebar, its own `--surface-raised`
-background and left-border divider, a persistent "INSPECTOR" header label,
-and its own independent scroll) are two distinct regions, not one flat row —
-the header/breadcrumb and the toolbar stay full-width bars above the split.
-On mobile the inspector is a bottom sheet instead (unchanged). The floor
-plan auto-fits to the available space on load, on resize, and via the
-floating strip's **Fit** button — no manual click needed on load — and its
-zoom controls are anchored to the floor-plan viewport's own bottom-right
-corner, not floating ambiguously between it and the inspector.
+width) and the sidebar (a fixed 320px column, its own `--surface-raised`
+background and left-border divider, and its own independent scroll) are two
+distinct regions, not one flat row — the header/breadcrumb stays a
+full-width bar above the split, with no toolbar row left in it. Every
+control the room page has — Next Unchecked, Search, zoom/pan, Inspection
+Mode, Filter, room actions, Legend + Stats, and the device inspector — now
+lives inside the sidebar itself, organized into six clearly divided
+sections (see below) rather than split between a header toolbar and the
+sidebar. On mobile the sidebar becomes a collapsible bottom sheet, closed to
+a small handle by default so the floor plan stays the dominant thing on
+screen; selecting a device or arming Inspection Mode opens it automatically
+(see "Mobile bottom sheet" below). The floor plan auto-fits to the available
+space on load, on resize, and via the **Fit** button in the sidebar's View
+section — no manual click needed on load.
 
 **Fit is a true maximum contain-fit.** It's computed from the room's actual
 drawn extent — every wall/room/entrance/counter shape and every device's
@@ -250,23 +255,32 @@ layouts; the fit view then centers that bounding box in the pane
 16px margin on every side rather than either butting against the edges or
 leaving a large, wasted gap.
 
-The inspector sidebar hosts three things, never blended together:
-1. **The device inspector** (below) — the default.
-2. **Inspection Mode's active UI** (below) — replaces #1 while armed.
-3. **A collapsible Legend + Stats section** — always present regardless of
-   which of the two above is showing, and separated from both by its own
-   labeled sub-section with a top divider.
+The sidebar hosts six sections, top to bottom, each its own clearly divided
+group rather than one undifferentiated wall of controls (a divider — the
+same `--border-divider` token used for every other structural seam in the
+app — separates each section from the next):
+1. **Primary actions** — Next Unchecked and Search, unlabeled since they're
+   the whole point of the page and need no caption.
+2. **View** — the zoom/pan strip, grouped here since it directly controls
+   the adjacent canvas.
+3. **Inspection Mode** — the toggle button; its active UI (the picker +
+   banner, below) renders directly beneath it, in this same section, while
+   armed.
+4. **Secondary actions** — Filter, the **⋯** room-actions menu, and **?**
+   help, visually lighter than the primary group (smaller `--text-meta`
+   sizing, same as `.kbd`/the save-status text) since they're used less
+   often.
+5. **Legend + Stats** — collapsible, closed by default now that five other
+   sections share the sidebar with it.
+6. **The device inspector** — ordinary per-device detail, replaced by #3's
+   active UI while Inspection Mode is armed.
 
 Every device carries two independent fields (see "Inspection state vs.
 condition" below): whether it's been looked at, and — only if it has —
 whether it's working. Everything below is built on that.
 
-The toolbar is two tiers on purpose: a primary row for the core "find the
-next thing, check it, move on" loop, and everything administrative
-(undo/export/reset) tucked out of the way until asked for.
-
-- **Tap a device** → the inspector panel (a side panel on desktop, a bottom
-  sheet on mobile) shows its id, a 5-way status control (Working/Minor
+- **Tap a device** → the sidebar (a side panel on desktop, a bottom sheet
+  on mobile) shows its id, a 5-way status control (Working/Minor
   Issue/Major Issue/Not Applicable/Not Checked), any linked asset info
   (asset id/serial/manufacturer, read-only — set via the editor, not here),
   and notes. Status changes and notes autosave — there's no Save button —
@@ -276,31 +290,30 @@ next thing, check it, move on" loop, and everything administrative
   Unchecked (row-major: top-to-bottom, then left-to-right, derived from
   each device's own stored position), panning/zooming it into view and
   focusing its status control.
-- **Inspection Mode**'s toggle button lives in the toolbar and stays there,
-  visible, when armed — switching to its pressed look rather than
-  disappearing, so there's always a visible, clickable trace of how you got
-  into the mode and how to leave it. Its *active* UI — the
+- **Inspection Mode**'s toggle button lives in its own sidebar section and
+  stays there, visible, when armed — switching to its pressed look rather
+  than disappearing, so there's always a visible, clickable trace of how
+  you got into the mode and how to leave it. Its *active* UI — the
   Working/Minor/Major/N/A picker and a banner making the mode impossible to
-  miss — renders in the inspector sidebar instead, replacing the normal
-  device inspector while armed (clicking a device applies a status directly
-  and never opens the inspector during this mode, so there's nothing useful
-  for it to show anyway). The banner carries its own **Exit** button — not
-  just text mentioning `Esc` — so the mode can be entered and exited
-  entirely by mouse or touch, with no keyboard required. Clicking the
-  toggle again, the active picker button again, the banner's Exit button,
-  or `Esc` all turn it off the same way and hand the sidebar back to the
-  normal inspector. `Undo` (in the room actions menu — see below) steps
-  back through every change, however it was made. Resetting a device back
-  to Not Checked isn't in this mode on purpose — that's a correction, not
-  something you do while sweeping the room, so it stays an
-  inspector/`0`-key action.
-- **Legend + Stats** is a collapsible sub-section at the bottom of the
-  sidebar (expanded by default) — the status legend (dot + label for each
-  of the five statuses, plus "Has a note") and the header stats line ("X
-  devices · Y inspected · Z not applicable · N remaining · M issues") that
-  used to sit at the bottom of the page and in the room header,
-  respectively. Both read at body-text size (13–15px, `--text-body-lg`) now,
-  not the smaller metadata size they used to.
+  miss — renders directly beneath the toggle, in that same section,
+  replacing the device inspector section further down while armed (clicking
+  a device applies a status directly and never opens the inspector during
+  this mode, so there's nothing useful for it to show anyway). The banner
+  carries its own **Exit** button — not just text mentioning `Esc` — so the
+  mode can be entered and exited entirely by mouse or touch, with no
+  keyboard required. Clicking the toggle again, the active picker button
+  again, the banner's Exit button, or `Esc` all turn it off the same way and
+  hand the inspector section back to normal. `Undo` (in the room actions
+  menu — see below) steps back through every change, however it was made.
+  Resetting a device back to Not Checked isn't in this mode on purpose —
+  that's a correction, not something you do while sweeping the room, so it
+  stays an inspector/`0`-key action.
+- **Legend + Stats** is a collapsible sidebar section, closed by default —
+  the status legend (dot + label for each of the five statuses, plus "Has a
+  note") and the stats line ("X devices · Y inspected · Z not applicable ·
+  N remaining · M issues") that used to sit at the bottom of the page and in
+  the room header, respectively. Both read at body-text size (13–15px,
+  `--text-body-lg`), not the smaller metadata size they used to.
 - **Filters** collapse behind a **Filter** toggle button (its own label
   shows the active filter, e.g. "Filter: Working", even while collapsed, so
   an active filter is never silently forgotten). Expanding it reveals
@@ -318,9 +331,10 @@ next thing, check it, move on" loop, and everything administrative
   manufacturer, notes, and status, across every room (other rooms' data is
   fetched lazily, only once you actually search). Picking a result in
   another room navigates there and focuses that device automatically.
-- **Zoom/pan** → the floating strip (−/Fit/100%/+/⛶) plus drag-to-pan
-  (mouse or touch). This is a view transform only — a device's stored
-  `top`/`left` never changes, no matter how far you've zoomed or panned.
+- **Zoom/pan** → the strip (−/Fit/100%/+/⛶) in the sidebar's View section,
+  plus drag-to-pan on the canvas itself (mouse or touch). This is a view
+  transform only — a device's stored `top`/`left` never changes, no matter
+  how far you've zoomed or panned.
   Plain mouse-wheel scroll over the floor plan behaves like normal page
   scroll; **Ctrl+scroll** (**Cmd+scroll** on Mac) zooms instead, matching
   the browser's own "zoom the page" gesture so an ordinary scroll is never
@@ -330,7 +344,15 @@ next thing, check it, move on" loop, and everything administrative
   `→` is Next Unchecked, `/` opens search, `F` fits the floor plan to
   screen, `Esc` exits Inspection Mode or closes whatever menu/dialog is
   open. Press `?` for the full list on screen — shortcuts are never
-  mandatory or permanently displayed otherwise.
+  mandatory or permanently displayed otherwise. Every shortcut dispatches on
+  `document`, so relocating the button it mirrors never changes its key.
+- **Mobile bottom sheet**: below 700px the sidebar becomes a fixed sheet
+  anchored to the bottom of the viewport, collapsed by default to a small
+  handle (`Controls & Inspector ▾`) — with six sections' worth of content
+  now living in the sidebar, staying permanently open would leave little of
+  the floor plan visible, so it opens only on request (tapping the handle)
+  or automatically the moment it's actually needed: selecting a device, or
+  arming Inspection Mode.
 
 No emoji anywhere in the app — every icon is either a plain character
 already used elsewhere (←, →, ↓, ↶, ↺, ⋯, ✕) or a small flat outline SVG

@@ -609,35 +609,50 @@ await test('the deferred auto-fit does not fight a ?focus= deep link\'s pan/zoom
     'the deferred one-frame-later re-fit should not undo a ?focus= deep link\'s selection/pan/zoom');
 });
 
-/* ── App-shell layout: floor plan and inspector as distinct regions ── */
+/* ── App-shell layout: floor plan and sidebar as distinct regions ── */
 
-await test('the inspector is a distinct region with its own persistent header label, separate from the floor-plan pane', async () => {
+await test('the sidebar is a distinct region, a direct sibling of the floor-plan pane inside .workstation', async () => {
   const { doc } = await mount(readRoom('commons'));
-  const label = doc.querySelector('#inspector-panel .inspector-panel-label');
-  assert(label && /inspector/i.test(label.textContent), 'the inspector panel should carry a persistent "Inspector" header label');
   assert(doc.getElementById('inspector-panel').parentElement === doc.getElementById('workstation'),
-    'the inspector panel should be a direct sibling of the floor-plan pane inside .workstation');
+    'the sidebar should be a direct sibling of the floor-plan pane inside .workstation');
   assert(doc.querySelector('.floor-pane').parentElement === doc.getElementById('workstation'),
-    'the floor-plan pane should be a direct sibling of the inspector inside .workstation');
+    'the floor-plan pane should be a direct sibling of the sidebar inside .workstation');
 });
 
-await test('the inspector\'s scrollable content is nested separately from its persistent label, so the label never scrolls away', async () => {
+await test('the sidebar is organized into distinct labelled sections rather than one undifferentiated wall of controls', async () => {
   const { doc } = await mount(readRoom('commons'));
-  const panel = doc.getElementById('inspector-panel');
-  const label = panel.querySelector('.inspector-panel-label');
-  const scrollArea = panel.querySelector('.inspector-scroll');
-  assert(label && scrollArea, 'expected both a persistent label and a separate scrollable content area');
-  assert(scrollArea.contains(doc.getElementById('inspector-content')), 'the actual inspector content should live inside the scrollable area, not beside the label');
-  assert(!scrollArea.contains(label), 'the persistent label should not be inside the scrollable area');
+  const labels = [...doc.querySelectorAll('#inspector-scroll .sidebar-section-label')].map(el => el.textContent.trim());
+  assert(labels.includes('View'), `expected a "View" section label, got ${labels.join(', ')}`);
+  assert(labels.includes('Inspection Mode'), `expected an "Inspection Mode" section label, got ${labels.join(', ')}`);
+  assert(labels.includes('More'), `expected a "More" section label, got ${labels.join(', ')}`);
+  assert(labels.includes('Inspector'), `expected an "Inspector" section label, got ${labels.join(', ')}`);
+  assert(doc.getElementById('btn-legend-toggle'), 'expected the Legend & Stats section to carry its own disclosure label');
 });
 
-await test('the zoom controls are anchored inside the floor-plan viewport itself, not floating between it and the inspector', async () => {
+await test('the main area above the floor plan carries no leftover toolbar row — every control lives in the sidebar', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const header = doc.querySelector('header');
+  assert(!header.querySelector('#btn-next-unchecked'), 'Next Unchecked should no longer live in the header toolbar');
+  assert(!header.querySelector('#btn-mode-toggle'), 'the Inspection Mode toggle should no longer live in the header toolbar');
+  assert(!header.querySelector('#zoom-controls'), 'the zoom controls should no longer live in the header toolbar');
+  assert(!doc.querySelector('.workstation-toolbar'), 'the old horizontal toolbar row should be gone entirely');
+  const panel = doc.getElementById('inspector-panel');
+  assert(panel.contains(doc.getElementById('btn-next-unchecked')), 'Next Unchecked should now live in the sidebar');
+  assert(panel.contains(doc.getElementById('btn-search')), 'Search should now live in the sidebar');
+  assert(panel.contains(doc.getElementById('btn-mode-toggle')), 'the Inspection Mode toggle should now live in the sidebar');
+  assert(panel.contains(doc.getElementById('btn-filter-toggle')), 'the Filter toggle should now live in the sidebar');
+  assert(panel.contains(doc.getElementById('btn-more')), 'the overflow (⋯) menu should now live in the sidebar');
+  assert(panel.contains(doc.getElementById('btn-help')), 'the help (?) button should now live in the sidebar');
+});
+
+await test('the zoom controls are grouped in the sidebar\'s View section, not floating over the canvas', async () => {
   const { doc } = await mount(readRoom('commons'));
   const zoomControls = doc.getElementById('zoom-controls');
   const viewport = doc.getElementById('room-viewport');
-  assert(zoomControls.parentElement === viewport, 'the zoom controls should be nested inside #room-viewport, not floating in the outer floor-pane');
-  assert(viewport.contains(doc.getElementById('room')) && viewport.contains(zoomControls),
-    'the pannable/zoomable .room and the zoom controls should both live inside the same viewport');
+  const panel = doc.getElementById('inspector-panel');
+  assert(!viewport.contains(zoomControls), 'the zoom controls should no longer be nested inside #room-viewport');
+  assert(panel.contains(zoomControls), 'the zoom controls should now live inside the sidebar');
+  assert(viewport.contains(doc.getElementById('room')), 'the pannable/zoomable .room should still live inside the viewport');
 });
 
 /* ── Save-status indicator ──────────────────────────────────────── */
@@ -683,6 +698,67 @@ await test('typing in the notes field does not trigger 1/2/3/0/U/ArrowRight shor
   notes.focus();
   key(doc, '2'); // dispatched on doc, but activeElement is the textarea — must be ignored
   assert(!readState(window)['TEST_PC1'], 'a keystroke while typing notes should not have applied a status');
+});
+
+/* ── Legend + Stats (collapsible sidebar section) ──────────────────── */
+
+await test('the Legend & Stats section defaults to collapsed, now that five other sections share the sidebar', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const toggle = doc.getElementById('btn-legend-toggle');
+  const body = doc.getElementById('legend-stats-body');
+  assert(body.hidden, 'the legend/stats body should start collapsed');
+  assert(toggle.getAttribute('aria-expanded') === 'false', 'the toggle should report collapsed via aria-expanded');
+});
+
+await test('the Legend & Stats toggle opens and closes the section, and it stays outside the Inspector/Inspection-Mode content', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const toggle = doc.getElementById('btn-legend-toggle');
+  const body = doc.getElementById('legend-stats-body');
+  click(toggle);
+  assert(!body.hidden, 'clicking the toggle should reveal the legend/stats body');
+  assert(toggle.getAttribute('aria-expanded') === 'true', 'the toggle should report expanded via aria-expanded');
+  assert(body.contains(doc.getElementById('room-stats')), 'stats should live inside the collapsible legend/stats body');
+  assert(body.querySelector('.legend'), 'the legend should live inside the collapsible legend/stats body');
+  assert(!doc.getElementById('inspector-normal').contains(doc.getElementById('sidebar-legend')),
+    'Legend & Stats should be a section of its own, not nested inside the Inspector content');
+
+  click(toggle);
+  assert(body.hidden, 'clicking the toggle again should collapse the section');
+});
+
+/* ── Mobile bottom sheet (the whole sidebar, below 700px) ──────────── */
+
+await test('the sidebar collapses to a small handle by default, so the floor plan stays dominant on a small screen', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const handle = doc.getElementById('btn-sheet-toggle');
+  assert(handle, 'expected a sheet-handle toggle button on the sidebar');
+  assert(handle.getAttribute('aria-expanded') === 'false', 'the sheet should start collapsed');
+  assert(!doc.getElementById('inspector-panel').classList.contains('sheet-open'), 'the sidebar should not carry .sheet-open by default');
+});
+
+await test('clicking the sheet handle opens and closes the sidebar sheet', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const handle = doc.getElementById('btn-sheet-toggle');
+  click(handle);
+  assert(doc.getElementById('inspector-panel').classList.contains('sheet-open'), 'clicking the handle should open the sheet');
+  assert(handle.getAttribute('aria-expanded') === 'true', 'the handle should report expanded via aria-expanded');
+
+  click(handle);
+  assert(!doc.getElementById('inspector-panel').classList.contains('sheet-open'), 'clicking the handle again should collapse the sheet');
+});
+
+await test('selecting a device opens the sheet, so the inspector it lands in is never hidden behind a collapsed handle', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  assert(!doc.getElementById('inspector-panel').classList.contains('sheet-open'), 'fixture assumption: the sheet starts collapsed');
+  selectViaClick(doc, 'PC1');
+  assert(doc.getElementById('inspector-panel').classList.contains('sheet-open'), 'selecting a device should open the sheet');
+});
+
+await test('arming Inspection Mode opens the sheet, so its picker/banner are never hidden behind a collapsed handle', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  assert(!doc.getElementById('inspector-panel').classList.contains('sheet-open'), 'fixture assumption: the sheet starts collapsed');
+  click(doc.getElementById('btn-mode-toggle'));
+  assert(doc.getElementById('inspector-panel').classList.contains('sheet-open'), 'arming Inspection Mode should open the sheet');
 });
 
 /* ── Report ────────────────────────────────────────────────────── */
