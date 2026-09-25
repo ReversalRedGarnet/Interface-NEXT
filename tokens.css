@@ -32,6 +32,16 @@
   --line:           #E9E7E1;
   --line-strong:    #C9C6BE;
 
+  /* Structural dividers — boundaries between whole regions of the page:
+     the inspector sidebar's divider, panel/card edges, header/footer
+     rules, list-group headings. Bold and high-contrast on purpose, so a
+     region boundary never reads as a faint hairline; --line-strong (not a
+     new color) is what supplies the contrast. Ordinary control borders
+     (buttons, inputs, chips) are a different concern and stay on --line
+     at their existing weight — this token is only for edges that separate
+     one section of the page from another. */
+  --border-divider: 2px solid var(--line-strong);
+
   /* ── Interactive emphasis ──
      One neutral for focus rings and filled "primary" actions. No separate
      brand accent — see README/AGENTS notes from the rebrand: there is no
@@ -63,12 +73,18 @@
   --danger-strong: #B91C1C;
 
   /* ── Radius ──
-     4px for controls (buttons/inputs/chips-that-aren't-pills), 6px for
-     panels/cards/overlays. Pill (999px) is reserved for status/tag
-     elements only — never a general "rounded corners" default. */
-  --radius-control: 4px;
-  --radius-panel:   6px;
-  --radius-pill:    999px;
+     Sharp everywhere — 0 for controls, panels, and (as of this pass) the
+     pill token too: --radius-pill's only consumer (status.css's
+     .summary-pill) isn't rendered anywhere in the live app, so there's no
+     live "tag" left that actually needs a rounded shape to stay legible;
+     if a future tag-style element genuinely needs one, that's a one-line
+     revert here, not a reason to keep three sharp tokens and one soft one
+     today. Kept as three separate tokens (not collapsed into one) so a
+     future design pass can still size them independently even though they
+     currently share a value. */
+  --radius-control: 0;
+  --radius-panel:   0;
+  --radius-pill:    0;
 
   /* ── Elevation ──
      Reserved for floating overlays/inspectors only (see overlays.css).

@@ -8,7 +8,7 @@
 /* ── Site header (every page) ── */
 .site-header {
   background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--border-divider);
   position: sticky;
   top: 0;
   z-index: 200;
@@ -72,7 +72,7 @@
 /* ── Site footer (every page) — mirrors .site-header ── */
 .site-footer {
   background: var(--surface);
-  border-top: 1px solid var(--line);
+  border-top: var(--border-divider);
   padding: var(--space-2) var(--space-6);
   text-align: center;
   margin-top: auto;
@@ -102,11 +102,12 @@
   padding: var(--space-6) var(--space-6) var(--space-8);
 }
 
-/* Room page's own <header>, built by room.js. */
+/* Room page's own <header>, built by room.js — its bottom border is the
+   toolbar's own divider from the floor-plan/inspector split below it. */
 header {
   margin-bottom: var(--space-4);
   padding-bottom: var(--space-4);
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--border-divider);
 }
 
 .header-inner {
@@ -173,5 +174,5 @@ body.menu-page {
 .menu-footer {
   text-align: center;
   padding-top: var(--space-4);
-  border-top: 1px solid var(--line);
+  border-top: var(--border-divider);
 }

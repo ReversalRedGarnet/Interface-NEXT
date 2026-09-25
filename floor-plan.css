@@ -9,14 +9,18 @@
  * position, so a checker's mental map of the room never shifts underfoot.
  */
 
-/* ── Room container ── */
+/* ── Room container ──
+   Uniform on all four sides (see --border-divider in tokens.css) — this
+   used to carry a heavier `border-top: 3px solid var(--focus)` accent left
+   over from before the app-shell restructure, which read as a visibly
+   darker top edge than the left/right/bottom once the floor plan became
+   one pane in a two-region layout rather than a standalone block. */
 .room {
   position: relative;
   width: 1200px;
   height: 800px;
   background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-top: 3px solid var(--focus);
+  border: var(--border-divider);
   border-radius: var(--radius-panel);
   overflow: hidden;
 }

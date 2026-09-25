@@ -18,14 +18,18 @@
 
 .site-card {
   background: var(--surface);
-  border: 1.5px solid var(--line);
+  border: var(--border-divider);
   border-radius: var(--radius-panel);
   padding: var(--space-6);
   transition: border-color var(--transition);
 }
 
+/* The resting border is already --line-strong (see --border-divider in
+   tokens.css) — hover escalates one step further, to --text-secondary, so
+   the hover state still reads as visibly different rather than
+   transitioning to the same color it's already at. */
 .site-card:hover {
-  border-color: var(--line-strong);
+  border-color: var(--text-secondary);
 }
 
 .site-card-header {
@@ -33,7 +37,7 @@
   align-items: center;
   margin-bottom: var(--space-4);
   padding-bottom: var(--space-3);
-  border-bottom: 1px solid var(--line);
+  border-bottom: var(--border-divider);
 }
 
 .site-name {
@@ -102,7 +106,7 @@
    floor-plan.css) rather than inventing a new one. */
 .campus-canvas-wrap {
   margin-bottom: var(--space-6);
-  border: 1.5px solid var(--line);
+  border: var(--border-divider);
   border-radius: var(--radius-panel);
   background: var(--surface);
   overflow: hidden;

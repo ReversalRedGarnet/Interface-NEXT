@@ -61,7 +61,7 @@ body.editor-page {
    overlays.css's "borders over shadows" note). */
 .editor-panel {
   background: var(--surface);
-  border: 1.5px solid var(--line);
+  border: var(--border-divider);
   border-radius: var(--radius-panel);
   padding: var(--space-4);
 }
@@ -230,7 +230,7 @@ body.editor-page {
   flex: 1;
   min-width: 0;
   background: var(--bg);
-  border: 1.5px solid var(--line);
+  border: var(--border-divider);
   border-radius: var(--radius-panel);
   overflow: hidden;
   display: flex;
@@ -344,7 +344,7 @@ circle.ed-selected {
   gap: var(--space-4);
   padding-top: var(--space-4);
   margin-top: var(--space-3);
-  border-top: 1px solid var(--line);
+  border-top: var(--border-divider);
 }
 
 .editor-dirty {

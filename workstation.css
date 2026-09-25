@@ -17,7 +17,7 @@
    floating content, never an ordinary docked panel. */
 .floating-panel {
   background: var(--surface-raised);
-  border: 1.5px solid var(--line);
+  border: var(--border-divider);
   border-radius: var(--radius-panel);
   box-shadow: var(--shadow-elevated);
 }
@@ -152,8 +152,16 @@
 }
 
 /* ── Inspection Mode banner — the mode must be obvious, not just a
-   pressed button somewhere in a toolbar. ── */
+   pressed button somewhere in a toolbar, and exiting it can't rely on a
+   sentence mentioning Esc: the banner carries its own clickable Exit
+   button so the mode can be entered AND left entirely by mouse/touch,
+   with no keyboard required. Esc still works exactly as before — the
+   button is additive, not a replacement. */
 .mode-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
   margin-top: var(--space-2);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-control);
@@ -163,10 +171,33 @@
   background: var(--surface-muted);
   color: var(--text);
 }
+.mode-banner[hidden] { display: none; }
 .mode-banner[data-status="working"] { background: var(--status-working-bg);   border-color: var(--status-working);   color: var(--status-working-strong); }
 .mode-banner[data-status="minor"]   { background: var(--status-minor-bg);     border-color: var(--status-minor);     color: var(--status-minor-strong); }
 .mode-banner[data-status="major"]   { background: var(--status-major-bg);     border-color: var(--status-major);     color: var(--status-major-strong); }
 .mode-banner[data-status="not-applicable"] { background: var(--surface-muted); border-color: var(--line-strong); color: var(--text-muted); }
+
+.mode-banner-text { flex: 1 1 auto; }
+
+/* currentColor + color:inherit means this button always matches its own
+   banner's status color (working/minor/major/n-a) with no per-status
+   override rules of its own — no new color values anywhere. */
+.mode-banner-exit {
+  flex-shrink: 0;
+  font-family: var(--font-body);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  padding: var(--space-1) var(--space-3);
+  background: var(--surface);
+  border: 1.5px solid currentColor;
+  border-radius: var(--radius-control);
+  color: inherit;
+  cursor: pointer;
+  transition: var(--transition);
+}
+.mode-banner-exit:hover {
+  background: var(--surface-muted);
+}
 
 /* ── Filters fade non-matching devices; they never disappear — spatial
    context (what's near what) has to survive a filter. ── */
@@ -210,7 +241,7 @@
   flex-direction: column;
   min-height: 0;
   background: var(--surface-raised);
-  border-left: 1.5px solid var(--line);
+  border-left: var(--border-divider);
   padding: var(--space-4);
 }
 
@@ -257,7 +288,7 @@
   font-size: var(--text-meta);
   color: var(--text-muted);
   margin: var(--space-2) 0 var(--space-3);
-  border-top: 1px solid var(--line);
+  border-top: var(--border-divider);
   padding-top: var(--space-2);
 }
 

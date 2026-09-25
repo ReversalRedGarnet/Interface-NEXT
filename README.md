@@ -89,24 +89,45 @@ test/
                     summarizeIssues/buildingStats/buildingStatusKey; no DOM
   issues.test.mjs — drives issues.js in jsdom: grouping, filtering, the
                     empty state, and the roster-fetch-failure fallback
+  tokens.test.mjs — permanent guard on the corner/divider design system:
+                    radius tokens stay 0, --border-divider stays bold and
+                    color-token-based, no stylesheet hardcodes a soft
+                    border-radius outside the token system
 ```
 
 ## Visual system
 Deliberately restrained — an operations console, not a dashboard: no
 gradients, no glow, no hover-scale, no gloss on devices, no pulsing status
 animation, minimal shadow, and borders (not shadows) as the primary way a
-panel reads as separate from the page.
+panel reads as separate from the page. Sharp corners and bold, high-contrast
+structural dividers throughout, rather than soft rounded panels on faint
+hairlines.
 
 - `tokens.css` — every color/spacing/radius/type-scale value, named by role
   (`--surface`, `--text-secondary`, `--status-major`), never by literal
   color. Retinting the product means editing values in this one file only.
-- Radius: 4px for controls (buttons/inputs/devices), 6px for panels/cards/
-  overlays. Pill shape (`--radius-pill`) is reserved for status/tag chips
-  (`.summary-pill`, `.status-dot`) — nothing else gets fully rounded corners.
+- Radius: `--radius-control`/`--radius-panel`/`--radius-pill` are all `0` —
+  sharp corners everywhere (controls, panels, the inspector sidebar,
+  floating panels, buttons, the campus building blocks). `--radius-pill`'s
+  only consumer (`.summary-pill`) isn't actually rendered anywhere in the
+  live app, so there's no live "tag" left that needs the rounded-pill
+  exception the token used to carry; a future tag-style element that
+  genuinely needs one is a one-line revert in `tokens.css`, not a reason to
+  keep it soft today.
+- Structural dividers: `--border-divider` (`2px solid var(--line-strong)`)
+  is the one token for boundaries between whole regions of the page — the
+  inspector sidebar's divider, panel/card edges, the site header/footer
+  rules, the room header's toolbar-bottom divider, list-group headings.
+  Bold and high-contrast on purpose, not a faint hairline, but still built
+  from an existing color token (`--line-strong`), never a new one. Ordinary
+  control borders (buttons, inputs, chips, per-item cards like a search
+  result) are a different concern and stay on `--line` at their existing
+  1–1.5px weight — this token is only for edges that separate one section
+  of the page from another.
 - Shadow: `--shadow-elevated` exists for exactly one purpose — a floating
-  `.popup`/`.overlay` sitting above dimmed content. No ordinary panel,
-  card, button, or floor-plan device has a shadow; a 1px `--line` does
-  that job instead.
+  `.popup`/`.overlay`/`.floating-panel` sitting above dimmed content. No
+  ordinary panel, card, button, or floor-plan device has a shadow; a border
+  does that job instead.
 - Spacing snaps to one scale: 4/8/12/16/24/32px (`--space-1`…`--space-8`).
 - Type scale: page title 22–28px (`--text-page-title`), section title 16px
   (`--text-section-title`), body 13–14px (`--text-body`/`--text-body-lg`),
@@ -118,7 +139,12 @@ panel reads as separate from the page.
   `prefers-reduced-motion` (see `responsive.css`).
 - `admin/trace.css` is deliberately **not** part of this system — the
   internal trace tool is a one-off utility page, never linked from the
-  app, with no reason to share its design language.
+  app, with its own local `--radius` token, with no reason to share its
+  design language (this pass's corner/divider tokens don't touch it).
+- `test/tokens.test.mjs` is a permanent regression guard: it fails if a
+  radius token stops being `0`, if `--border-divider` stops being bold or
+  starts inventing a new color, or if any stylesheet hardcodes a soft
+  border-radius pixel value outside the token system.
 
 ## Campus view (prototype)
 `index.html` opens on a birds-eye schematic of buildings (`data/campus.json`),
@@ -228,15 +254,20 @@ next thing, check it, move on" loop, and everything administrative
   each device's own stored position), panning/zooming it into view and
   focusing its status control.
 - **Inspection Mode** collapses to a single toggle button when off. Clicking
-  it arms Working and reveals the Working/Minor/Major/N/A picker in its
-  place, so one tap per device applies a status instead of opening the
-  inspector each time. A banner makes the active mode impossible to miss;
-  `Esc`, or clicking the active picker button again, turns it off and
-  collapses the picker back down to the toggle button. `Undo` (in the room
-  actions menu — see below) steps back through every change, however it was
-  made. Resetting a device back to Not Checked isn't in this mode on
-  purpose — that's a correction, not something you do while sweeping the
-  room, so it stays an inspector/`0`-key action.
+  it arms Working and reveals the Working/Minor/Major/N/A picker alongside
+  it, so one tap per device applies a status instead of opening the
+  inspector each time — the toggle button itself stays visible and switches
+  to its pressed look rather than disappearing, so there's always a
+  visible, clickable trace of how you got into the mode and how to leave it
+  from the toolbar. A banner makes the active mode impossible to miss, and
+  carries its own **Exit** button — not just text mentioning `Esc` — so the
+  mode can be entered and exited entirely by mouse or touch, with no
+  keyboard required. Clicking the toggle again, the active picker button
+  again, the banner's Exit button, or `Esc` all turn it off the same way.
+  `Undo` (in the room actions menu — see below) steps back through every
+  change, however it was made. Resetting a device back to Not Checked isn't
+  in this mode on purpose — that's a correction, not something you do while
+  sweeping the room, so it stays an inspector/`0`-key action.
 - **Filters** collapse behind a **Filter** toggle button (its own label
   shows the active filter, e.g. "Filter: Working", even while collapsed, so
   an active filter is never silently forgotten). Expanding it reveals

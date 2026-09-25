@@ -57,7 +57,7 @@
     flex: none;
     max-height: 45vh;
     border-left: none;
-    border-top: 1.5px solid var(--line);
+    border-top: var(--border-divider);
     border-radius: var(--radius-panel) var(--radius-panel) 0 0;
     box-shadow: var(--shadow-elevated);
     z-index: 400;

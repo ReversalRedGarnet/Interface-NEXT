@@ -268,18 +268,47 @@ await test('devices carrying notes are flagged on the map', async () => {
 
 /* ── Inspection Mode (built on the old Quick Mark) ──────────────── */
 
-await test('Inspection Mode is collapsed to a single toggle button when off, and expands to the picker when armed', async () => {
+await test('Inspection Mode\'s toggle button stays visible and switches to its pressed look while armed — it never disappears with no trace of how to get back to it', async () => {
   const { doc } = await mount(readRoom('commons'));
   const toggle = doc.getElementById('btn-mode-toggle');
   const group = doc.getElementById('mode-group');
-  assert(!toggle.hidden, 'the collapsed toggle button should be visible when Inspection Mode is off');
+  assert(!toggle.hidden, 'the toggle button should be visible when Inspection Mode is off');
+  assert(toggle.getAttribute('aria-pressed') === 'false', 'the toggle should not read pressed when off');
   assert(group.hidden, 'the Working/Minor/Major/N/A picker should not be visible when Inspection Mode is off');
 
   click(toggle);
-  assert(toggle.hidden, 'the toggle button should hide once Inspection Mode is armed');
+  assert(!toggle.hidden, 'the toggle button must stay visible once armed, not disappear');
+  assert(toggle.getAttribute('aria-pressed') === 'true', 'the toggle should read pressed once Inspection Mode is armed');
   assert(!group.hidden, 'the picker should appear once Inspection Mode is armed');
   assert(doc.querySelector('#mode-group [data-mode-status="working"]').getAttribute('aria-pressed') === 'true',
     'clicking the toggle button should arm Working by default');
+});
+
+await test('clicking the toggle button again while armed exits Inspection Mode, since it now behaves as a real pressed/unpressed toggle', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const toggle = doc.getElementById('btn-mode-toggle');
+  click(toggle);
+  assert(toggle.getAttribute('aria-pressed') === 'true', 'fixture assumption: mode should be armed after the first click');
+  click(toggle);
+  assert(toggle.getAttribute('aria-pressed') === 'false', 'clicking the toggle again should exit Inspection Mode');
+  assert(doc.getElementById('mode-group').hidden, 'the picker should collapse once exited via the toggle');
+  assert(doc.getElementById('mode-banner').hidden, 'the banner should hide once exited via the toggle');
+});
+
+await test('the mode banner carries its own clickable Exit button (not just text mentioning Esc), so Inspection Mode can be entered and exited by mouse/touch alone', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  click(doc.getElementById('btn-mode-toggle'));
+  const banner = doc.getElementById('mode-banner');
+  const exitBtn = doc.getElementById('btn-mode-exit');
+  assert(!banner.hidden, 'fixture assumption: banner should be visible once armed');
+  assert(exitBtn, 'expected an Exit button inside the mode banner');
+  assert(banner.contains(exitBtn), 'the Exit button should be part of the banner itself');
+
+  click(exitBtn);
+  assert(banner.hidden, 'clicking Exit should hide the banner');
+  assert(doc.getElementById('mode-group').hidden, 'clicking Exit should collapse the picker');
+  assert(doc.querySelector('#mode-group [data-mode-status="working"]').getAttribute('aria-pressed') === 'false', 'clicking Exit should disarm the active status');
+  assert(doc.getElementById('btn-mode-toggle').getAttribute('aria-pressed') === 'false', 'the toggle should read unpressed again after Exit');
 });
 
 await test('Inspection Mode applies a status in one tap, with no inspector opening', async () => {

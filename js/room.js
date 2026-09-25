@@ -300,7 +300,10 @@ export function initRoomPage(CFG) {
           </div>
         </div>
 
-        <p class="mode-banner" id="mode-banner" hidden></p>
+        <div class="mode-banner" id="mode-banner" hidden>
+          <span class="mode-banner-text" id="mode-banner-text"></span>
+          <button type="button" class="mode-banner-exit" id="btn-mode-exit" title="Exit Inspection Mode (Esc)">Exit</button>
+        </div>
       </header>
 
       <div class="workstation" id="workstation">
@@ -410,6 +413,8 @@ export function initRoomPage(CFG) {
   const modeBtns = document.querySelectorAll('#mode-group .quick-btn');
   const filterBtns = document.querySelectorAll('#filter-row .filter-btn');
   const modeBanner = document.getElementById('mode-banner');
+  const modeBannerText = document.getElementById('mode-banner-text');
+  const modeExitBtn = document.getElementById('btn-mode-exit');
   const modeToggleBtn = document.getElementById('btn-mode-toggle');
   const modeGroup = document.getElementById('mode-group');
   const filterToggleBtn = document.getElementById('btn-filter-toggle');
@@ -623,21 +628,24 @@ export function initRoomPage(CFG) {
   /* ── Inspection Mode (build on Quick Mark) ───────────────────────
      Collapsed to a single toggle button when off; clicking it arms
      Working (the common case) and reveals the Working/Minor/Major/N/A
-     picker in its place. Clicking the already-active picker button again
-     (or Esc) turns it off and collapses back to the toggle button. */
+     picker alongside it — the toggle button itself stays visible and
+     switches to its pressed look (rather than disappearing), so there's
+     always a visible, clickable trace of how you got into the mode and
+     how to leave it from the toolbar itself. Clicking the already-active
+     picker button again, the banner's own Exit button, or Esc all turn it
+     off the same way and collapse the picker back down. */
 
   function setMode(status) {
     activeModeStatus = status;
     modeBtns.forEach(b => b.setAttribute('aria-pressed', String(b.dataset.modeStatus === status)));
     room.classList.toggle('quick-mode', !!status);
     if (status) room.dataset.quick = status; else delete room.dataset.quick;
-    modeToggleBtn.hidden = !!status;
     modeToggleBtn.setAttribute('aria-pressed', String(!!status));
     modeGroup.hidden = !status;
     if (status) {
       modeBanner.hidden = false;
       modeBanner.dataset.status = status;
-      modeBanner.textContent = `INSPECTION MODE — marking ${STATUS_WORDS[status]}. Click a device to apply. Esc to exit.`;
+      modeBannerText.textContent = `INSPECTION MODE — marking ${STATUS_WORDS[status]}. Click a device to apply.`;
     } else {
       modeBanner.hidden = true;
     }
@@ -951,10 +959,11 @@ export function initRoomPage(CFG) {
     selectDevice(deviceId);
   });
 
-  modeToggleBtn.addEventListener('click', () => setMode('working'));
+  modeToggleBtn.addEventListener('click', () => setMode(activeModeStatus ? null : 'working'));
   modeBtns.forEach(btn => btn.addEventListener('click', () => {
     setMode(activeModeStatus === btn.dataset.modeStatus ? null : btn.dataset.modeStatus);
   }));
+  modeExitBtn.addEventListener('click', () => setMode(null));
 
   filterToggleBtn.addEventListener('click', () => setFilterOpen(!filterOpen));
   filterBtns.forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter)));
