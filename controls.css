@@ -1,0 +1,240 @@
+/**
+ * controls.css — one button family, used everywhere (toolbar actions,
+ * popup actions, quick-mark, status selection, site-list toggles, the
+ * editor's own tool/inline buttons), plus text inputs/textareas.
+ *
+ * Borders over shadows: an ordinary control is a flat surface with a
+ * 1px line, never a shadow. The one thing every button shares is declared
+ * once below; each variant only adds its own fill/border color on top —
+ * that's what keeps this "one button family" instead of a new style per
+ * feature.
+ */
+
+/* ── Shared button base ──
+   .editor-tool-btn/.editor-btn-inline are declared here (not in
+   editor.css) specifically so the editor's buttons are never a separate
+   style — controls.css loads on every page, including editor.html. */
+.toolbar-btn,
+.btn-primary,
+.btn-secondary,
+.btn-danger,
+.quick-btn,
+.status-btn,
+.site-toggle,
+.back-btn,
+.editor-tool-btn,
+.editor-btn-inline {
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  font-weight: 500;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.toolbar-btn,
+.btn-secondary,
+.quick-btn,
+.status-btn,
+.site-toggle,
+.editor-tool-btn,
+.editor-btn-inline {
+  background: var(--surface);
+  color: var(--text-secondary);
+  border: 1.5px solid var(--line);
+}
+
+.toolbar-btn,
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  padding: var(--space-2) var(--space-4);
+}
+
+/* ── Toolbar ── */
+.toolbar {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.toolbar-btn:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.toolbar-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+}
+.toolbar-btn:disabled:hover {
+  border-color: var(--line);
+  color: var(--text-secondary);
+}
+
+/* ── Primary/secondary/danger actions (popups, dialogs) ── */
+.popup-actions {
+  display: flex;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+.btn-primary,
+.btn-secondary,
+.btn-danger {
+  font-weight: 600;
+  border: none;
+}
+
+.btn-primary       { background: var(--text); color: var(--surface); }
+.btn-primary:hover { background: var(--focus); }
+
+.btn-secondary       { background: var(--surface-muted); color: var(--text-muted); border: 1.5px solid var(--line); }
+.btn-secondary:hover { color: var(--text); border-color: var(--line-strong); }
+
+.btn-danger       { background: var(--danger-bg); color: var(--danger-strong); border: 1.5px solid var(--danger); }
+.btn-danger:hover { background: var(--danger); color: var(--surface); }
+
+/* ── Back button (room → menu) ── */
+.back-btn {
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-secondary);
+  text-decoration: none;
+  padding: var(--space-1) var(--space-3);
+  border: 1.5px solid var(--line);
+  white-space: nowrap;
+}
+
+.back-btn:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+/* ── Quick-mark group ──
+   Arm a status once, then one tap per device instead of four. Color-by-
+   status variants (aria-pressed) live in status.css, not here. */
+.quick-mark {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-3);
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-control);
+}
+
+.quick-mark-label {
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-right: 2px;
+}
+
+.quick-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: var(--space-2) var(--space-3);
+}
+
+.quick-btn:hover { border-color: var(--line-strong); color: var(--text); }
+
+/* ── Status selection grid (popup) — structure only; color-selected
+   variants live in status.css. ── */
+.status-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.printer-grid { grid-template-columns: 1fr 1fr; }
+
+.status-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  background: var(--surface-muted);
+  padding: 10px var(--space-3);
+}
+
+.status-btn:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+/* ── Site-list toggle (menu page) ── */
+.site-toggle {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  color: var(--text-muted);
+}
+
+.site-toggle:hover {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+/* ── Notes textarea ── */
+.notes-label {
+  display: block;
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  margin-bottom: 5px;
+}
+
+.notes-input {
+  width: 100%;
+  background: var(--surface-muted);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-control);
+  color: var(--text);
+  font-family: var(--font-body);
+  font-size: var(--text-body);
+  padding: var(--space-2) var(--space-3);
+  resize: vertical;
+  transition: border-color var(--transition);
+  margin-bottom: var(--space-2);
+}
+
+.notes-input::placeholder { color: var(--text-muted); }
+
+.notes-input:focus {
+  outline: none;
+  border-color: var(--focus);
+  background: var(--bg);
+}
+
+.last-updated {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--text-muted);
+  margin-bottom: var(--space-4);
+  min-height: 14px;
+}
+
+/* ── Visible focus ring for keyboard users, suppressed for mouse clicks ── */
+.pc:focus-visible,
+.printer:focus-visible,
+.toolbar-btn:focus-visible,
+.quick-btn:focus-visible,
+.status-btn:focus-visible,
+.site-toggle:focus-visible,
+.room-link:focus-visible,
+.back-btn:focus-visible,
+.btn-primary:focus-visible,
+.btn-secondary:focus-visible,
+.btn-danger:focus-visible,
+.popup-close:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+  z-index: 20;
+}

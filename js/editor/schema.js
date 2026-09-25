@@ -87,7 +87,7 @@ export function createShape(type, x = 0, y = 0) {
   return { type, ...factory(x, y) };
 }
 
-/** Box size a device renders at — mirrors the CSS cascade in style.css
+/** Box size a device renders at — mirrors the CSS cascade in floor-plan.css
  *  exactly: `.pc.wide` (label > 5 chars) is declared after `.pc.staff`, so
  *  a long-labelled staff PC ends up 64px wide, not 52px. */
 export function deviceBoxSize(device) {

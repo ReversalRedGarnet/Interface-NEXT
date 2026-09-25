@@ -1,0 +1,107 @@
+/**
+ * tokens.css — Gridkeep's design tokens. Load first on every page.
+ *
+ * Named by ROLE (--surface, --text-secondary), never by literal color (no
+ * --gray-400, no --blue-600) — retinting the product should only ever mean
+ * editing values in this one file, never hunting for a color name that no
+ * longer matches what it's assigned to.
+ *
+ * Values are carried over unchanged from the previous single stylesheet
+ * (this pass reorganizes and renames, it does not restyle the palette) —
+ * see base.css/controls.css/etc. for what actually consumes these.
+ */
+:root {
+  /* ── Surfaces ──
+     Flat by design: panels are distinguished from the page by a 1px line,
+     not a shadow or a color leap (see "Borders over shadows" in
+     controls.css/overlays.css). --surface and --surface-raised share the
+     same value — --surface-raised is a semantic marker for the one place
+     an elevation shadow is allowed (floating overlays/inspectors), not a
+     different color. */
+  --bg:             #FAF9F6;
+  --surface:        #FAF9F6;
+  --surface-raised: #FAF9F6;
+  --surface-muted:  #F1EFEA;
+
+  /* ── Text ── */
+  --text:           #2A2A2A;
+  --text-secondary: #4A4A4A;
+  --text-muted:     #7A7873;
+
+  /* ── Lines ── */
+  --line:           #E9E7E1;
+  --line-strong:    #C9C6BE;
+
+  /* ── Interactive emphasis ──
+     One neutral for focus rings and filled "primary" actions. No separate
+     brand accent — see README/AGENTS notes from the rebrand: there is no
+     brand color left in this product, only neutral emphasis. */
+  --focus:          #1A1A1A;
+
+  /* ── Status ──
+     The only hues in the system besides neutral gray. Each has a solid
+     tone (icons/borders/dots), a tint (pill/chip backgrounds), and a
+     "strong" tone (text on a tint, so it stays readable). */
+  --status-working:        #16A34A;
+  --status-working-bg:     #DCFCE7;
+  --status-working-strong: #15803D;
+
+  --status-minor:        #D97706;
+  --status-minor-bg:     #FEF3C7;
+  --status-minor-strong: #B45309;
+
+  --status-major:        #DC2626;
+  --status-major-bg:     #FEE2E2;
+  --status-major-strong: #B91C1C;
+
+  --status-unchecked:        #64748B;
+  --status-unchecked-bg:     #F1F5F9;
+  --status-unchecked-strong: #475569;
+
+  --danger:        #DC2626;
+  --danger-bg:     #FEE2E2;
+  --danger-strong: #B91C1C;
+
+  /* ── Radius ──
+     4px for controls (buttons/inputs/chips-that-aren't-pills), 6px for
+     panels/cards/overlays. Pill (999px) is reserved for status/tag
+     elements only — never a general "rounded corners" default. */
+  --radius-control: 4px;
+  --radius-panel:   6px;
+  --radius-pill:    999px;
+
+  /* ── Elevation ──
+     Reserved for floating overlays/inspectors only (see overlays.css).
+     No ordinary panel, card, or button gets a shadow — a 1px --line does
+     that job instead. */
+  --shadow-elevated: 0 8px 24px rgba(0,0,0,.12), 0 2px 6px rgba(0,0,0,.06);
+
+  /* ── Motion ──
+     Kept short and functional (a state change, not a performance) — see
+     responsive.css for the prefers-reduced-motion override that collapses
+     this further for anyone who's asked for it. */
+  --transition: 120ms ease;
+
+  /* ── Spacing scale ──
+     4/8/12/16/24/32 — every margin/padding/gap in the system snaps to one
+     of these six values. */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+  --space-8: 32px;
+
+  /* ── Type ── */
+  --font-display: -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-body:    -apple-system, 'Segoe UI', Roboto, sans-serif;
+  --font-mono:    ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+
+  /* Type scale — page title 22–28, section title 15–18, body 13–15,
+     metadata (ids/serials/timestamps — always --font-mono) 11–12. */
+  --text-page-title:    clamp(22px, 3vw, 28px);
+  --text-section-title: 16px;
+  --text-body:          13px;
+  --text-body-lg:       14px;
+  --text-meta:          11px;
+}

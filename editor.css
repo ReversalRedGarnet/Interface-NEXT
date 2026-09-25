@@ -1,8 +1,10 @@
-/* editor.css — floor-plan editor page.
-   Layered on top of style.css: reuses its custom properties (soft
-   white/black/gray palette, system font stack), .site-header/.site-footer,
-   .toolbar-btn, .overlay/.popup and .btn-primary/.btn-secondary/.btn-danger
-   rather than redefining them. */
+/**
+ * editor.css — floor-plan editor page only. Loaded after the shared
+ * files (tokens/base/layout/controls/navigation/floor-plan/status/
+ * overlays), so .editor-tool-btn/.editor-btn-inline get their font,
+ * padding-shape, and border from controls.css's shared button family —
+ * this file only adds what's genuinely editor-specific on top of that.
+ */
 
 body.editor-page {
   padding: 0;
@@ -12,7 +14,7 @@ body.editor-page {
 }
 
 .editor-app {
-  padding: 20px 20px 16px;
+  padding: var(--space-4) var(--space-4) var(--space-3);
   flex: 1;
   width: 100%;
   display: flex;
@@ -21,27 +23,27 @@ body.editor-page {
 }
 
 .editor-header {
-  margin-bottom: 16px;
+  margin-bottom: var(--space-4);
 }
 
 .editor-connect {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-top: 10px;
+  gap: var(--space-3);
+  margin-top: var(--space-2);
   flex-wrap: wrap;
 }
 
 .editor-connect-status {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-meta);
   color: var(--text-muted);
 }
 
 /* ── Body: sidebar + canvas ── */
 .editor-body {
   display: flex;
-  gap: 18px;
+  gap: var(--space-4);
   flex: 1;
   min-height: 0;
 }
@@ -51,41 +53,38 @@ body.editor-page {
   flex: 0 0 280px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: var(--space-3);
   overflow-y: auto;
 }
 
+/* Ordinary docked panel — a border, no shadow (see controls.css/
+   overlays.css's "borders over shadows" note). */
 .editor-panel {
   background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 16px;
-  box-shadow: var(--shadow-sm);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-panel);
+  padding: var(--space-4);
 }
 
 .editor-panel h2 {
-  font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--primary-blue-xdark);
-  margin-bottom: 12px;
+  margin-bottom: var(--space-3);
 }
 
 .editor-panel .toolbar-btn {
   width: 100%;
-  margin-top: 8px;
+  margin-top: var(--space-2);
 }
 
 .editor-field {
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  margin-bottom: 10px;
-  font-size: 12px;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+  font-size: var(--text-body);
 }
 
 .editor-field > span {
-  font-size: 10px;
+  font-size: var(--text-meta);
   font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 0.06em;
@@ -97,17 +96,17 @@ body.editor-page {
 .editor-field select,
 .editor-field textarea {
   font-family: var(--font-body);
-  font-size: 13px;
-  background: var(--surface-2);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
+  font-size: var(--text-body);
+  background: var(--surface-muted);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-control);
   color: var(--text);
-  padding: 7px 10px;
+  padding: var(--space-2) var(--space-3);
 }
 
 .editor-field textarea {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-meta);
   resize: vertical;
 }
 
@@ -115,14 +114,14 @@ body.editor-page {
 .editor-field select:focus,
 .editor-field textarea:focus {
   outline: none;
-  border-color: var(--primary-blue);
+  border-color: var(--focus);
   background: var(--bg);
 }
 
 .editor-field-inline {
   flex-direction: row;
   align-items: center;
-  gap: 8px;
+  gap: var(--space-2);
 }
 
 .editor-field-inline input[type="number"] {
@@ -149,45 +148,39 @@ body.editor-page {
   min-width: 0;
 }
 
+/* .editor-btn-inline's font/color/border/radius come from controls.css's
+   shared button family — only its compact sizing is specific to it. */
 .editor-btn-inline {
   flex: 0 0 auto;
-  font-family: var(--font-body);
-  font-size: 11px;
-  font-weight: 500;
-  background: var(--surface);
-  color: var(--text-mid);
-  border: 1.5px solid var(--border);
-  padding: 0 10px;
-  border-radius: var(--radius);
-  cursor: pointer;
-  transition: var(--transition);
+  font-size: var(--text-meta);
+  padding: 0 var(--space-2);
 }
 .editor-btn-inline:hover {
-  background: var(--primary-blue);
-  border-color: var(--primary-blue);
-  color: var(--bg);
+  background: var(--focus);
+  border-color: var(--focus);
+  color: var(--surface);
 }
 
 /* Advisory, non-blocking — reuses the existing "minor issue" status color
    rather than introducing a new accent; nothing here prevents saving. */
 .editor-field-warning {
-  font-size: 11px;
-  color: var(--minor-dark);
-  margin-top: 4px;
+  font-size: var(--text-meta);
+  color: var(--status-minor-strong);
+  margin-top: var(--space-1);
 }
 
 .editor-tool-group {
-  margin-bottom: 10px;
+  margin-bottom: var(--space-2);
 }
 
 .editor-tool-group-label {
   display: block;
-  font-size: 10px;
+  font-size: var(--text-meta);
   font-weight: 600;
   color: var(--text-muted);
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  margin-bottom: 6px;
+  margin-bottom: var(--space-2);
 }
 
 .editor-tool-row {
@@ -196,46 +189,49 @@ body.editor-page {
   gap: 6px;
 }
 
+/* .editor-tool-btn's font/color/border/radius come from controls.css's
+   shared button family — a compact palette of many small buttons is the
+   one deliberate exception sized at the metadata tier, not the body tier. */
 .editor-tool-btn {
-  font-size: 11px;
-  padding: 5px 10px;
+  font-size: var(--text-meta);
+  padding: var(--space-1) var(--space-2);
 }
 
 .editor-tool-btn.armed {
-  background: var(--primary-blue);
-  border-color: var(--primary-blue);
-  color: var(--bg);
+  background: var(--focus);
+  border-color: var(--focus);
+  color: var(--surface);
 }
 
 .editor-hint {
-  font-size: 11px;
+  font-size: var(--text-meta);
   color: var(--text-muted);
   line-height: 1.5;
-  margin: 10px 0;
+  margin: var(--space-3) 0;
 }
 
 .editor-shape-type {
   font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--primary-blue);
+  font-size: var(--text-meta);
+  color: var(--text);
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
-  margin-bottom: 10px;
+  margin-bottom: var(--space-3);
 }
 
 #btn-delete-selected {
   width: 100%;
-  margin-top: 6px;
+  margin-top: var(--space-2);
 }
 
-/* ── Canvas ── */
+/* ── Canvas — an ordinary docked surface, no shadow ── */
 .editor-canvas-wrap {
   flex: 1;
   min-width: 0;
   background: var(--bg);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius-lg);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-panel);
   overflow: hidden;
   display: flex;
 }
@@ -243,15 +239,14 @@ body.editor-page {
 .editor-canvas-scroll {
   flex: 1;
   overflow: auto;
-  padding: 16px;
+  padding: var(--space-4);
 }
 
 .editor-canvas {
   display: block;
   background: var(--surface);
-  border: 1.5px solid var(--border);
-  border-radius: var(--radius);
-  box-shadow: var(--shadow);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-control);
   width: 100%;
   height: auto;
   cursor: crosshair;
@@ -267,21 +262,21 @@ body.editor-page {
    were closed back to its start point. Without this, each tile's implicit
    closed triangle defaults to fill:black, producing a black/white hazard-
    stripe checkerboard across the whole grid instead of a plain line grid. */
-.ed-grid-line { stroke: var(--border); stroke-width: 1; fill: none; }
+.ed-grid-line { stroke: var(--line); stroke-width: 1; fill: none; }
 
 .ed-rect-body {
-  fill: var(--surface-2);
-  stroke: var(--text-mid);
+  fill: var(--surface-muted);
+  stroke: var(--text-secondary);
   stroke-width: 1.5;
 }
 .ed-outline .ed-rect-body { fill: var(--surface); stroke-width: 2; }
 .ed-floor .ed-rect-body { stroke: none; }
-.ed-counter .ed-rect-body { fill: var(--surface-2); stroke: var(--border); }
-.ed-wallrect .ed-rect-body { fill: var(--text-mid); opacity: 0.85; }
+.ed-counter .ed-rect-body { fill: var(--surface-muted); stroke: var(--line); }
+.ed-wallrect .ed-rect-body { fill: var(--text-secondary); opacity: 0.85; }
 
 .ed-shape-label {
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: var(--text-meta);
   font-weight: 500;
   fill: var(--text-muted);
   letter-spacing: 0.05em;
@@ -289,9 +284,9 @@ body.editor-page {
   pointer-events: none;
 }
 
-.ed-wall-line { stroke: var(--text-mid); stroke-width: 2; stroke-linecap: square; }
-.ed-door-leaf { stroke: var(--text-mid); stroke-width: 1.5; }
-.ed-door-arc { stroke: var(--border); stroke-width: 1; stroke-dasharray: 3 3; fill: none; }
+.ed-wall-line { stroke: var(--text-secondary); stroke-width: 2; stroke-linecap: square; }
+.ed-door-leaf { stroke: var(--text-secondary); stroke-width: 1.5; }
+.ed-door-arc { stroke: var(--line); stroke-width: 1; stroke-dasharray: 3 3; fill: none; }
 
 /* wide invisible stroke so thin lines/doors/outline edges are easy to grab */
 .ed-hit-line {
@@ -306,39 +301,39 @@ body.editor-page {
 
 .ed-handle {
   fill: var(--bg);
-  stroke: var(--primary-blue);
+  stroke: var(--focus);
   stroke-width: 1.5;
   cursor: grab;
 }
-.ed-handle:hover { fill: var(--primary-blue-tint); }
+.ed-handle:hover { fill: var(--surface-muted); }
 
 .ed-device { cursor: move; }
 .ed-device-body {
-  fill: var(--unknown);
-  stroke: var(--unknown-dark);
+  fill: var(--status-unchecked);
+  stroke: var(--status-unchecked-strong);
   stroke-width: 1.5;
 }
-.ed-device-printer .ed-device-body { fill: var(--surface-2); stroke: var(--border); }
+.ed-device-printer .ed-device-body { fill: var(--surface-muted); stroke: var(--line); }
 .ed-device-staff .ed-device-body { stroke-width: 2; }
 
 .ed-device-label {
   font-family: var(--font-mono);
   font-size: 9px;
   font-weight: 500;
-  fill: #fff;
+  fill: var(--surface);
   pointer-events: none;
 }
-.ed-device-printer .ed-device-label { fill: var(--text-mid); font-size: 11px; }
+.ed-device-printer .ed-device-label { fill: var(--text-secondary); font-size: var(--text-meta); }
 
 .ed-selected .ed-rect-body,
 .ed-selected .ed-device-body,
 circle.ed-selected {
-  stroke: var(--primary-orange) !important;
+  stroke: var(--focus) !important;
   stroke-width: 3 !important;
 }
 .ed-selected .ed-wall-line,
 .ed-selected .ed-door-leaf {
-  stroke: var(--primary-orange);
+  stroke: var(--focus);
 }
 
 /* ── Footer / status ── */
@@ -346,30 +341,24 @@ circle.ed-selected {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 14px;
-  padding-top: 14px;
-  margin-top: 12px;
-  border-top: 1px solid var(--border-light);
+  gap: var(--space-4);
+  padding-top: var(--space-4);
+  margin-top: var(--space-3);
+  border-top: 1px solid var(--line);
 }
 
 .editor-dirty {
-  font-size: 11px;
+  font-size: var(--text-meta);
   color: var(--text-muted);
   font-family: var(--font-mono);
 }
-.editor-dirty-active { color: var(--minor-dark); font-weight: 600; }
+.editor-dirty-active { color: var(--status-minor-strong); font-weight: 600; }
 
 .editor-status {
-  font-size: 12px;
+  font-size: var(--text-body);
   color: var(--text-muted);
   min-height: 16px;
-  margin-top: 10px;
+  margin-top: var(--space-3);
 }
-.editor-status-error { color: var(--major-dark); font-weight: 500; }
+.editor-status-error { color: var(--danger-strong); font-weight: 500; }
 .editor-status:empty { margin-top: 0; }
-
-@media (max-width: 900px) {
-  .editor-body { flex-direction: column; }
-  .editor-sidebar { width: 100%; flex: none; flex-direction: row; flex-wrap: wrap; }
-  .editor-panel { flex: 1 1 240px; }
-}

@@ -1,0 +1,85 @@
+/**
+ * overlays.css — modal dialogs: the room page's status/reset popups, the
+ * campus view's floor picker, and the editor's New Room dialog all share
+ * this one .overlay/.popup shape.
+ *
+ * This is the ONE place in the system allowed an elevation shadow — a
+ * floating panel over dimmed content needs it to read as "above" the
+ * page; an ordinary docked panel doesn't (see controls.css/layout.css).
+ * No backdrop blur — a dimmed backdrop reads as "modal" just as clearly
+ * without the frosted-glass look.
+ */
+
+.overlay {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,.35);
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  padding: var(--space-4);
+}
+
+.overlay.open { display: flex; }
+
+.popup {
+  background: var(--surface-raised);
+  border: 1.5px solid var(--line);
+  border-top: 4px solid var(--focus);
+  border-radius: var(--radius-panel);
+  padding: var(--space-6);
+  width: 100%;
+  max-width: 360px;
+  box-shadow: var(--shadow-elevated);
+  position: relative;
+  animation: popup-in 120ms ease;
+}
+
+.popup-sm { max-width: 300px; }
+
+@keyframes popup-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.popup-close {
+  position: absolute;
+  top: var(--space-3);
+  right: var(--space-3);
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  cursor: pointer;
+  padding: var(--space-1) 7px;
+  border-radius: var(--radius-control);
+  transition: var(--transition);
+  line-height: 1;
+}
+
+.popup-close:hover {
+  background: var(--surface-muted);
+  color: var(--text);
+}
+
+.popup-title {
+  font-size: var(--text-section-title);
+  margin-bottom: 2px;
+}
+
+.popup-id {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  color: var(--text-secondary);
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  margin-bottom: var(--space-4);
+}
+
+.popup-body {
+  font-size: var(--text-body);
+  color: var(--text-muted);
+  margin: var(--space-2) 0 var(--space-4);
+  line-height: 1.55;
+}

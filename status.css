@@ -1,0 +1,101 @@
+/**
+ * status.css — the working/minor/major/unchecked color system, applied
+ * consistently everywhere a status shows up: devices on the floor plan,
+ * the header's summary pills, the legend dots, the popup's status-select
+ * grid, and quick-mark's armed buttons. One set of tokens (tokens.css),
+ * one set of rules, so every surface agrees on what "major" looks like.
+ *
+ * Major status is a strong STATIC marker (a heavier border) plus the text
+ * that already exists everywhere (aria-label, legend, summary pill count)
+ * — deliberately not an animated pulse. Urgency should be legible from a
+ * screenshot, not just from watching the screen for a second.
+ */
+
+/* ── Header summary pills ── */
+.status-summary {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.summary-pill {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-pill);
+  border: 1.5px solid transparent;
+}
+
+.summary-pill.working   { background: var(--status-working-bg);   color: var(--status-working-strong);   border-color: var(--status-working); }
+.summary-pill.minor     { background: var(--status-minor-bg);     color: var(--status-minor-strong);     border-color: var(--status-minor); }
+.summary-pill.major     { background: var(--status-major-bg);     color: var(--status-major-strong);     border-color: var(--status-major); }
+.summary-pill.unchecked { background: var(--status-unchecked-bg); color: var(--status-unchecked-strong); border-color: var(--status-unchecked); }
+
+/* ── Sweep progress bar ── */
+.sweep { margin-top: var(--space-2); }
+
+.sweep-bar {
+  height: 5px;
+  border-radius: var(--radius-control);
+  background: var(--surface-muted);
+  overflow: hidden;
+  margin-bottom: var(--space-1);
+}
+
+.sweep-fill {
+  display: block;
+  height: 100%;
+  border-radius: var(--radius-control);
+  background: var(--focus);
+  transition: width .25s ease;
+}
+
+/* ── Legend + popup status dots ── */
+.dot.working { background: var(--status-working); }
+.dot.minor   { background: var(--status-minor);   }
+.dot.major   { background: var(--status-major);   }
+.dot.unknown { background: var(--status-unchecked); }
+.dot.has-notes { background: var(--focus); }
+
+.status-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot.working { background: var(--status-working); }
+.status-dot.minor   { background: var(--status-minor);   }
+.status-dot.major   { background: var(--status-major);   }
+.status-dot.unknown { background: var(--status-unchecked); }
+
+/* ── Popup status-select buttons ── */
+.status-btn.selected[data-status="working"] { background: var(--status-working-bg);   border-color: var(--status-working);   color: var(--status-working-strong);   font-weight: 600; }
+.status-btn.selected[data-status="minor"]   { background: var(--status-minor-bg);     border-color: var(--status-minor);     color: var(--status-minor-strong);     font-weight: 600; }
+.status-btn.selected[data-status="major"]   { background: var(--status-major-bg);     border-color: var(--status-major);     color: var(--status-major-strong);     font-weight: 600; }
+.status-btn.selected[data-status="unknown"] { background: var(--status-unchecked-bg); border-color: var(--status-unchecked); color: var(--status-unchecked-strong); font-weight: 600; }
+
+/* ── Quick-mark armed buttons ── */
+.quick-btn[aria-pressed="true"][data-status="working"] { background: var(--status-working-bg);   border-color: var(--status-working);   color: var(--status-working-strong);   font-weight: 600; }
+.quick-btn[aria-pressed="true"][data-status="minor"]   { background: var(--status-minor-bg);     border-color: var(--status-minor);     color: var(--status-minor-strong);     font-weight: 600; }
+.quick-btn[aria-pressed="true"][data-status="major"]   { background: var(--status-major-bg);     border-color: var(--status-major);     color: var(--status-major-strong);     font-weight: 600; }
+.quick-btn[aria-pressed="true"][data-status="clear"]   { background: var(--status-unchecked-bg); border-color: var(--status-unchecked); color: var(--status-unchecked-strong); font-weight: 600; }
+
+/* ── Device status colors ── */
+.pc[data-status="working"] { background-color: var(--status-working);   border-color: var(--status-working-strong); }
+.pc[data-status="minor"]   { background-color: var(--status-minor);     border-color: var(--status-minor-strong); }
+.pc[data-status="major"]   { background-color: var(--status-major);     border-color: var(--status-major-strong);     border-width: 3px; }
+.pc[data-status="unknown"] { background-color: var(--status-unchecked); border-color: var(--status-unchecked-strong); }
+
+.printer[data-status="working"] {
+  border-color: var(--status-working);
+  color: var(--status-working-strong);
+  background: var(--status-working-bg);
+}
+.printer[data-status="major"] {
+  border-color: var(--status-major);
+  color: var(--status-major-strong);
+  background: var(--status-major-bg);
+  border-width: 3px;
+}

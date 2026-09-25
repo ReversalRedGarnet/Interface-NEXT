@@ -8,7 +8,10 @@ tap each device, and the status sticks. Reports come out as CSV.
 index.html      — campus view (birds-eye buildings/floors) + the site/room
                   menu, kept intact as a collapsed fallback (see "Campus
                   view" below)
-style.css
+tokens.css, base.css, layout.css, controls.css, navigation.css,
+floor-plan.css, status.css, overlays.css, responsive.css
+  — the visual system, split by concern (see "Visual system" below);
+    loaded in that order on every page except admin/trace.html
 js/
   main.js         — entry point (dual-mode: menu page vs room page)
   menu.js         — menu page: site toggles, export-all, backup/restore
@@ -56,6 +59,35 @@ test/
                     checks, and campus.js's rendering/click/keyboard
                     behaviour driven in jsdom
 ```
+
+## Visual system
+Deliberately restrained — an operations console, not a dashboard: no
+gradients, no glow, no hover-scale, no gloss on devices, no pulsing status
+animation, minimal shadow, and borders (not shadows) as the primary way a
+panel reads as separate from the page.
+
+- `tokens.css` — every color/spacing/radius/type-scale value, named by role
+  (`--surface`, `--text-secondary`, `--status-major`), never by literal
+  color. Retinting the product means editing values in this one file only.
+- Radius: 4px for controls (buttons/inputs/devices), 6px for panels/cards/
+  overlays. Pill shape (`--radius-pill`) is reserved for status/tag chips
+  (`.summary-pill`, `.status-dot`) — nothing else gets fully rounded corners.
+- Shadow: `--shadow-elevated` exists for exactly one purpose — a floating
+  `.popup`/`.overlay` sitting above dimmed content. No ordinary panel,
+  card, button, or floor-plan device has a shadow; a 1px `--line` does
+  that job instead.
+- Spacing snaps to one scale: 4/8/12/16/24/32px (`--space-1`…`--space-8`).
+- Type scale: page title 22–28px (`--text-page-title`), section title 16px
+  (`--text-section-title`), body 13–14px (`--text-body`/`--text-body-lg`),
+  metadata/ids/timestamps 11px (`--text-meta`, always `--font-mono`).
+- A device's major-status urgency is a static heavier border, not an
+  animated pulse — the existing text (aria-label, legend, summary pill
+  count) already carries the same information. Any transition left in the
+  system (button hover, a popup's fade-in) collapses under
+  `prefers-reduced-motion` (see `responsive.css`).
+- `admin/trace.css` is deliberately **not** part of this system — the
+  internal trace tool is a one-off utility page, never linked from the
+  app, with no reason to share its design language.
 
 ## Campus view (prototype)
 `index.html` opens on a birds-eye schematic of buildings (`data/campus.json`),

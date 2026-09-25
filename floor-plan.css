@@ -1,0 +1,256 @@
+/**
+ * floor-plan.css — the room container, the SVG floor plan drawn from
+ * layout data (room.js's drawLayout), and the device/printer nodes placed
+ * on it. Status *coloring* of devices lives in status.css; this file is
+ * their geometry, shape, and the plain (non-decorative) interaction states.
+ *
+ * No hover-scale, no gloss, no shadow, no pulse here by design — a device
+ * changes only its border/outline on hover or focus, never its size or
+ * position, so a checker's mental map of the room never shifts underfoot.
+ */
+
+/* ── Room container ── */
+.room {
+  position: relative;
+  width: 1200px;
+  height: 800px;
+  background: var(--surface);
+  border: 1.5px solid var(--line);
+  border-top: 3px solid var(--focus);
+  border-radius: var(--radius-panel);
+  overflow: hidden;
+}
+
+/* floor plan image fallback — no `layout` data given */
+.room-bg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  opacity: 0.55;
+}
+
+/* ── Coded floor plan (SVG built from layout data — no PNG) ── */
+.room-bg-svg {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.floor-outline {
+  fill: var(--surface);
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+  stroke-linejoin: round;
+}
+
+.floor-room {
+  fill: var(--surface);
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+}
+
+.floor-label {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  fill: var(--text-muted);
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.floor-counter {
+  fill: var(--surface-muted);
+  stroke: var(--line);
+  stroke-width: 1.5;
+}
+
+.floor-fill {
+  fill: var(--surface);
+}
+
+.floor-wall {
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+  stroke-linecap: square;
+}
+
+.floor-wallrect {
+  fill: var(--text-secondary);
+  opacity: 0.85;
+}
+
+.floor-door {
+  stroke: var(--line);
+  stroke-width: 1.5;
+  stroke-dasharray: 4 3;
+}
+
+.floor-door-leaf {
+  stroke: var(--text-secondary);
+  stroke-width: 1.5;
+}
+
+.floor-door-arc {
+  stroke: var(--line);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  fill: none;
+}
+
+/* Entrance uses the exact same visual treatment as .floor-room — only the
+   "Entrance" text in the layout data distinguishes it, no separate styling. */
+.floor-entrance {
+  fill: var(--surface);
+  stroke: var(--text-secondary);
+  stroke-width: 2;
+}
+
+.floor-label-entrance {
+  fill: var(--text-muted);
+  font-style: normal;
+  font-weight: 500;
+}
+
+/* ── Devices are <button>s — clear the UA button styling first ── */
+.pc, .printer {
+  appearance: none;
+  -webkit-appearance: none;
+  padding: 0;
+  line-height: 1.15;
+  text-align: center;
+  border-radius: var(--radius-control);
+  cursor: pointer;
+  user-select: none;
+  transition: border-color var(--transition), outline-color var(--transition);
+}
+
+/* ── PC / device nodes ── */
+.pc {
+  position: absolute;
+  width: 42px;
+  height: 42px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 500;
+  color: var(--surface);
+
+  /* default = unchecked */
+  background-color: var(--status-unchecked);
+  border: 1.5px solid var(--status-unchecked-strong);
+}
+
+.pc:hover {
+  border-color: var(--focus);
+}
+
+/* staff PCs slightly wider */
+.pc.staff {
+  width: 52px;
+  font-size: 8px;
+  border-width: 2px;
+}
+
+/* Long labels ("STAFF-PC") in a wider chip instead of overflowing. */
+.pc.wide {
+  width: 64px;
+  font-size: 8px;
+  letter-spacing: -0.02em;
+}
+
+/* ── Printer node ── */
+.printer {
+  position: absolute;
+  width: 88px;
+  height: 44px;
+  background: var(--surface-muted);
+  border: 1.5px solid var(--line);
+  color: var(--text-secondary);
+  font-family: var(--font-body);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+}
+
+.printer:hover {
+  border-color: var(--focus);
+}
+
+.printer-icon { font-size: 14px; }
+
+/* "This device has a note" flag — a static corner dot, same for every
+   status, so it never competes with the status color itself. */
+.pc[data-has-notes="true"]::before,
+.printer[data-has-notes="true"]::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--focus);
+  border: 1.5px solid var(--surface);
+  z-index: 2;
+}
+
+/* ── Legend ── */
+.legend {
+  display: flex;
+  justify-content: center;
+  gap: var(--space-6);
+  margin-top: var(--space-4);
+  flex-wrap: wrap;
+}
+
+.legend-item {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-body);
+  color: var(--text-muted);
+}
+
+.dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+/* ── Fit-to-screen viewport ──
+   The floor plan keeps its fixed coordinate space (every device position
+   in data/*.json stays valid); the canvas is scaled as a whole and the
+   viewport owns the resulting height. */
+.room-viewport {
+  position: relative;
+  width: 100%;
+  overflow: hidden;
+}
+
+.room-viewport.actual-size {
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.room-viewport .room {
+  transform-origin: top left;
+}
+
+/* While armed, the whole floor plan is a marking surface — say so via a
+   static dashed outline, not an animated one. */
+.room.quick-mode { cursor: crosshair; }
+.room.quick-mode .pc,
+.room.quick-mode .printer { cursor: crosshair; }
+.room.quick-mode {
+  outline: 2px dashed var(--focus);
+  outline-offset: 3px;
+}

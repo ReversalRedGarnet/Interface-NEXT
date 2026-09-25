@@ -1,0 +1,56 @@
+/**
+ * base.css — reset, body defaults, and the handful of typographic/utility
+ * rules that aren't specific to any one page or component. Loaded after
+ * tokens.css, before everything else.
+ */
+
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html, body {
+  height: 100%;
+}
+
+body {
+  font-family: var(--font-body);
+  background: var(--bg);
+  color: var(--text);
+  min-height: 100vh;
+  font-size: var(--text-body);
+  line-height: 1.5;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Generic page-title/subtitle defaults — page-specific containers
+   (layout.css's .menu-header/header) may size these further, but the
+   scale itself (page title vs. subtitle) is set once, here. */
+h1 {
+  font-family: var(--font-display);
+  font-size: var(--text-page-title);
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.2px;
+}
+
+h2 {
+  font-family: var(--font-display);
+  font-size: var(--text-section-title);
+  font-weight: 700;
+  color: var(--text);
+}
+
+.subtitle {
+  font-size: var(--text-body);
+  color: var(--text-muted);
+  letter-spacing: 0.02em;
+}
+
+/* Screen-reader-only live region / labels. */
+.visually-hidden {
+  position: absolute;
+  width: 1px; height: 1px;
+  padding: 0; margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}

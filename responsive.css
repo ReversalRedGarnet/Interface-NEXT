@@ -1,0 +1,47 @@
+/**
+ * responsive.css — every @media rule in the system: small-screen layout
+ * adjustments for the room page and the editor, and the one global
+ * accessibility override that applies everywhere regardless of viewport.
+ */
+
+/* Anyone who's asked their OS for reduced motion gets it — every
+   transition/animation left in the system (button/link state changes, a
+   popup's fade-in, the sweep bar filling) collapses to effectively
+   instant instead of being removed outright, so state changes are still
+   visible, just not animated. */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ── Room page — small screens ── */
+@media (max-width: 700px) {
+  .app { padding: var(--space-4) var(--space-3) var(--space-8); }
+
+  .header-inner { align-items: flex-start; }
+
+  .status-summary { gap: var(--space-2); }
+  .summary-pill { padding: var(--space-1) var(--space-2); }
+
+  .toolbar { gap: var(--space-2); }
+  .toolbar-btn { flex: 1 1 auto; min-height: 40px; }
+
+  .quick-mark { flex: 1 1 100%; justify-content: flex-start; }
+  .quick-btn { flex: 1 1 auto; justify-content: center; min-height: 40px; }
+
+  .legend { gap: var(--space-3) var(--space-4); margin-top: var(--space-3); }
+
+  .popup { padding: var(--space-4); }
+  .status-btn { min-height: 44px; }
+}
+
+/* ── Editor page — small screens ── */
+@media (max-width: 900px) {
+  .editor-body { flex-direction: column; }
+  .editor-sidebar { width: 100%; flex: none; flex-direction: row; flex-wrap: wrap; }
+  .editor-panel { flex: 1 1 240px; }
+}

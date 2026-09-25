@@ -1,0 +1,141 @@
+/**
+ * layout.css — page-level structural chrome: the site header/footer every
+ * page shares, the room page's own app shell + header, and the menu page's
+ * shell + header. Not concerned with any one component's look (buttons,
+ * cards, floor plan) — see controls.css/navigation.css/floor-plan.css.
+ */
+
+/* ── Site header (every page) ── */
+.site-header {
+  background: var(--surface);
+  border-bottom: 1px solid var(--line);
+  position: sticky;
+  top: 0;
+  z-index: 200;
+}
+
+.site-header-inner {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-2) var(--space-6);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.site-tool {
+  font-family: var(--font-body);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* ── Site footer (every page) — mirrors .site-header ── */
+.site-footer {
+  background: var(--surface);
+  border-top: 1px solid var(--line);
+  padding: var(--space-2) var(--space-6);
+  text-align: center;
+  margin-top: auto;
+}
+
+.site-footer p {
+  max-width: 1280px;
+  margin: 0 auto;
+  font-family: var(--font-body);
+  font-size: var(--text-meta);
+  font-weight: 500;
+  color: var(--text-muted);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+}
+
+.site-footer a {
+  color: var(--text-muted);
+  text-decoration: none;
+}
+.site-footer a:hover { color: var(--text); text-decoration: underline; }
+
+/* ── Room page app shell ── */
+.app {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: var(--space-6) var(--space-6) var(--space-8);
+}
+
+/* Room page's own <header>, built by room.js. */
+header {
+  margin-bottom: var(--space-4);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--line);
+}
+
+.header-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.header-icon { display: none; }
+
+/* the site/building breadcrumb shown under the room name */
+.campus-crumb {
+  font-family: var(--font-body);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--focus);
+  letter-spacing: 0.10em;
+  text-transform: uppercase;
+  margin-top: 1px;
+}
+
+/* ── Menu page shell ──
+   flex column so .site-footer sticks to the bottom of the viewport even
+   when there isn't enough content (e.g. site cards collapsed) to push
+   it down naturally */
+body.menu-page {
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.menu-app {
+  max-width: 780px;
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) 60px;
+  flex: 1;
+  width: 100%;
+}
+
+.menu-header {
+  text-align: center;
+  margin-bottom: var(--space-8);
+}
+
+.menu-header h1 {
+  margin-bottom: var(--space-1);
+}
+
+.menu-header .subtitle {
+  font-size: var(--text-body);
+}
+
+/* global export button row */
+.menu-footer {
+  text-align: center;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--line);
+}
