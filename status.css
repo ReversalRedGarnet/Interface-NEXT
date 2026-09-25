@@ -1,9 +1,14 @@
 /**
- * status.css — the working/minor/major/unchecked color system, applied
- * consistently everywhere a status shows up: devices on the floor plan,
- * the header's summary pills, the legend dots, the popup's status-select
- * grid, and quick-mark's armed buttons. One set of tokens (tokens.css),
+ * status.css — the working/minor/major/unchecked/not-applicable color
+ * system, applied consistently everywhere a status shows up: devices on
+ * the floor plan, the legend dots, the inspector's status-select grid,
+ * and Inspection Mode's armed buttons. One set of tokens (tokens.css),
  * one set of rules, so every surface agrees on what "major" looks like.
+ *
+ * "Not applicable" is deliberately NOT a status color — it reuses the
+ * neutral line/muted tokens plus a dashed border, so an intentionally
+ * excluded device reads as "set aside", not as another condition next to
+ * working/minor/major.
  *
  * Major status is a strong STATIC marker (a heavier border) plus the text
  * that already exists everywhere (aria-label, legend, summary pill count)
@@ -55,7 +60,8 @@
 .dot.working { background: var(--status-working); }
 .dot.minor   { background: var(--status-minor);   }
 .dot.major   { background: var(--status-major);   }
-.dot.unknown { background: var(--status-unchecked); }
+.dot.unchecked { background: var(--status-unchecked); }
+.dot.not-applicable { background: var(--line-strong); }
 .dot.has-notes { background: var(--focus); }
 
 .status-dot {
@@ -68,25 +74,28 @@
 .status-dot.working { background: var(--status-working); }
 .status-dot.minor   { background: var(--status-minor);   }
 .status-dot.major   { background: var(--status-major);   }
-.status-dot.unknown { background: var(--status-unchecked); }
+.status-dot.unchecked { background: var(--status-unchecked); }
+.status-dot.not-applicable { background: var(--line-strong); }
 
-/* ── Popup status-select buttons ── */
+/* ── Inspector status-select buttons ── */
 .status-btn.selected[data-status="working"] { background: var(--status-working-bg);   border-color: var(--status-working);   color: var(--status-working-strong);   font-weight: 600; }
 .status-btn.selected[data-status="minor"]   { background: var(--status-minor-bg);     border-color: var(--status-minor);     color: var(--status-minor-strong);     font-weight: 600; }
 .status-btn.selected[data-status="major"]   { background: var(--status-major-bg);     border-color: var(--status-major);     color: var(--status-major-strong);     font-weight: 600; }
-.status-btn.selected[data-status="unknown"] { background: var(--status-unchecked-bg); border-color: var(--status-unchecked); color: var(--status-unchecked-strong); font-weight: 600; }
+.status-btn.selected[data-status="unchecked"] { background: var(--status-unchecked-bg); border-color: var(--status-unchecked); color: var(--status-unchecked-strong); font-weight: 600; }
+.status-btn.selected[data-status="not-applicable"] { background: var(--surface-muted); border-color: var(--line-strong); color: var(--text-muted); font-weight: 600; }
 
-/* ── Quick-mark armed buttons ── */
+/* ── Inspection Mode armed buttons ── */
 .quick-btn[aria-pressed="true"][data-status="working"] { background: var(--status-working-bg);   border-color: var(--status-working);   color: var(--status-working-strong);   font-weight: 600; }
 .quick-btn[aria-pressed="true"][data-status="minor"]   { background: var(--status-minor-bg);     border-color: var(--status-minor);     color: var(--status-minor-strong);     font-weight: 600; }
 .quick-btn[aria-pressed="true"][data-status="major"]   { background: var(--status-major-bg);     border-color: var(--status-major);     color: var(--status-major-strong);     font-weight: 600; }
-.quick-btn[aria-pressed="true"][data-status="clear"]   { background: var(--status-unchecked-bg); border-color: var(--status-unchecked); color: var(--status-unchecked-strong); font-weight: 600; }
+.quick-btn[aria-pressed="true"][data-status="not-applicable"] { background: var(--surface-muted); border-color: var(--line-strong); color: var(--text-muted); font-weight: 600; }
 
 /* ── Device status colors ── */
 .pc[data-status="working"] { background-color: var(--status-working);   border-color: var(--status-working-strong); }
 .pc[data-status="minor"]   { background-color: var(--status-minor);     border-color: var(--status-minor-strong); }
 .pc[data-status="major"]   { background-color: var(--status-major);     border-color: var(--status-major-strong);     border-width: 3px; }
-.pc[data-status="unknown"] { background-color: var(--status-unchecked); border-color: var(--status-unchecked-strong); }
+.pc[data-status="unchecked"] { background-color: var(--status-unchecked); border-color: var(--status-unchecked-strong); }
+.pc[data-status="not-applicable"] { background-color: var(--surface-muted); border-color: var(--line-strong); border-style: dashed; color: var(--text-muted); }
 
 .printer[data-status="working"] {
   border-color: var(--status-working);
@@ -98,4 +107,10 @@
   color: var(--status-major-strong);
   background: var(--status-major-bg);
   border-width: 3px;
+}
+.printer[data-status="not-applicable"] {
+  border-color: var(--line-strong);
+  border-style: dashed;
+  color: var(--text-muted);
+  background: var(--surface-muted);
 }

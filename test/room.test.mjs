@@ -102,9 +102,35 @@ await test('clicking a device selects it and applies a status via the inspector 
   input(notes);
   notes.blur();
   const st = readState(window);
-  assert(st['TEST_PC7']?.status === 'major', `state was ${JSON.stringify(st)}`);
+  assert(st['TEST_PC7']?.inspectionState === 'checked', `state was ${JSON.stringify(st)}`);
+  assert(st['TEST_PC7']?.condition === 'major', `condition was ${st['TEST_PC7']?.condition}`);
   assert(st['TEST_PC7']?.notes === 'no power', 'notes not saved');
   assert(pc.dataset.status === 'major', `node status was ${pc.dataset.status}`);
+});
+
+await test('marking a device Not Applicable stores that inspection state with no condition', async () => {
+  const { doc, window } = await mount(readRoom('commons'));
+  selectViaClick(doc, 'PC8');
+  click(doc.querySelector('#inspector-status-grid [data-status="not-applicable"]'));
+  const st = readState(window);
+  assert(st['TEST_PC8']?.inspectionState === 'not-applicable', `expected not-applicable, got ${JSON.stringify(st['TEST_PC8'])}`);
+  assert(st['TEST_PC8']?.condition == null, 'not-applicable should carry no condition');
+  assert(doc.querySelector('[data-id="PC8"]').dataset.status === 'not-applicable', 'device chip should reflect not-applicable');
+});
+
+await test('"Not Checked" resets a device to unchecked but preserves its note', async () => {
+  const { doc, window } = await mount(readRoom('commons'));
+  selectViaClick(doc, 'PC7');
+  click(doc.querySelector('#inspector-status-grid [data-status="major"]'));
+  const notes = doc.getElementById('inspector-notes');
+  notes.focus();
+  notes.value = 'keep this note';
+  input(notes);
+  notes.blur();
+  click(doc.querySelector('#inspector-status-grid [data-status="unchecked"]'));
+  const st = readState(window);
+  assert(st['TEST_PC7']?.inspectionState === 'unchecked', `expected unchecked, got ${JSON.stringify(st['TEST_PC7'])}`);
+  assert(st['TEST_PC7']?.notes === 'keep this note', 'resetting to Not Checked should not discard the note');
 });
 
 await test('summary/stats line reflects saved statuses', async () => {
@@ -133,12 +159,12 @@ await test('a save does not clobber writes made in another tab', async () => {
   const { doc, window } = await mount(readRoom('commons'));
   const before = readState(window);
   window.localStorage.setItem('it-room-monitor-v1',
-    JSON.stringify({ ...before, 'WORKSHOP_PC3': { status: 'major', notes: 'from the other tab' } }));
+    JSON.stringify({ ...before, 'WORKSHOP_PC3': { inspectionState: 'checked', condition: 'major', notes: 'from the other tab' } }));
   selectViaClick(doc, 'PC2');
   click(doc.querySelector('#inspector-status-grid [data-status="working"]'));
   const st = readState(window);
-  assert(st['TEST_PC2']?.status === 'working', 'this tab failed to save');
-  assert(st['WORKSHOP_PC3']?.status === 'major', 'the other tab\'s save was wiped out');
+  assert(st['TEST_PC2']?.condition === 'working', 'this tab failed to save');
+  assert(st['WORKSHOP_PC3']?.condition === 'major', 'the other tab\'s save was wiped out');
 });
 
 /* ── Checker-interface symptoms ────────────────────────────────── */
@@ -178,16 +204,17 @@ await test('a second printer keeps its own status', async () => {
   click(p2);
   click(doc.querySelector('#inspector-status-grid [data-status="major"]'));
   const st = readState(window);
-  assert(st['TEST_PRINTER2']?.status === 'major',
+  assert(st['TEST_PRINTER2']?.condition === 'major',
     `PRINTER2 status landed under the wrong key: ${JSON.stringify(st)}`);
   assert(!st['TEST_PRINTER'], 'marking PRINTER2 also wrote PRINTER');
 });
 
-await test('printer inspector only offers Working/Not Working, not the full 4-way grid', async () => {
+await test('printer inspector offers Working/Not Working plus Not Applicable/Not Checked, not the full PC grid', async () => {
   const { doc } = await mount(readRoom('commons'));
   click(doc.querySelector('[data-id="PRINTER"]'));
   const options = [...doc.querySelectorAll('#inspector-status-grid .status-btn')].map(b => b.dataset.status);
-  assert(options.join(',') === 'working,major', `expected exactly working,major — got ${options.join(',')}`);
+  assert(options.join(',') === 'working,major,not-applicable,unchecked',
+    `expected exactly working,major,not-applicable,unchecked — got ${options.join(',')}`);
 });
 
 await test('long device labels get the wide chip so text is not clipped', async () => {
@@ -253,6 +280,16 @@ await test('Inspection Mode applies a status in one tap, with no inspector openi
   assert(!doc.getElementById('inspector-content').hidden, 'the inspector should open normally once Inspection Mode is off');
 });
 
+await test('Inspection Mode offers a Not Applicable choice but no "Clear" — resetting stays an inspector/keyboard action', async () => {
+  const { doc, window } = await mount(readRoom('commons'));
+  const statuses = [...doc.querySelectorAll('#mode-group [data-mode-status]')].map(b => b.dataset.modeStatus);
+  assert(statuses.join(',') === 'working,minor,major,not-applicable', `expected working,minor,major,not-applicable — got ${statuses.join(',')}`);
+
+  click(doc.querySelector('#mode-group [data-mode-status="not-applicable"]'));
+  click(doc.querySelector('[data-id="PC10"]'));
+  assert(readState(window)['TEST_PC10']?.inspectionState === 'not-applicable', 'Inspection Mode\'s N/A button should mark the clicked device not-applicable');
+});
+
 await test('Escape exits Inspection Mode', async () => {
   const { doc } = await mount(readRoom('commons'));
   click(doc.querySelector('#mode-group [data-mode-status="major"]'));
@@ -300,6 +337,30 @@ await test('the Working filter fades non-working devices but never removes them 
 
   click(doc.querySelector('#filter-row [data-filter="all"]'));
   assert(!pc2.classList.contains('filtered-out'), 'switching back to All should clear the fade');
+});
+
+await test('the filter row offers Checked and Not Applicable alongside the per-condition filters', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const keys = [...doc.querySelectorAll('#filter-row [data-filter]')].map(b => b.dataset.filter);
+  for (const key of ['all', 'unchecked', 'checked', 'not-applicable', 'working', 'minor', 'major', 'notes']) {
+    assert(keys.includes(key), `filter row missing "${key}" — got ${keys.join(',')}`);
+  }
+});
+
+await test('the Not Applicable filter matches only not-applicable devices, and Checked matches any condition', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  selectViaClick(doc, 'PC1');
+  click(doc.querySelector('#inspector-status-grid [data-status="not-applicable"]'));
+  selectViaClick(doc, 'PC2');
+  click(doc.querySelector('#inspector-status-grid [data-status="working"]'));
+
+  click(doc.querySelector('#filter-row [data-filter="not-applicable"]'));
+  assert(!doc.querySelector('[data-id="PC1"]').classList.contains('filtered-out'), 'PC1 (not-applicable) should match the Not Applicable filter');
+  assert(doc.querySelector('[data-id="PC2"]').classList.contains('filtered-out'), 'PC2 (working) should not match the Not Applicable filter');
+
+  click(doc.querySelector('#filter-row [data-filter="checked"]'));
+  assert(!doc.querySelector('[data-id="PC2"]').classList.contains('filtered-out'), 'PC2 (checked+working) should match the Checked filter');
+  assert(doc.querySelector('[data-id="PC1"]').classList.contains('filtered-out'), 'PC1 (not-applicable) should not match the Checked filter');
 });
 
 /* ── Search ──────────────────────────────────────────────────────── */
@@ -360,16 +421,16 @@ await test('1/2/3/0 apply a status to the currently selected device', async () =
   const { doc, window } = await mount(readRoom('commons'));
   selectViaClick(doc, 'PC1');
   key(doc, '2');
-  assert(readState(window)['TEST_PC1']?.status === 'minor', '"2" should mark the selected device Minor');
+  assert(readState(window)['TEST_PC1']?.condition === 'minor', '"2" should mark the selected device Minor');
   key(doc, '0');
-  assert(!readState(window)['TEST_PC1'], '"0" should clear the selected device\'s status');
+  assert(!readState(window)['TEST_PC1'], '"0" should reset the selected device to Not Checked (and drop its empty entry)');
 });
 
 await test('U undoes the most recent status change, regardless of how it was made', async () => {
   const { doc, window } = await mount(readRoom('commons'));
   selectViaClick(doc, 'PC1');
   key(doc, '1');
-  assert(readState(window)['TEST_PC1']?.status === 'working', 'setup: expected PC1 working before undo');
+  assert(readState(window)['TEST_PC1']?.condition === 'working', 'setup: expected PC1 working before undo');
   key(doc, 'u');
   assert(!readState(window)['TEST_PC1'], 'U should undo the "1" keyboard shortcut\'s status change');
 });

@@ -98,50 +98,70 @@ await test('returns null for an empty device list instead of throwing', async ()
 });
 
 /* ══════════════════════════════════════════════════════════════════
-   computeStats
+   computeStats — two-part model: inspectionState + condition
    ══════════════════════════════════════════════════════════════════ */
 
-await test('computeStats counts each status and derives inspected/issues', async () => {
-  const devices = [{ id: 'A' }, { id: 'B' }, { id: 'C' }, { id: 'D' }, { id: 'E' }];
-  const statusFor = d => ({ A: 'working', B: 'working', C: 'minor', D: 'major' }[d.id] || 'unknown');
-  const stats = computeStats(devices, statusFor);
-  assertEqual(stats.total, 5, 'total wrong');
+await test('computeStats counts each condition, not-applicable, and unchecked separately', async () => {
+  const devices = [{ id: 'A' }, { id: 'B' }, { id: 'C' }, { id: 'D' }, { id: 'E' }, { id: 'F' }];
+  const table = {
+    A: { inspectionState: 'checked', condition: 'working' },
+    B: { inspectionState: 'checked', condition: 'working' },
+    C: { inspectionState: 'checked', condition: 'minor' },
+    D: { inspectionState: 'checked', condition: 'major' },
+    E: { inspectionState: 'not-applicable', condition: null },
+  };
+  const inspectionFor = d => table[d.id] || { inspectionState: 'unchecked', condition: null };
+  const stats = computeStats(devices, inspectionFor);
+  assertEqual(stats.total, 6, 'total wrong');
   assertEqual(stats.working, 2, 'working count wrong');
   assertEqual(stats.minor, 1, 'minor count wrong');
   assertEqual(stats.major, 1, 'major count wrong');
-  assertEqual(stats.unchecked, 1, 'unchecked count wrong');
-  assertEqual(stats.inspected, 4, 'inspected (total - unchecked) wrong');
+  assertEqual(stats.notApplicable, 1, 'not-applicable count wrong');
+  assertEqual(stats.unchecked, 1, 'unchecked count wrong (F, with no table entry)');
+  assertEqual(stats.inspected, 4, 'inspected (checked devices only, not-applicable excluded) wrong');
   assertEqual(stats.issues, 2, 'issues (minor + major) wrong');
 });
 
 await test('computeStats on an empty room is all zeroes, not NaN', async () => {
-  const stats = computeStats([], () => 'unknown');
+  const stats = computeStats([], () => ({ inspectionState: 'unchecked', condition: null }));
   assertEqual(stats.total, 0, 'total wrong');
   assertEqual(stats.inspected, 0, 'inspected wrong');
+  assertEqual(stats.notApplicable, 0, 'notApplicable wrong');
   assertEqual(stats.issues, 0, 'issues wrong');
 });
 
 /* ══════════════════════════════════════════════════════════════════
-   matchesFilter
+   matchesFilter — 'all'/'unchecked'/'checked'/'not-applicable'/
+   'working'/'minor'/'major'/'notes'
    ══════════════════════════════════════════════════════════════════ */
 
-await test('matchesFilter: "all" always matches', async () => {
-  assert(matchesFilter('major', false, 'all'), 'all should match a major device');
-  assert(matchesFilter('unknown', false, 'all'), 'all should match an unchecked device');
+await test('matchesFilter: "all" always matches regardless of inspection state', async () => {
+  assert(matchesFilter('checked', 'major', false, 'all'), 'all should match a checked+major device');
+  assert(matchesFilter('unchecked', null, false, 'all'), 'all should match an unchecked device');
+  assert(matchesFilter('not-applicable', null, false, 'all'), 'all should match a not-applicable device');
 });
 
-await test('matchesFilter: status filters only match their own status', async () => {
-  assert(matchesFilter('unknown', false, 'unchecked'), 'unchecked filter should match an unknown-status device');
-  assert(!matchesFilter('working', false, 'unchecked'), 'unchecked filter should not match a working device');
-  assert(matchesFilter('working', false, 'working'), 'working filter should match a working device');
-  assert(!matchesFilter('minor', false, 'working'), 'working filter should not match a minor device');
-  assert(matchesFilter('minor', false, 'minor'), 'minor filter should match a minor device');
-  assert(matchesFilter('major', false, 'major'), 'major filter should match a major device');
+await test('matchesFilter: "unchecked"/"checked"/"not-applicable" match inspection state only', async () => {
+  assert(matchesFilter('unchecked', null, false, 'unchecked'), 'unchecked filter should match an unchecked device');
+  assert(!matchesFilter('checked', 'working', false, 'unchecked'), 'unchecked filter should not match a checked device');
+  assert(matchesFilter('checked', 'working', false, 'checked'), 'checked filter should match any condition');
+  assert(matchesFilter('checked', 'major', false, 'checked'), 'checked filter should match major too');
+  assert(!matchesFilter('not-applicable', null, false, 'checked'), 'checked filter should not match not-applicable');
+  assert(matchesFilter('not-applicable', null, false, 'not-applicable'), 'not-applicable filter should match a not-applicable device');
+  assert(!matchesFilter('unchecked', null, false, 'not-applicable'), 'not-applicable filter should not match an unchecked device');
 });
 
-await test('matchesFilter: "notes" matches purely on hasNotes, regardless of status', async () => {
-  assert(matchesFilter('working', true, 'notes'), 'notes filter should match a working device with a note');
-  assert(!matchesFilter('major', false, 'notes'), 'notes filter should not match a major device with no note');
+await test('matchesFilter: "working"/"minor"/"major" require checked AND that specific condition', async () => {
+  assert(matchesFilter('checked', 'working', false, 'working'), 'working filter should match checked+working');
+  assert(!matchesFilter('checked', 'minor', false, 'working'), 'working filter should not match checked+minor');
+  assert(matchesFilter('checked', 'minor', false, 'minor'), 'minor filter should match checked+minor');
+  assert(matchesFilter('checked', 'major', false, 'major'), 'major filter should match checked+major');
+  assert(!matchesFilter('unchecked', null, false, 'working'), 'working filter should never match an unchecked device');
+});
+
+await test('matchesFilter: "notes" matches purely on hasNotes, regardless of inspection state', async () => {
+  assert(matchesFilter('checked', 'working', true, 'notes'), 'notes filter should match a working device with a note');
+  assert(!matchesFilter('checked', 'major', false, 'notes'), 'notes filter should not match a major device with no note');
 });
 
 /* ══════════════════════════════════════════════════════════════════

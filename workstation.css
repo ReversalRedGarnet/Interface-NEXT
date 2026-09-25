@@ -65,7 +65,7 @@
 .mode-banner[data-status="working"] { background: var(--status-working-bg);   border-color: var(--status-working);   color: var(--status-working-strong); }
 .mode-banner[data-status="minor"]   { background: var(--status-minor-bg);     border-color: var(--status-minor);     color: var(--status-minor-strong); }
 .mode-banner[data-status="major"]   { background: var(--status-major-bg);     border-color: var(--status-major);     color: var(--status-major-strong); }
-.mode-banner[data-status="clear"]   { background: var(--status-unchecked-bg); border-color: var(--status-unchecked); color: var(--status-unchecked-strong); }
+.mode-banner[data-status="not-applicable"] { background: var(--surface-muted); border-color: var(--line-strong); color: var(--text-muted); }
 
 /* ── Filters fade non-matching devices; they never disappear — spatial
    context (what's near what) has to survive a filter. ── */

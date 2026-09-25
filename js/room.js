@@ -17,44 +17,68 @@ import {
   matchesFilter, matchesSearch, buildSearchHaystack,
 } from './room-logic.js';
 
-/** Spoken/written status wording — one place, so the map, the stats line
- *  and the screen-reader labels can never disagree with each other. */
+/**
+ * Every device carries two independent fields (see state.js): an
+ * inspectionState ('unchecked' | 'checked' | 'not-applicable') and, only
+ * when checked, a condition ('working' | 'minor' | 'major'). Everywhere
+ * in this file that needs a single display key collapses the two into
+ * one of five "status keys" — 'working' | 'minor' | 'major' | 'unchecked'
+ * | 'not-applicable' — via `statusKeyOf`/`changeFor` below. That
+ * collapsed key is a rendering/UI convenience only; the stored shape
+ * always keeps the two fields separate.
+ */
+const CONDITION_WORDS = { working: 'working', minor: 'minor issue', major: 'major issue' };
+
+/** Spoken/written wording for every status key — one place, so the
+ *  stats line and the screen-reader labels can never disagree. */
 const STATUS_WORDS = {
   working: 'working',
   minor:   'minor issue',
   major:   'major issue',
-  unknown: 'not checked',
+  unchecked: 'not checked',
+  'not-applicable': 'not applicable',
 };
 
 /** Status options the inspector offers — printers only ever have two
- *  meaningful states, same distinction the old per-kind popups made. */
+ *  meaningful conditions, same distinction the old per-kind popups made.
+ *  "Not Applicable" and "Not Checked" (renamed from a generic "Clear" —
+ *  each label matches exactly what the action does) are common to both. */
 const PC_STATUS_OPTIONS = [
   { status: 'working', label: 'Working' },
   { status: 'minor',   label: 'Minor Issue' },
   { status: 'major',   label: 'Major Issue' },
-  { status: 'unknown', label: 'Unchecked' },
+  { status: 'not-applicable', label: 'Not Applicable' },
+  { status: 'unchecked', label: 'Not Checked' },
 ];
 const PRINTER_STATUS_OPTIONS = [
   { status: 'working', label: 'Working' },
   { status: 'major',   label: 'Not Working' },
+  { status: 'not-applicable', label: 'Not Applicable' },
+  { status: 'unchecked', label: 'Not Checked' },
 ];
 
-/** Inspection Mode's status choices — applies to whatever's clicked next,
- *  same four choices the old Quick Mark offered. */
+/** Inspection Mode's choices — Working/Minor/Major apply a condition in
+ *  one tap, same as the old Quick Mark; Not Applicable marks a device
+ *  intentionally excluded without leaving the mode. There's no "reset to
+ *  Not Checked" quick-action here on purpose — resetting a device is a
+ *  correction, not something you do while sweeping the room, so it stays
+ *  an inspector/keyboard-shortcut-only action (see applyChange). */
 const MODE_STATUSES = [
   { status: 'working', label: 'Working' },
   { status: 'minor',   label: 'Minor' },
   { status: 'major',   label: 'Major' },
-  { status: 'clear',   label: 'Clear' },
+  { status: 'not-applicable', label: 'N/A' },
 ];
 
 const FILTERS = [
-  { key: 'all',       label: 'All' },
-  { key: 'unchecked', label: 'Unchecked' },
-  { key: 'working',   label: 'Working' },
-  { key: 'minor',     label: 'Minor' },
-  { key: 'major',     label: 'Major' },
-  { key: 'notes',     label: 'Notes' },
+  { key: 'all',            label: 'All' },
+  { key: 'unchecked',      label: 'Unchecked' },
+  { key: 'checked',        label: 'Checked' },
+  { key: 'not-applicable', label: 'Not Applicable' },
+  { key: 'working',        label: 'Working' },
+  { key: 'minor',          label: 'Minor' },
+  { key: 'major',          label: 'Major' },
+  { key: 'notes',          label: 'Notes' },
 ];
 
 const MIN_SCALE = 0.25;
@@ -227,7 +251,7 @@ export function initRoomPage(CFG) {
           <div class="mode-group" id="mode-group" role="group" aria-label="Inspection mode">
             ${MODE_STATUSES.map(m => `
               <button type="button" class="quick-btn" data-mode-status="${m.status}" aria-pressed="false">
-                ${m.status === 'clear' ? '' : `<span class="status-dot ${m.status}"></span>`}${m.label}
+                <span class="status-dot ${m.status}"></span>${m.label}
               </button>`).join('')}
           </div>
 
@@ -270,7 +294,8 @@ export function initRoomPage(CFG) {
             <div class="legend-item"><span class="dot working"></span>Working</div>
             <div class="legend-item"><span class="dot minor"></span>Minor Issue</div>
             <div class="legend-item"><span class="dot major"></span>Major Issue</div>
-            <div class="legend-item"><span class="dot unknown"></span>Unknown</div>
+            <div class="legend-item"><span class="dot unchecked"></span>Not Checked</div>
+            <div class="legend-item"><span class="dot not-applicable"></span>Not Applicable</div>
             <div class="legend-item"><span class="dot has-notes"></span>Has a note</div>
           </div>
         </div>
@@ -312,7 +337,7 @@ export function initRoomPage(CFG) {
           <div><dt class="kbd">1</dt><dd>Mark selected device Working</dd></div>
           <div><dt class="kbd">2</dt><dd>Mark selected device Minor</dd></div>
           <div><dt class="kbd">3</dt><dd>Mark selected device Major</dd></div>
-          <div><dt class="kbd">0</dt><dd>Clear selected device's status</dd></div>
+          <div><dt class="kbd">0</dt><dd>Reset selected device to Not Checked</dd></div>
           <div><dt class="kbd">N</dt><dd>Add/edit note on selected device</dd></div>
           <div><dt class="kbd">U</dt><dd>Undo last status change</dd></div>
           <div><dt class="kbd">→</dt><dd>Jump to next unchecked device</dd></div>
@@ -381,7 +406,26 @@ export function initRoomPage(CFG) {
 
   const announce = msg => { liveEl.textContent = msg; };
   const entryFor = (id, ofRoomId = roomId) => state[stateKey(ofRoomId, id)];
-  const statusOf = device => entryFor(device.id)?.status || 'unknown';
+  /** The collapsed 5-way display key described at the top of this file —
+   *  shared by painting, the inspector, and cross-room search, so every
+   *  surface derives it from an entry the exact same way. */
+  const statusKeyFromEntry = entry => {
+    const inspectionState = entry?.inspectionState || 'unchecked';
+    return inspectionState === 'checked' ? (entry.condition || 'unchecked') : inspectionState;
+  };
+  const statusKeyOf = device => statusKeyFromEntry(entryFor(device.id));
+  /** `{ inspectionState, condition }` for room-logic.js's two-field API. */
+  const inspectionOf = device => {
+    const entry = entryFor(device.id);
+    return { inspectionState: entry?.inspectionState || 'unchecked', condition: entry?.condition ?? null };
+  };
+  /** Turns a status key (what a button/shortcut names) into the two-part
+   *  change to store — the one place that mapping happens. */
+  function changeFor(statusKey) {
+    if (statusKey === 'not-applicable') return { inspectionState: 'not-applicable', condition: null };
+    if (statusKey === 'unchecked') return { inspectionState: 'unchecked', condition: null };
+    return { inspectionState: 'checked', condition: statusKey };
+  }
 
   /* ── State writes ──────────────────────────────────────────────
      Re-read before merging: a checker often has two room tabs open, and the
@@ -408,14 +452,14 @@ export function initRoomPage(CFG) {
     if (!el) return;
     const entry = entryFor(deviceId);
     const device = deviceById.get(deviceId);
-    const status = entry?.status || 'unknown';
+    const status = statusKeyOf(device || { id: deviceId });
     const name = device ? deviceLabel(device) : deviceId;
     const kind = el.dataset.kind === 'printer' ? 'Printer ' : '';
     const note = entry?.notes ? ` — note: ${entry.notes}` : '';
 
     el.dataset.status = status;
     el.dataset.hasNotes = entry?.notes ? 'true' : 'false';
-    el.setAttribute('aria-label', `${kind}${name}, ${STATUS_WORDS[status] || STATUS_WORDS.unknown}${note}`);
+    el.setAttribute('aria-label', `${kind}${name}, ${STATUS_WORDS[status] || STATUS_WORDS.unchecked}${note}`);
     if (entry?.notes) el.setAttribute('title', entry.notes);
     else el.removeAttribute('title');
     applyFilterToNode(el);
@@ -426,23 +470,27 @@ export function initRoomPage(CFG) {
   }
 
   function updateStatsUI() {
-    const stats = computeStats(CFG.devices, statusOf);
+    const stats = computeStats(CFG.devices, inspectionOf);
     roomStatsEl.textContent =
-      `${stats.total} devices · ${stats.inspected} inspected · ${stats.unchecked} remaining · ${stats.issues} issue${stats.issues === 1 ? '' : 's'}`;
-    sweepFillEl.style.width = stats.total ? `${(stats.inspected / stats.total) * 100}%` : '0%';
+      `${stats.total} devices · ${stats.inspected} inspected · ${stats.notApplicable} not applicable · ${stats.unchecked} remaining · ${stats.issues} issue${stats.issues === 1 ? '' : 's'}`;
+    sweepFillEl.style.width = stats.total ? `${((stats.inspected + stats.notApplicable) / stats.total) * 100}%` : '0%';
   }
 
   /* ── Entry writes ──────────────────────────────────────────── */
 
-  function saveEntry(deviceId, status, notes) {
+  /** The one place any device entry is written — a fresh device (no
+   *  entry yet) and an untouched-since-reset device (inspectionState
+   *  'unchecked' with no notes) both collapse to "no localStorage row",
+   *  matching the "no entry = unchecked" convention untouched devices
+   *  have always used; a note always keeps the row alive so it isn't
+   *  lost under a reset-to-unchecked. */
+  function saveEntry(deviceId, change) {
     const key = stateKey(roomId, deviceId);
-    mutate(s => { s[key] = { status, notes, updatedAt: new Date().toISOString() }; });
-    paint(deviceId);
-    updateStatsUI();
-  }
-
-  function clearEntry(deviceId) {
-    mutate(s => { delete s[stateKey(roomId, deviceId)]; });
+    const notes = entryFor(deviceId)?.notes || '';
+    mutate(s => {
+      if (change.inspectionState === 'unchecked' && !notes) delete s[key];
+      else s[key] = { inspectionState: change.inspectionState, condition: change.condition ?? null, notes, updatedAt: new Date().toISOString() };
+    });
     paint(deviceId);
     updateStatsUI();
   }
@@ -458,20 +506,21 @@ export function initRoomPage(CFG) {
     announce(`${CFG.label} reset`);
   }
 
-  /** The one place any status change goes through — Inspection Mode
-   *  clicks, inspector status buttons, and keyboard shortcuts (1/2/3/0)
-   *  all call this, so Undo always sees every kind of change. */
-  function applyStatus(deviceId, status, opts = {}) {
+  function describeChange(change) {
+    if (change.inspectionState === 'not-applicable') return 'marked not applicable';
+    if (change.inspectionState === 'unchecked') return 'reset to not checked';
+    return `marked ${CONDITION_WORDS[change.condition] || change.condition}`;
+  }
+
+  /** The one place any inspection-state/condition change goes through —
+   *  Inspection Mode clicks, inspector status buttons, and keyboard
+   *  shortcuts (1/2/3/0) all call this, so Undo always sees every kind
+   *  of change regardless of how it was made. */
+  function applyChange(deviceId, change, opts = {}) {
     undoStack.push({ deviceId, previous: entryFor(deviceId) ?? null });
     refreshUndo();
-    if (status === 'clear') {
-      clearEntry(deviceId);
-      if (!opts.silent) announce(`${deviceId} cleared`);
-    } else {
-      const notes = entryFor(deviceId)?.notes || '';
-      saveEntry(deviceId, status, notes);
-      if (!opts.silent) announce(`${deviceId} marked ${STATUS_WORDS[status] || status}`);
-    }
+    saveEntry(deviceId, change);
+    if (!opts.silent) announce(`${deviceId} ${describeChange(change)}`);
     flashSaveStatus();
     if (selectedDeviceId === deviceId) renderInspector({ keepFocus: true });
   }
@@ -500,8 +549,14 @@ export function initRoomPage(CFG) {
   /* ── Notes ─────────────────────────────────────────────────── */
 
   function saveNotesNow(deviceId, notes) {
-    const status = entryFor(deviceId)?.status || 'unknown';
-    mutate(s => { s[stateKey(roomId, deviceId)] = { status, notes, updatedAt: new Date().toISOString() }; });
+    const key = stateKey(roomId, deviceId);
+    const entry = entryFor(deviceId);
+    const inspectionState = entry?.inspectionState || 'unchecked';
+    const condition = inspectionState === 'checked' ? (entry?.condition ?? null) : null;
+    mutate(s => {
+      if (inspectionState === 'unchecked' && !notes) delete s[key];
+      else s[key] = { inspectionState, condition, notes, updatedAt: new Date().toISOString() };
+    });
     paint(deviceId);
     updateStatsUI();
     flashSaveStatus();
@@ -530,13 +585,11 @@ export function initRoomPage(CFG) {
     if (status) {
       modeBanner.hidden = false;
       modeBanner.dataset.status = status;
-      modeBanner.textContent = status === 'clear'
-        ? 'INSPECTION MODE — clearing. Click a device to clear it. Esc to exit.'
-        : `INSPECTION MODE — marking ${STATUS_WORDS[status]}. Click a device to apply. Esc to exit.`;
+      modeBanner.textContent = `INSPECTION MODE — marking ${STATUS_WORDS[status]}. Click a device to apply. Esc to exit.`;
     } else {
       modeBanner.hidden = true;
     }
-    announce(status ? `Inspection mode on: ${status === 'clear' ? 'clear' : STATUS_WORDS[status]}` : 'Inspection mode off');
+    announce(status ? `Inspection mode on: ${STATUS_WORDS[status]}` : 'Inspection mode off');
   }
 
   /* ── Filters (fade, never hide — spatial context stays intact) ── */
@@ -546,7 +599,8 @@ export function initRoomPage(CFG) {
     const device = deviceById.get(id);
     if (!device) return;
     const entry = entryFor(id);
-    const match = matchesFilter(entry?.status || 'unknown', !!entry?.notes, activeFilter);
+    const { inspectionState, condition } = inspectionOf(device);
+    const match = matchesFilter(inspectionState, condition, !!entry?.notes, activeFilter);
     el.classList.toggle('filtered-out', !match);
   }
 
@@ -577,7 +631,7 @@ export function initRoomPage(CFG) {
     inspectorContent.hidden = false;
 
     const entry = entryFor(device.id);
-    const status = entry?.status || 'unknown';
+    const status = statusKeyOf(device);
 
     inspectorDeviceIdEl.textContent = `${roomId} › ${deviceLabel(device)}`;
 
@@ -586,7 +640,7 @@ export function initRoomPage(CFG) {
         <span class="status-dot ${opt.status}"></span>${opt.label}
       </button>`).join('');
     inspectorStatusGrid.querySelectorAll('.status-btn').forEach(btn => {
-      btn.addEventListener('click', () => applyStatus(device.id, btn.dataset.status));
+      btn.addEventListener('click', () => applyChange(device.id, changeFor(btn.dataset.status)));
     });
 
     const assetRecord = device.assetId ? assets[device.assetId] : null;
@@ -600,7 +654,7 @@ export function initRoomPage(CFG) {
     if (document.activeElement !== inspectorNotesEl) inspectorNotesEl.value = entry?.notes || '';
     inspectorLastUpdated.textContent = entry?.updatedAt ? `Updated ${formatDate(entry.updatedAt)}` : '';
     // Only a *fresh* selection resets the save-status text — re-renders
-    // triggered by applyStatus/undo must leave whatever flashSaveStatus()
+    // triggered by applyChange/undo must leave whatever flashSaveStatus()
     // just set (e.g. "Saving…") alone, or it'd be overwritten instantly.
     if (opts.resetSaveStatus) saveStatusEl.textContent = 'Saved';
 
@@ -698,7 +752,7 @@ export function initRoomPage(CFG) {
   /* ── Next Unchecked ───────────────────────────────────────────── */
 
   function goToNextUnchecked() {
-    const next = findNextUnchecked(orderedDevices, d => statusOf(d) === 'unknown', selectedDeviceId);
+    const next = findNextUnchecked(orderedDevices, d => inspectionOf(d).inspectionState === 'unchecked', selectedDeviceId);
     if (!next) { announce('Every device is inspected.'); return; }
     focusDevice(next.id);
   }
@@ -728,7 +782,7 @@ export function initRoomPage(CFG) {
     const indexRoom = (rid, rlabel, stem, devices) => {
       devices.forEach(d => {
         const entry = state[stateKey(rid, d.id)];
-        const statusWord = STATUS_WORDS[entry?.status || 'unknown'];
+        const statusWord = STATUS_WORDS[statusKeyFromEntry(entry)];
         const assetRecord = d.assetId ? assets[d.assetId] : null;
         const haystack = buildSearchHaystack({
           roomId: rid, roomLabel: rlabel, device: d,
@@ -824,7 +878,7 @@ export function initRoomPage(CFG) {
     const el = e.target.closest?.('[data-id]');
     if (!el || !room.contains(el)) return;
     const deviceId = el.dataset.id;
-    if (activeModeStatus) { applyStatus(deviceId, activeModeStatus); return; }
+    if (activeModeStatus) { applyChange(deviceId, changeFor(activeModeStatus)); return; }
     selectDevice(deviceId);
   });
 
@@ -886,8 +940,8 @@ export function initRoomPage(CFG) {
   document.getElementById('reset-cancel').addEventListener('click', () => closeOverlay(resetOverlay));
   resetOverlay.addEventListener('click', e => { if (e.target === resetOverlay) closeOverlay(resetOverlay); });
 
-  document.getElementById('btn-export-room').addEventListener('click', () => exportRoom(roomId, CFG.label));
-  document.getElementById('btn-export-all').addEventListener('click', () => exportAllRooms());
+  document.getElementById('btn-export-room').addEventListener('click', () => exportRoom(roomId, CFG.label, { devices: CFG.devices }));
+  document.getElementById('btn-export-all').addEventListener('click', () => exportAllRooms({ dataUrlFor: stem => `../data/${stem}.json` }));
 
   document.addEventListener('keydown', e => {
     if (e.key === '?') { e.preventDefault(); openOverlay(helpOverlay); return; }
@@ -912,10 +966,10 @@ export function initRoomPage(CFG) {
     if (e.key.toLowerCase() === 'f') { e.preventDefault(); fitToScreen(); return; }
     if (e.key.toLowerCase() === 'u') { e.preventDefault(); undoLast(); return; }
     if (!selectedDeviceId) return;
-    if (e.key === '1') { e.preventDefault(); applyStatus(selectedDeviceId, 'working'); return; }
-    if (e.key === '2') { e.preventDefault(); applyStatus(selectedDeviceId, 'minor'); return; }
-    if (e.key === '3') { e.preventDefault(); applyStatus(selectedDeviceId, 'major'); return; }
-    if (e.key === '0') { e.preventDefault(); applyStatus(selectedDeviceId, 'clear'); return; }
+    if (e.key === '1') { e.preventDefault(); applyChange(selectedDeviceId, changeFor('working')); return; }
+    if (e.key === '2') { e.preventDefault(); applyChange(selectedDeviceId, changeFor('minor')); return; }
+    if (e.key === '3') { e.preventDefault(); applyChange(selectedDeviceId, changeFor('major')); return; }
+    if (e.key === '0') { e.preventDefault(); applyChange(selectedDeviceId, changeFor('unchecked')); return; }
     if (e.key.toLowerCase() === 'n') { e.preventDefault(); inspectorNotesEl.focus(); return; }
   });
 

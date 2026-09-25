@@ -42,10 +42,27 @@ const NEWLINE   = '\r\n';
 const BOM       = '\uFEFF';
 const CSV_MIME  = 'text/csv;charset=utf-8';
 
-const STATUS_LABELS = { working: 'Working', minor: 'Minor', major: 'Major', unknown: 'Unknown' };
+/**
+ * Every device gets exactly one of these five effective statuses:
+ * `inspectionState` 'checked' collapses to its `condition`; 'unchecked'
+ * and 'not-applicable' stand on their own. This is a display-only
+ * collapse for the CSV column \u2014 the stored shape (state.js) always keeps
+ * inspection state and condition separate.
+ */
+function effectiveStatus(entry) {
+  const inspectionState = entry?.inspectionState || 'unchecked';
+  if (inspectionState === 'checked') return entry.condition || 'unchecked';
+  return inspectionState;
+}
 
-/** Row order: worst first, so the things that need attention are at the top. */
-const STATUS_ORDER = { major: 0, minor: 1, unknown: 2, working: 3 };
+const STATUS_LABELS = {
+  working: 'Working', minor: 'Minor', major: 'Major',
+  unchecked: 'Not Checked', 'not-applicable': 'Not Applicable',
+};
+
+/** Row order: worst first, then untouched, then the things nobody needs
+ *  to act on (working, not applicable) at the bottom. */
+const STATUS_ORDER = { major: 0, minor: 1, unchecked: 2, working: 3, 'not-applicable': 4 };
 
 const HEADERS = ['Campus', 'Room', 'Device ID', 'Status', 'Working', 'Notes', 'Last Updated'];
 
@@ -81,22 +98,22 @@ function csvRow(cells) {
 /* ── Row building ───────────────────────────────────────── */
 
 /**
- * All tracked devices for one room, as flat table rows.
- * Note: only devices that have been clicked at least once have a
- * localStorage entry, so untouched devices don't appear — same as before.
+ * Every device in the room's roster, as flat table rows — including
+ * devices nobody has ever clicked. Untouched devices have no localStorage
+ * entry at all (see state.js), so they join against an empty/default
+ * entry and export as "Not Checked" instead of being silently absent.
  */
-function buildRoomRows(room, state) {
-  const prefix = room.id + '_';
-
-  const entries = Object.entries(state)
-    .filter(([key]) => key.startsWith(prefix))
-    .map(([key, value]) => ({ deviceId: key.slice(prefix.length), ...value }));
-
-  if (!entries.length) {
-    return [[room.campus, room.label, '', 'Not checked', '', '', '']];
+export function buildRoomRows(room, devices, state) {
+  if (!devices.length) {
+    return [[room.campus, room.label, '', 'No devices', '', '', '']];
   }
 
-  return entries
+  const rows = devices.map(d => {
+    const entry = state[`${room.id}_${d.id}`];
+    return { deviceId: d.id, status: effectiveStatus(entry), notes: entry?.notes || '', updatedAt: entry?.updatedAt };
+  });
+
+  return rows
     .sort((a, b) => {
       const rank = (STATUS_ORDER[a.status] ?? 2) - (STATUS_ORDER[b.status] ?? 2);
       if (rank !== 0) return rank;
@@ -106,11 +123,34 @@ function buildRoomRows(room, state) {
       room.campus,
       room.label,
       e.deviceId,
-      STATUS_LABELS[e.status] || 'Unknown',
+      STATUS_LABELS[e.status] || 'Not Checked',
       e.status === 'working' ? 'Yes' : 'No',
-      e.notes || '',
+      e.notes,
       formatTimestamp(e.updatedAt),
     ]);
+}
+
+/**
+ * Fetches one room's device roster from its data file. `dataUrlFor(stem)`
+ * lets each caller supply the path prefix that matches its own location
+ * (room pages live under rooms/, so they fetch '../data/x.json'; the menu
+ * page lives at the project root and fetches 'data/x.json') — export.js
+ * itself has no idea which page called it, so it never hardcodes a depth.
+ * Network/parse failures degrade to an empty roster rather than throwing,
+ * matching how room.js's own cross-room lookups already tolerate a room
+ * that fails to load.
+ */
+export async function fetchRoomDevices(room, dataUrlFor) {
+  try {
+    const stem = String(room.id).toLowerCase();
+    const url = (dataUrlFor || (s => `data/${s}.json`))(stem);
+    const res = await fetch(url);
+    if (!res.ok) return [];
+    const data = await res.json();
+    return Array.isArray(data.devices) ? data.devices : [];
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -159,24 +199,37 @@ function findRoom(roomId, roomLabel) {
   );
 }
 
-/* ── Public API (unchanged signatures) ──────────────────── */
+/* ── Public API ────────────────────────────────────────────
+ * Both exports are now async: building a roster-complete report means
+ * reading each room's device list, and a caller that doesn't already
+ * have it in hand (e.g. "Export All Rooms" from the menu page) has to
+ * fetch it. `opts.devices` lets a caller that already has the current
+ * room's devices loaded (a room page) skip that fetch entirely;
+ * `opts.dataUrlFor` lets any caller say where its data files live
+ * relative to itself. Both are optional — omitting them just means every
+ * roster is fetched with the project-root-relative default path. */
 
-export function exportRoom(roomId, roomLabel) {
+export async function exportRoom(roomId, roomLabel, opts = {}) {
   const exporter = getExporterName();
   if (exporter === null) return;
 
   const room = findRoom(roomId, roomLabel);
-  const rows = buildRoomRows(room, loadState());
+  const devices = opts.devices || await fetchRoomDevices(room, opts.dataUrlFor);
+  const rows = buildRoomRows(room, devices, loadState());
 
   download(buildCsv(rows, exporter), `report-${roomId}-${today()}.csv`, CSV_MIME);
 }
 
-export function exportAllRooms() {
+export async function exportAllRooms(opts = {}) {
   const exporter = getExporterName();
   if (exporter === null) return;
 
   const state = loadState();
-  const rows = ALL_ROOMS.flatMap(room => buildRoomRows(room, state));
+  const rows = [];
+  for (const room of ALL_ROOMS) {
+    const devices = await fetchRoomDevices(room, opts.dataUrlFor);
+    rows.push(...buildRoomRows(room, devices, state));
+  }
 
   download(buildCsv(rows, exporter), `report-ALL-${today()}.csv`, CSV_MIME);
 }

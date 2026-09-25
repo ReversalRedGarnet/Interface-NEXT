@@ -29,8 +29,9 @@ js/
   room-logic.js — pure logic behind room.js (inspection order, next-
                   unchecked, stats, filter/search matching); no DOM, same
                   split as campus-data.js/schema.js
-  export.js     — CSV reports + JSON state backup/restore
-  state.js      — localStorage read/write helpers
+  export.js     — roster-complete CSV reports + JSON state backup/restore
+  state.js      — localStorage read/write helpers, incl. the one-time
+                  old-shape → inspectionState/condition migration
   format.js     — date formatting helpers
   build-grid.js — shared PC-grid generator; regenerates the `devices` array
                   in data/*.json (was previously 4 copy-pasted inline loops)
@@ -58,8 +59,13 @@ js/editor/
                         js/export.js's ALL_ROOMS, and the cross-file
                         id-collision check for a brand-new room
 test/
+  state.test.mjs      — the old-shape → inspectionState/condition migration,
+                        run against representative old-shape sample data
   room-logic.test.mjs — room-logic.js's pure logic: inspection order,
                         next-unchecked, stats, filter/search matching
+  export.test.mjs — buildRoomRows roster-completeness (every device gets a
+                    row, untouched ones export as "Not Checked") and
+                    fetchRoomDevices' tolerant-failure behavior
   room.test.mjs   — drives room.js in jsdom; asserts on the DOM a checker
                     touches (inspector, Inspection Mode, filters, search,
                     zoom/pan, keyboard shortcuts, save-status)
@@ -160,27 +166,33 @@ no DOM at all.
 
 ## Room workstation
 The room page's inspector panel is always on screen — never a popup — so
-inspecting a device never interrupts seeing the floor plan. Nothing about
-what a status *is* or how it's stored changed; this is all interaction on
-top of the same `state.js`-backed localStorage entries as before.
+inspecting a device never interrupts seeing the floor plan.
+
+Every device carries two independent fields (see "Inspection state vs.
+condition" below): whether it's been looked at, and — only if it has —
+whether it's working. Everything below is built on that.
 
 - **Tap a device** → the inspector panel (a side panel on desktop, a bottom
-  sheet on mobile) shows its id, status control, any linked asset info
+  sheet on mobile) shows its id, a 5-way status control (Working/Minor
+  Issue/Major Issue/Not Applicable/Not Checked), any linked asset info
   (asset id/serial/manufacturer, read-only — set via the editor, not here),
   and notes. Status changes and notes autosave — there's no Save button —
   and a small **Saved**/**Saving…** indicator next to the device id
   confirms it went through.
-- **⏭ Next Unchecked** → jumps straight to the next uninspected device (row-
-  major: top-to-bottom, then left-to-right, derived from each device's own
-  stored position), panning/zooming it into view and focusing its status
-  control.
-- **Inspection Mode** (Working/Minor/Major/Clear) → arm a status, then one
-  tap per device instead of opening the inspector each time. A banner makes
-  the active mode impossible to miss; `Esc` exits it. `Undo` steps back
-  through every status change, however it was made.
-- **Filters** (All/Unchecked/Working/Minor/Major/Notes) → non-matching
-  devices fade to ~25% opacity rather than disappearing, so where they sit
-  relative to everything else is never lost.
+- **⏭ Next Unchecked** → jumps straight to the next device still marked
+  Unchecked (row-major: top-to-bottom, then left-to-right, derived from
+  each device's own stored position), panning/zooming it into view and
+  focusing its status control.
+- **Inspection Mode** (Working/Minor/Major/N/A) → arm a status, then one tap
+  per device instead of opening the inspector each time. A banner makes the
+  active mode impossible to miss; `Esc` exits it. `Undo` steps back through
+  every change, however it was made. Resetting a device back to Not Checked
+  isn't in this mode on purpose — that's a correction, not something you do
+  while sweeping the room, so it stays an inspector/`0`-key action.
+- **Filters** (All/Unchecked/Checked/Not Applicable/Working/Minor/
+  Major/Notes) → non-matching devices fade to ~25% opacity rather than
+  disappearing, so where they sit relative to everything else is never
+  lost.
 - **Search** (`/` or Ctrl/⌘+K) → matches device id, label, asset id, serial,
   manufacturer, notes, and status, across every room (other rooms' data is
   fetched lazily, only once you actually search). Picking a result in
@@ -189,12 +201,35 @@ top of the same `state.js`-backed localStorage entries as before.
   drag-to-pan (mouse or touch). This is a view transform only — a device's
   stored `top`/`left` never changes, no matter how far you've zoomed or
   panned.
-- **Keyboard**: `1`/`2`/`3`/`0` set the selected device's status (Working/
-  Minor/Major/clear), `N` jumps to its notes field, `U` undoes, `→` is Next
-  Unchecked, `/` opens search, `F` fits the floor plan to screen, `Esc`
-  exits Inspection Mode or closes whatever dialog is open. Press `?` for
-  the full list on screen — shortcuts are never mandatory or permanently
-  displayed otherwise.
+- **Keyboard**: `1`/`2`/`3` mark the selected device Working/Minor/Major,
+  `0` resets it to Not Checked, `N` jumps to its notes field, `U` undoes,
+  `→` is Next Unchecked, `/` opens search, `F` fits the floor plan to
+  screen, `Esc` exits Inspection Mode or closes whatever dialog is open.
+  Press `?` for the full list on screen — shortcuts are never mandatory or
+  permanently displayed otherwise.
+
+## Inspection state vs. condition
+A device's status is two independent fields, not one:
+
+- **Inspection state** — `unchecked` (default) | `checked` | `not-applicable`
+- **Condition** — `working` | `minor` | `major`, meaningful only when the
+  inspection state is `checked`
+
+So a device is always exactly one of: unchecked, not applicable, or checked
+with a condition. This split exists so "hasn't been looked at yet" and
+"intentionally excluded from this sweep" are never confused with each
+other or folded into the working/minor/major scale.
+
+`state.js` stores this as `{ inspectionState, condition, notes, updatedAt }`
+per device, keyed the same way as before
+(`ROOMID_DEVICEID`). Older data saved before this split (a single `status`
+of `working`/`minor`/`major`/`unknown`) is migrated transparently on every
+read — `working`/`minor`/`major` become `checked` + that condition, and
+`unknown` (or a missing/malformed status) becomes `unchecked` — without
+ever deleting anything from `localStorage`. The migration only becomes
+permanent in storage the next time that data is actually saved; opening
+the app read-only never rewrites anything. See `test/state.test.mjs` for
+the migration tests, run against representative old-shape sample data.
 
 ## Editing a room's device grid
 For the 4 grid-based rooms (annex, workshop, b2-204, b2-210), edit the params in
@@ -303,8 +338,12 @@ As a practical workaround for moving state between machines, the menu page has:
 True real-time sync across devices would require a small backend (a shared
 database instead of localStorage).
 
-## Known limitation: the CSV lists only devices that were touched
-`export.js` builds its rows by scanning localStorage keys, so a device nobody
-clicked has no row at all — a room that was never checked collapses to a single
-"Not checked" line. Fixing this properly means giving `export.js` access to each
-room's device roster, which currently lives only in `data/*.json`.
+## CSV / report export
+The CSV is roster-complete: it always has one row per device that actually
+exists in that room's `data/*.json` (or, for "Export All Rooms", every
+room's), whether or not anyone has ever touched it — an untouched device
+exports as "Not Checked" rather than being silently absent. `export.js`
+fetches each room's device list itself (a room page that already has its
+own devices loaded skips that fetch and passes them straight in); rows sort
+worst-first (major, minor, unchecked, working, not applicable). See
+`test/export.test.mjs`.
