@@ -238,8 +238,17 @@ sidebar. On mobile the sidebar becomes a collapsible bottom sheet, closed to
 a small handle by default so the floor plan stays the dominant thing on
 screen; selecting a device or arming Inspection Mode opens it automatically
 (see "Mobile bottom sheet" below). The floor plan auto-fits to the available
-space on load, on resize, and via the **Fit** button in the sidebar's View
-section — no manual click needed on load.
+space on load, on every live resize (a browser window resized while the
+page is already open, not just a fresh load at a given width), and via the
+**Fit** button in the sidebar's View section — no manual click needed on
+load. Once you've manually zoomed away from fit (the +/−/100% buttons or
+Ctrl/Cmd+scroll), a resize stops silently overriding that choice back to
+fit — it re-clamps your chosen zoom to the new size instead, the same way
+panning does; clicking **Fit** re-arms auto-refit on the next resize. (The
+original version compared the current scale to a freshly recomputed fit
+scale on every resize, which broke the moment the viewport actually changed
+size — the two almost never matched, so a live resize silently never
+re-fit at all.)
 
 **Fit is a true maximum contain-fit.** It's computed from the room's actual
 drawn extent — every wall/room/entrance/counter shape and every device's
@@ -261,19 +270,19 @@ same `--border-divider` token used for every other structural seam in the
 app — separates each section from the next):
 1. **Primary actions** — Next Unchecked and Search, unlabeled since they're
    the whole point of the page and need no caption.
-2. **View** — the zoom/pan strip, grouped here since it directly controls
-   the adjacent canvas.
-3. **Inspection Mode** — the toggle button; its active UI (the picker +
+2. **Inspection Mode** — the toggle button; its active UI (the picker +
    banner, below) renders directly beneath it, in this same section, while
    armed.
-4. **Secondary actions** — Filter, the **⋯** room-actions menu, and **?**
+3. **Secondary actions** — Filter, the **⋯** room-actions menu, and **?**
    help, visually lighter than the primary group (smaller `--text-meta`
    sizing, same as `.kbd`/the save-status text) since they're used less
    often.
-5. **Legend + Stats** — collapsible, closed by default now that five other
+4. **Legend + Stats** — collapsible, closed by default now that five other
    sections share the sidebar with it.
-6. **The device inspector** — ordinary per-device detail, replaced by #3's
+5. **The device inspector** — ordinary per-device detail, replaced by #2's
    active UI while Inspection Mode is armed.
+6. **View** — the zoom/pan strip, last since it's reached for least often
+   relative to the inspect-a-device loop above it.
 
 Every device carries two independent fields (see "Inspection state vs.
 condition" below): whether it's been looked at, and — only if it has —

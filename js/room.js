@@ -302,21 +302,7 @@ export function initRoomPage(CFG) {
               <button type="button" class="toolbar-btn sidebar-block-btn" id="btn-search">${ICON_SEARCH} Search <span class="kbd">/</span></button>
             </div>
 
-            <!-- 2. View — the zoom/pan strip, grouped since it controls the
-                 adjacent canvas directly. -->
-            <div class="sidebar-section sidebar-view" id="sidebar-view">
-              <p class="quick-mark-label sidebar-section-label">View</p>
-              <div class="zoom-controls" id="zoom-controls">
-                <button type="button" class="toolbar-btn" id="zoom-out" aria-label="Zoom out">−</button>
-                <button type="button" class="toolbar-btn" id="zoom-fit" aria-label="Fit to screen">Fit</button>
-                <button type="button" class="toolbar-btn" id="zoom-100" aria-label="Actual size">100%</button>
-                <button type="button" class="toolbar-btn" id="zoom-in" aria-label="Zoom in">+</button>
-                <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">${ICON_FULLSCREEN}</button>
-                <span class="zoom-hint">${zoomModifierLabel()}+scroll to zoom</span>
-              </div>
-            </div>
-
-            <!-- 3. Inspection Mode — the toggle is the entry point; once
+            <!-- 2. Inspection Mode — the toggle is the entry point; once
                  armed, the Mark-as picker + banner appear right below it in
                  this same section (see setMode()). -->
             <div class="sidebar-section sidebar-inspection-mode" id="sidebar-inspection-mode">
@@ -337,7 +323,7 @@ export function initRoomPage(CFG) {
               </div>
             </div>
 
-            <!-- 4. Secondary actions — used less often than the primary
+            <!-- 3. Secondary actions — used less often than the primary
                  loop, so visually lighter/smaller (see workstation.css). -->
             <div class="sidebar-section sidebar-secondary" id="sidebar-secondary">
               <p class="quick-mark-label sidebar-section-label">More</p>
@@ -361,7 +347,7 @@ export function initRoomPage(CFG) {
               </div>
             </div>
 
-            <!-- 5. Legend + stats — always available regardless of
+            <!-- 4. Legend + stats — always available regardless of
                  Inspector/Inspection-Mode state, its own clearly separate,
                  collapsible sub-section rather than blended into either. -->
             <div class="sidebar-section sidebar-legend" id="sidebar-legend">
@@ -379,7 +365,7 @@ export function initRoomPage(CFG) {
               </div>
             </div>
 
-            <!-- 6. Inspector — ordinary device-detail content, as before. -->
+            <!-- 5. Inspector — ordinary device-detail content, as before. -->
             <div class="sidebar-section sidebar-inspector" id="sidebar-inspector">
               <div id="inspector-normal">
                 <p class="quick-mark-label sidebar-section-label">Inspector</p>
@@ -395,6 +381,22 @@ export function initRoomPage(CFG) {
                   <textarea id="inspector-notes" class="notes-input" rows="4" placeholder="Describe the issue…"></textarea>
                   <p class="last-updated" id="inspector-last-updated"></p>
                 </div>
+              </div>
+            </div>
+
+            <!-- 6. View — the zoom/pan strip, grouped since it controls the
+                 adjacent canvas directly. Last in the sidebar since it's
+                 reached for least often relative to the inspect-a-device
+                 loop above it. -->
+            <div class="sidebar-section sidebar-view" id="sidebar-view">
+              <p class="quick-mark-label sidebar-section-label">View</p>
+              <div class="zoom-controls" id="zoom-controls">
+                <button type="button" class="toolbar-btn" id="zoom-out" aria-label="Zoom out">−</button>
+                <button type="button" class="toolbar-btn" id="zoom-fit" aria-label="Fit to screen">Fit</button>
+                <button type="button" class="toolbar-btn" id="zoom-100" aria-label="Actual size">100%</button>
+                <button type="button" class="toolbar-btn" id="zoom-in" aria-label="Zoom in">+</button>
+                <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">${ICON_FULLSCREEN}</button>
+                <span class="zoom-hint">${zoomModifierLabel()}+scroll to zoom</span>
               </div>
             </div>
 
@@ -839,6 +841,15 @@ export function initRoomPage(CFG) {
 
   /* ── Zoom / pan — a view transform only; device coordinates never change ── */
   let view = { scale: 1, x: 0, y: 0 };
+  /** True whenever `view` still reflects the last computed fit — set on
+   *  every fitToScreen() call, cleared the moment the user deliberately
+   *  changes scale (the zoom buttons, Ctrl/Cmd+wheel, or Actual Size).
+   *  Pan-only actions (drag, the resize handler's own re-clamp) never
+   *  touch it. This is what lets a live window resize re-fit automatically
+   *  right up until the user has manually zoomed away from fit — after
+   *  that, resizing only re-clamps pan at their chosen scale instead of
+   *  silently overriding it (see the resize listener below). */
+  let fitIsCurrent = true;
 
   function clampScale(s) { return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)); }
 
@@ -865,7 +876,16 @@ export function initRoomPage(CFG) {
     room.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
   }
 
+  /** Pan-only calls (drag, the resize handler's own re-clamp) always pass
+   *  `view.scale` straight back in, so this comparison — against the raw,
+   *  not-yet-clamped argument, never a value recomputed via a different
+   *  code path — only ever flips `fitIsCurrent` off for a call that's
+   *  actually asking for a different scale (zoomAt, actualSize,
+   *  focusDevice's targeted zoom-to-device). No float-equality fragility:
+   *  it's the same value being compared, not two independently derived
+   *  ones. */
   function setView(scale, x, y) {
+    if (scale !== view.scale) fitIsCurrent = false;
     view.scale = clampScale(scale);
     const clamped = clampPan(x, y, view.scale);
     view.x = clamped.x;
@@ -902,6 +922,7 @@ export function initRoomPage(CFG) {
     view.x = x;
     view.y = y;
     applyView();
+    fitIsCurrent = true;
   }
   function actualSize() { setView(1, 0, 0); }
 
@@ -1182,12 +1203,25 @@ export function initRoomPage(CFG) {
     if (selectedDeviceId) renderInspector({ keepFocus: true });
   });
 
-  window.addEventListener('resize', () => {
-    if (view.scale === computeFitScale()) fitToScreen();
+  /** Re-fits on any viewport size change — window resize, or (via the
+   *  ResizeObserver below) a layout change that isn't a window resize at
+   *  all, like a split-screen/multi-window drag — but only while the view
+   *  still reflects the last fit (`fitIsCurrent`). The old rule compared
+   *  `view.scale === computeFitScale()` freshly every time, which broke
+   *  the moment the viewport actually changed size: the *old* scale almost
+   *  never equals the *newly recomputed* fit scale for the *new* size, so
+   *  a live resize from desktop down to mobile width silently never
+   *  re-fit, just re-clamped pan at the old (now too-large) scale. Once
+   *  the user has manually zoomed away from fit, resizing intentionally
+   *  falls back to that same re-clamp instead — a deliberate zoom should
+   *  survive a resize, not get silently overridden back to fit. */
+  function handleViewportResize() {
+    if (fitIsCurrent) fitToScreen();
     else setView(view.scale, view.x, view.y);
-  });
+  }
+  window.addEventListener('resize', handleViewportResize);
   if (typeof ResizeObserver === 'function') {
-    new ResizeObserver(() => setView(view.scale, view.x, view.y)).observe(viewport);
+    new ResizeObserver(handleViewportResize).observe(viewport);
   }
 
   paintAll();

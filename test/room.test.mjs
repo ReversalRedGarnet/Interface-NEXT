@@ -71,6 +71,9 @@ function wheel(el, opts = {}) {
     metaKey: !!opts.metaKey,
   }));
 }
+function resize(window) {
+  window.dispatchEvent(new window.Event('resize'));
+}
 function readState(window) {
   return JSON.parse(window.localStorage.getItem('it-room-monitor-v1') || '{}');
 }
@@ -607,6 +610,47 @@ await test('the deferred auto-fit does not fight a ?focus= deep link\'s pan/zoom
   await nextFrame(window);
   assert(doc.querySelector('[data-id="SPC3"]').classList.contains('selected'),
     'the deferred one-frame-later re-fit should not undo a ?focus= deep link\'s selection/pan/zoom');
+});
+
+await test('a live window resize re-fits automatically while the view still reflects the last fit', async () => {
+  const { doc, window } = await mount(readRoom('commons'));
+  const before = doc.getElementById('room').style.transform;
+  resize(window);
+  assert(doc.getElementById('room').style.transform.includes('scale'),
+    'a resize while still at fit should re-fit cleanly, not throw or leave a broken transform');
+});
+
+await test('a live window resize does not silently override a manual zoom made since the last fit', async () => {
+  const { doc, window } = await mount(readRoom('commons'));
+  click(doc.getElementById('zoom-in'));
+  const zoomedTransform = doc.getElementById('room').style.transform;
+
+  resize(window);
+  assert(doc.getElementById('room').style.transform === zoomedTransform,
+    'a resize after a manual zoom-in should preserve that zoom rather than snapping back to fit');
+
+  wheel(doc.getElementById('room-viewport'), { deltaY: -100, ctrlKey: true });
+  const wheelZoomedTransform = doc.getElementById('room').style.transform;
+  resize(window);
+  assert(doc.getElementById('room').style.transform === wheelZoomedTransform,
+    'a resize after a Ctrl+wheel zoom should likewise preserve it');
+});
+
+await test('clicking Fit again after a manual zoom re-arms auto-refit on the next resize', async () => {
+  // annex.json's content bounding box doesn't match its nominal canvas
+  // (see room-logic.test.mjs) — that's what makes this test able to tell
+  // a real re-fit (bbox-centered, via fitToScreen/fitPanFor) apart from
+  // the manual-zoom re-clamp path (nominal-canvas-clamped, via
+  // setView/clampPan): if re-arming the fit flag didn't work, resize would
+  // silently take the wrong path even though the transform "looks" set.
+  const { doc, window } = await mount(readRoom('annex'));
+  click(doc.getElementById('zoom-in'));
+  click(doc.getElementById('zoom-fit'));
+  const fitTransform = doc.getElementById('room').style.transform;
+
+  resize(window);
+  assert(doc.getElementById('room').style.transform === fitTransform,
+    'a resize right after clicking Fit should still be treated as "at fit" and reproduce the same true fit, not a stale re-clamp');
 });
 
 /* ── App-shell layout: floor plan and sidebar as distinct regions ── */

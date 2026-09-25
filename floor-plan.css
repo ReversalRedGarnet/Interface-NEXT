@@ -235,9 +235,12 @@
    in data/*.json stays valid) — only .room's transform (translate+scale)
    changes. Unlike the old fit-only mode, the viewport now needs its own
    fixed height: it's a clipped window you pan/zoom within, not a box that
-   grows to match the content's scaled size. */
+   grows to match the content's scaled size. (No `position: relative` here
+   — that was only ever needed to anchor the zoom-control strip when it
+   floated absolutely inside this element; now that the strip lives in the
+   sidebar's own View section, nothing inside .room-viewport depends on it
+   establishing a positioning context.) */
 .room-viewport {
-  position: relative;
   width: 100%;
   height: min(70vh, 640px);
   overflow: hidden;
