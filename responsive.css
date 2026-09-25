@@ -40,9 +40,14 @@
   .status-btn { min-height: 44px; }
 
   .workstation { flex-direction: column; }
-  .floor-pane { width: 100%; }
+  .floor-pane { width: 100%; padding-right: 0; }
   .room-viewport { height: 45vh; }
 
+  /* The desktop app-shell's left-border divider doesn't apply once the
+     inspector stops sitting beside the floor plan — it becomes a bottom
+     sheet instead, so the divider moves to its top edge, and the
+     shadow (already part of the base .floating-panel-style elevation)
+     does the rest of the "floating above the page" work. */
   .inspector-panel {
     position: fixed;
     left: 0;
@@ -51,7 +56,8 @@
     width: 100%;
     flex: none;
     max-height: 45vh;
-    overflow-y: auto;
+    border-left: none;
+    border-top: 1.5px solid var(--line);
     border-radius: var(--radius-panel) var(--radius-panel) 0 0;
     box-shadow: var(--shadow-elevated);
     z-index: 400;

@@ -6,6 +6,22 @@
  * value the rest of the system doesn't already use.
  */
 
+/* ── Elevated panels ──
+   Every transient panel that appears above the base layout — the expanded
+   Mark-as/Filter rows, the room-actions overflow menu, and (via
+   overlays.css's .popup, already on this token set) search results and
+   the shortcuts help — shares this exact treatment, so each one reads as
+   floating above the page rather than each inventing its own look.
+   --surface-raised is the one token in the system meant for this (see its
+   own comment in tokens.css); --shadow-elevated is likewise reserved for
+   floating content, never an ordinary docked panel. */
+.floating-panel {
+  background: var(--surface-raised);
+  border: 1.5px solid var(--line);
+  border-radius: var(--radius-panel);
+  box-shadow: var(--shadow-elevated);
+}
+
 /* ── Header stats + toolbar ── */
 .room-stats {
   font-family: var(--font-mono);
@@ -45,6 +61,7 @@
   align-items: center;
   gap: var(--space-1);
   flex-wrap: wrap;
+  padding: var(--space-2) var(--space-3);
 }
 
 .mode-group[hidden],
@@ -91,10 +108,6 @@
   flex-direction: column;
   gap: 2px;
   min-width: 200px;
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-control);
-  box-shadow: var(--shadow-elevated);
   padding: var(--space-1);
 }
 
@@ -170,26 +183,49 @@
   z-index: 15;
 }
 
-/* ── Workstation layout: floor plan + inspector side by side ── */
+/* ── App-shell: floor plan and inspector as two distinct regions, not one
+   flat horizontal flow. The header/toolbar bars above stay full-width —
+   this split is specifically the content area below them. `stretch`
+   (rather than the old `flex-start`) makes both regions share the taller
+   one's height, which is what lets the inspector scroll independently
+   instead of growing the whole page; the divider between them is the
+   inspector's own left border, not a gap, so it reads as one seam rather
+   than a gap plus a border. ── */
 .workstation {
   display: flex;
-  align-items: flex-start;
-  gap: var(--space-4);
+  align-items: stretch;
 }
 
 .floor-pane {
   position: relative;
   flex: 1;
   min-width: 0;
+  padding-right: var(--space-4);
 }
 
 .inspector-panel {
   width: 320px;
   flex: 0 0 320px;
-  background: var(--surface);
-  border: 1.5px solid var(--line);
-  border-radius: var(--radius-panel);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--surface-raised);
+  border-left: 1.5px solid var(--line);
   padding: var(--space-4);
+}
+
+.inspector-panel-label {
+  display: block;
+  margin: 0 0 var(--space-3);
+}
+
+/* The label stays put; everything below it scrolls on its own if the
+   inspector's own content (a long note, several asset-meta rows) is
+   taller than the panel — never the whole page. */
+.inspector-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .inspector-empty {
@@ -234,10 +270,16 @@
 
 .mono { font-family: var(--font-mono); }
 
-/* ── Floating zoom/pan control strip ── */
+/* ── Floating zoom/pan control strip ──
+   Anchored to the floor-plan viewport's OWN bottom-right corner (it's a
+   child of #room-viewport, not #floor-pane) — never the top edge, which
+   used to sit right on the seam with the inspector sidebar and read as
+   ambiguously belonging to neither region. It's a sibling of #room, not
+   inside it, so panning/zooming the floor plan never moves the controls
+   themselves. */
 .zoom-controls {
   position: absolute;
-  top: var(--space-2);
+  bottom: var(--space-2);
   right: var(--space-2);
   z-index: 50;
   display: flex;

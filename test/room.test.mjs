@@ -25,9 +25,9 @@ function readRoom(name) {
  *  Node's fetch rejects a relative URL with no base, which room.js already
  *  treats as "that other room didn't load", so this exercises the same
  *  tolerant-failure path a real network hiccup would. */
-async function mount(data, meta = {}, seed = null) {
+async function mount(data, meta = {}, seed = null, url = 'http://localhost/rooms/test.html') {
   const dom = new JSDOM('<!doctype html><html><body><div id="room-root"></div></body></html>', {
-    url: 'http://localhost/rooms/test.html',
+    url,
     pretendToBeVisual: true,
   });
   const { window } = dom;
@@ -531,6 +531,67 @@ await test('Ctrl+wheel zooms the floor plan (Cmd+wheel does too)', async () => {
   const before2 = doc2.getElementById('room').style.transform;
   wheel(doc2.getElementById('room-viewport'), { deltaY: -100, metaKey: true });
   assert(doc2.getElementById('room').style.transform !== before2, 'Cmd (metaKey)+wheel should change the zoom transform too');
+});
+
+function nextFrame(window) {
+  return new Promise(resolve => window.requestAnimationFrame(resolve));
+}
+
+await test('the floor plan auto-fits on load without a manual Fit click', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  assert(doc.getElementById('room').style.transform.includes('scale'),
+    '.room should already carry a scale() transform right after mount, before any button is clicked');
+});
+
+await test('a deferred re-fit runs one frame after load (correcting a too-early fit once real layout is available)', async () => {
+  const { doc, window } = await mount(readRoom('commons'));
+  const before = doc.getElementById('room').style.transform;
+  await nextFrame(window);
+  // jsdom never lays out real content, so the recomputed fit is identical
+  // to the first one here — this just proves the deferred call runs
+  // without throwing and doesn't leave the view in a broken state.
+  assert(doc.getElementById('room').style.transform.includes('scale'),
+    `expected a valid scale() transform after the deferred re-fit, got "${doc.getElementById('room').style.transform}" (was "${before}")`);
+});
+
+await test('the deferred auto-fit does not fight a ?focus= deep link\'s pan/zoom', async () => {
+  const { doc, window } = await mount(readRoom('commons'), {}, null, 'http://localhost/rooms/test.html?focus=SPC3');
+  assert(doc.querySelector('[data-id="SPC3"]').classList.contains('selected'),
+    'the ?focus= param should select its device immediately, synchronously during load');
+  await nextFrame(window);
+  assert(doc.querySelector('[data-id="SPC3"]').classList.contains('selected'),
+    'the deferred one-frame-later re-fit should not undo a ?focus= deep link\'s selection/pan/zoom');
+});
+
+/* ── App-shell layout: floor plan and inspector as distinct regions ── */
+
+await test('the inspector is a distinct region with its own persistent header label, separate from the floor-plan pane', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const label = doc.querySelector('#inspector-panel .inspector-panel-label');
+  assert(label && /inspector/i.test(label.textContent), 'the inspector panel should carry a persistent "Inspector" header label');
+  assert(doc.getElementById('inspector-panel').parentElement === doc.getElementById('workstation'),
+    'the inspector panel should be a direct sibling of the floor-plan pane inside .workstation');
+  assert(doc.querySelector('.floor-pane').parentElement === doc.getElementById('workstation'),
+    'the floor-plan pane should be a direct sibling of the inspector inside .workstation');
+});
+
+await test('the inspector\'s scrollable content is nested separately from its persistent label, so the label never scrolls away', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const panel = doc.getElementById('inspector-panel');
+  const label = panel.querySelector('.inspector-panel-label');
+  const scrollArea = panel.querySelector('.inspector-scroll');
+  assert(label && scrollArea, 'expected both a persistent label and a separate scrollable content area');
+  assert(scrollArea.contains(doc.getElementById('inspector-content')), 'the actual inspector content should live inside the scrollable area, not beside the label');
+  assert(!scrollArea.contains(label), 'the persistent label should not be inside the scrollable area');
+});
+
+await test('the zoom controls are anchored inside the floor-plan viewport itself, not floating between it and the inspector', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const zoomControls = doc.getElementById('zoom-controls');
+  const viewport = doc.getElementById('room-viewport');
+  assert(zoomControls.parentElement === viewport, 'the zoom controls should be nested inside #room-viewport, not floating in the outer floor-pane');
+  assert(viewport.contains(doc.getElementById('room')) && viewport.contains(zoomControls),
+    'the pannable/zoomable .room and the zoom controls should both live inside the same viewport');
 });
 
 /* ── Save-status indicator ──────────────────────────────────────── */

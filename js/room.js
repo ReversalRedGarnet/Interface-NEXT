@@ -268,7 +268,7 @@ export function initRoomPage(CFG) {
             <button type="button" class="toolbar-btn" id="btn-search">${ICON_SEARCH} Search <span class="kbd">/</span></button>
 
             <button type="button" class="toolbar-btn" id="btn-mode-toggle" aria-pressed="false">Inspection Mode</button>
-            <div class="mode-group" id="mode-group" role="group" aria-label="Inspection mode: mark status" hidden>
+            <div class="mode-group floating-panel" id="mode-group" role="group" aria-label="Inspection mode: mark status" hidden>
               <span class="quick-mark-label">Mark as</span>
               ${MODE_STATUSES.map(m => `
                 <button type="button" class="quick-btn" data-mode-status="${m.status}" aria-pressed="false">
@@ -282,7 +282,7 @@ export function initRoomPage(CFG) {
 
             <div class="overflow-wrap" id="overflow-wrap">
               <button type="button" class="toolbar-btn" id="btn-more" aria-haspopup="true" aria-expanded="false" aria-label="More room actions">⋯</button>
-              <div class="overflow-menu" id="overflow-menu" role="menu" aria-label="Room actions" hidden>
+              <div class="overflow-menu floating-panel" id="overflow-menu" role="menu" aria-label="Room actions" hidden>
                 <button type="button" class="overflow-item" id="btn-undo" role="menuitem" disabled>↶ Undo</button>
                 <button type="button" class="overflow-item" id="btn-export-room" role="menuitem">↓ Export This Room</button>
                 <button type="button" class="overflow-item" id="btn-export-all" role="menuitem">↓ Export All Rooms</button>
@@ -293,7 +293,7 @@ export function initRoomPage(CFG) {
             <button type="button" class="toolbar-btn" id="btn-help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">?</button>
           </div>
 
-          <div class="filter-row" id="filter-row" role="group" aria-label="Filter devices" hidden>
+          <div class="filter-row floating-panel" id="filter-row" role="group" aria-label="Filter devices" hidden>
             <span class="quick-mark-label">Filter</span>
             ${FILTERS.map(f => `
               <button type="button" class="filter-btn" data-filter="${f.key}" aria-pressed="${f.key === 'all'}">${f.label}</button>`).join('')}
@@ -305,19 +305,19 @@ export function initRoomPage(CFG) {
 
       <div class="workstation" id="workstation">
         <div class="floor-pane">
-          <div class="zoom-controls" id="zoom-controls">
-            <button type="button" class="toolbar-btn" id="zoom-out" aria-label="Zoom out">−</button>
-            <button type="button" class="toolbar-btn" id="zoom-fit" aria-label="Fit to screen">Fit</button>
-            <button type="button" class="toolbar-btn" id="zoom-100" aria-label="Actual size">100%</button>
-            <button type="button" class="toolbar-btn" id="zoom-in" aria-label="Zoom in">+</button>
-            <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">${ICON_FULLSCREEN}</button>
-            <span class="zoom-hint">${zoomModifierLabel()}+scroll to zoom</span>
-          </div>
-
           <div class="room-viewport" id="room-viewport">
             <div class="room" id="room" style="width:${W}px;height:${H}px">
               ${buildFloorPlanHTML(CFG)}
               ${buildDeviceHTML(CFG.devices)}
+            </div>
+
+            <div class="zoom-controls" id="zoom-controls">
+              <button type="button" class="toolbar-btn" id="zoom-out" aria-label="Zoom out">−</button>
+              <button type="button" class="toolbar-btn" id="zoom-fit" aria-label="Fit to screen">Fit</button>
+              <button type="button" class="toolbar-btn" id="zoom-100" aria-label="Actual size">100%</button>
+              <button type="button" class="toolbar-btn" id="zoom-in" aria-label="Zoom in">+</button>
+              <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">${ICON_FULLSCREEN}</button>
+              <span class="zoom-hint">${zoomModifierLabel()}+scroll to zoom</span>
             </div>
           </div>
 
@@ -334,17 +334,20 @@ export function initRoomPage(CFG) {
         </div>
 
         <aside class="inspector-panel" id="inspector-panel" aria-label="Device inspector">
-          <p class="inspector-empty" id="inspector-empty">Select a device to inspect it, or press <span class="kbd">→</span> for the next unchecked one.</p>
-          <div class="inspector-content" id="inspector-content" hidden>
-            <div class="inspector-head">
-              <h3 id="inspector-device-id"></h3>
-              <span class="save-status" id="save-status"></span>
+          <p class="quick-mark-label inspector-panel-label">Inspector</p>
+          <div class="inspector-scroll">
+            <p class="inspector-empty" id="inspector-empty">Select a device to inspect it, or press <span class="kbd">→</span> for the next unchecked one.</p>
+            <div class="inspector-content" id="inspector-content" hidden>
+              <div class="inspector-head">
+                <h3 id="inspector-device-id"></h3>
+                <span class="save-status" id="save-status"></span>
+              </div>
+              <div class="status-grid" id="inspector-status-grid"></div>
+              <div class="inspector-meta" id="inspector-meta"></div>
+              <label class="notes-label" for="inspector-notes">Notes (optional)</label>
+              <textarea id="inspector-notes" class="notes-input" rows="4" placeholder="Describe the issue…"></textarea>
+              <p class="last-updated" id="inspector-last-updated"></p>
             </div>
-            <div class="status-grid" id="inspector-status-grid"></div>
-            <div class="inspector-meta" id="inspector-meta"></div>
-            <label class="notes-label" for="inspector-notes">Notes (optional)</label>
-            <textarea id="inspector-notes" class="notes-input" rows="4" placeholder="Describe the issue…"></textarea>
-            <p class="last-updated" id="inspector-last-updated"></p>
           </div>
         </aside>
       </div>
@@ -1089,5 +1092,15 @@ export function initRoomPage(CFG) {
       url.searchParams.delete('focus');
       window.history.replaceState(null, '', url);
     }
+  } else if (typeof requestAnimationFrame === 'function') {
+    // The synchronous fitToScreen() above can run before the browser has
+    // actually laid out the DOM just injected — viewport.clientWidth may
+    // still read 0 at that exact point, which computeFitScale() silently
+    // treats as "no room, use scale 1" instead of a true fit. Re-running
+    // it one frame later, once layout has definitely settled, corrects
+    // that without disturbing anything the user's done since. Skipped
+    // entirely when a ?focus= param is about to pan/zoom to a specific
+    // device instead, so this never fights that.
+    requestAnimationFrame(() => fitToScreen());
   }
 }

@@ -168,6 +168,17 @@ no DOM at all.
 The room page's inspector panel is always on screen — never a popup — so
 inspecting a device never interrupts seeing the floor plan.
 
+On desktop, the room body is an app-shell: the floor plan (most of the
+width) and the inspector (a fixed 320px sidebar, its own `--surface-raised`
+background and left-border divider, a persistent "INSPECTOR" header label,
+and its own independent scroll) are two distinct regions, not one flat row —
+the header/breadcrumb and the toolbar stay full-width bars above the split.
+On mobile the inspector is a bottom sheet instead (unchanged). The floor
+plan auto-fits to the available space on load and on resize — no manual
+"Fit" click needed — and its zoom controls are anchored to the floor-plan
+viewport's own bottom-right corner, not floating ambiguously between it and
+the inspector.
+
 Every device carries two independent fields (see "Inspection state vs.
 condition" below): whether it's been looked at, and — only if it has —
 whether it's working. Everything below is built on that.
@@ -232,6 +243,13 @@ No emoji anywhere in the app — every icon is either a plain character
 already used elsewhere (←, →, ↓, ↶, ↺, ⋯, ✕) or a small flat outline SVG
 (`.icon` in controls.css), sized in `em` and colored via `currentColor` so
 it always matches its own button.
+
+Every transient panel that floats above the base layout — the Mark-as
+picker, the expanded filter row, the room-actions overflow menu, search
+results, the shortcuts help — shares one `.floating-panel` treatment
+(`--surface-raised` background, a `--line` border, `--shadow-elevated`) in
+workstation.css, so each one reads as floating rather than each inventing
+its own look.
 
 ## Inspection state vs. condition
 A device's status is two independent fields, not one:
