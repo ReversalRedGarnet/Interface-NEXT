@@ -271,15 +271,15 @@ await test('devices carrying notes are flagged on the map', async () => {
 await test('Inspection Mode\'s toggle button stays visible and switches to its pressed look while armed — it never disappears with no trace of how to get back to it', async () => {
   const { doc } = await mount(readRoom('commons'));
   const toggle = doc.getElementById('btn-mode-toggle');
-  const group = doc.getElementById('mode-group');
+  const sidebarMode = doc.getElementById('sidebar-mode');
   assert(!toggle.hidden, 'the toggle button should be visible when Inspection Mode is off');
   assert(toggle.getAttribute('aria-pressed') === 'false', 'the toggle should not read pressed when off');
-  assert(group.hidden, 'the Working/Minor/Major/N/A picker should not be visible when Inspection Mode is off');
+  assert(sidebarMode.hidden, 'the sidebar\'s Mark-as picker/banner should not be visible when Inspection Mode is off');
 
   click(toggle);
   assert(!toggle.hidden, 'the toggle button must stay visible once armed, not disappear');
   assert(toggle.getAttribute('aria-pressed') === 'true', 'the toggle should read pressed once Inspection Mode is armed');
-  assert(!group.hidden, 'the picker should appear once Inspection Mode is armed');
+  assert(!sidebarMode.hidden, 'the sidebar\'s Mark-as picker/banner should appear once Inspection Mode is armed');
   assert(doc.querySelector('#mode-group [data-mode-status="working"]').getAttribute('aria-pressed') === 'true',
     'clicking the toggle button should arm Working by default');
 });
@@ -291,22 +291,40 @@ await test('clicking the toggle button again while armed exits Inspection Mode, 
   assert(toggle.getAttribute('aria-pressed') === 'true', 'fixture assumption: mode should be armed after the first click');
   click(toggle);
   assert(toggle.getAttribute('aria-pressed') === 'false', 'clicking the toggle again should exit Inspection Mode');
-  assert(doc.getElementById('mode-group').hidden, 'the picker should collapse once exited via the toggle');
-  assert(doc.getElementById('mode-banner').hidden, 'the banner should hide once exited via the toggle');
+  assert(doc.getElementById('sidebar-mode').hidden, 'the sidebar\'s picker/banner should collapse once exited via the toggle');
+});
+
+await test('Inspection Mode\'s active UI (picker + banner) renders inside the inspector sidebar, replacing the normal inspector content while armed', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const panel = doc.getElementById('inspector-panel');
+  const sidebarMode = doc.getElementById('sidebar-mode');
+  const inspectorNormal = doc.getElementById('inspector-normal');
+  assert(panel.contains(sidebarMode), 'the Inspection Mode UI should live inside the inspector sidebar');
+  assert(panel.contains(doc.getElementById('mode-group')), 'the Mark-as picker should be inside the sidebar');
+  assert(panel.contains(doc.getElementById('mode-banner')), 'the mode banner should be inside the sidebar');
+  assert(!inspectorNormal.hidden, 'the normal inspector content should be showing before Inspection Mode is armed');
+
+  click(doc.getElementById('btn-mode-toggle'));
+  assert(!sidebarMode.hidden, 'the sidebar\'s Mode UI should be visible once armed');
+  assert(inspectorNormal.hidden, 'the normal inspector content should be hidden while Inspection Mode is armed');
+
+  click(doc.getElementById('btn-mode-toggle'));
+  assert(sidebarMode.hidden, 'the sidebar\'s Mode UI should hide again once exited');
+  assert(!inspectorNormal.hidden, 'the normal inspector content should return once Inspection Mode is off');
 });
 
 await test('the mode banner carries its own clickable Exit button (not just text mentioning Esc), so Inspection Mode can be entered and exited by mouse/touch alone', async () => {
   const { doc } = await mount(readRoom('commons'));
   click(doc.getElementById('btn-mode-toggle'));
+  const sidebarMode = doc.getElementById('sidebar-mode');
   const banner = doc.getElementById('mode-banner');
   const exitBtn = doc.getElementById('btn-mode-exit');
-  assert(!banner.hidden, 'fixture assumption: banner should be visible once armed');
+  assert(!sidebarMode.hidden, 'fixture assumption: the sidebar Mode UI should be visible once armed');
   assert(exitBtn, 'expected an Exit button inside the mode banner');
   assert(banner.contains(exitBtn), 'the Exit button should be part of the banner itself');
 
   click(exitBtn);
-  assert(banner.hidden, 'clicking Exit should hide the banner');
-  assert(doc.getElementById('mode-group').hidden, 'clicking Exit should collapse the picker');
+  assert(sidebarMode.hidden, 'clicking Exit should hide the sidebar Mode UI');
   assert(doc.querySelector('#mode-group [data-mode-status="working"]').getAttribute('aria-pressed') === 'false', 'clicking Exit should disarm the active status');
   assert(doc.getElementById('btn-mode-toggle').getAttribute('aria-pressed') === 'false', 'the toggle should read unpressed again after Exit');
 });
@@ -317,7 +335,7 @@ await test('Inspection Mode applies a status in one tap, with no inspector openi
   const arm = doc.querySelector('#mode-group [data-mode-status="working"]');
   assert(arm, 'no Inspection Mode control in the toolbar');
   assert(arm.getAttribute('aria-pressed') === 'true', 'Inspection Mode did not arm');
-  assert(!doc.getElementById('mode-banner').hidden, 'the mode banner should be visible while armed — the mode must be obvious, not just a pressed button');
+  assert(!doc.getElementById('sidebar-mode').hidden, 'the sidebar Mode UI should be visible while armed — the mode must be obvious, not just a pressed button');
 
   const pc = doc.querySelector('[data-id="PC11"]');
   click(pc);
@@ -327,9 +345,8 @@ await test('Inspection Mode applies a status in one tap, with no inspector openi
 
   click(arm);
   assert(arm.getAttribute('aria-pressed') === 'false', 'Inspection Mode did not disarm');
-  assert(doc.getElementById('mode-banner').hidden, 'the mode banner should hide once disarmed');
+  assert(doc.getElementById('sidebar-mode').hidden, 'the sidebar Mode UI should hide once disarmed');
   assert(!doc.getElementById('btn-mode-toggle').hidden, 'disarming should collapse the picker back to the toggle button');
-  assert(doc.getElementById('mode-group').hidden, 'the picker should hide again once disarmed');
   click(doc.querySelector('[data-id="PC12"]'));
   assert(!doc.getElementById('inspector-content').hidden, 'the inspector should open normally once Inspection Mode is off');
 });
@@ -349,7 +366,7 @@ await test('switching between statuses within an already-armed Inspection Mode d
   const { doc } = await mount(readRoom('commons'));
   click(doc.getElementById('btn-mode-toggle')); // arms "working"
   click(doc.querySelector('#mode-group [data-mode-status="minor"]'));
-  assert(!doc.getElementById('mode-group').hidden, 'switching to a different status should keep the picker open');
+  assert(!doc.getElementById('sidebar-mode').hidden, 'switching to a different status should keep the sidebar picker open');
   assert(doc.querySelector('#mode-group [data-mode-status="minor"]').getAttribute('aria-pressed') === 'true', 'minor should now be armed');
   assert(doc.querySelector('#mode-group [data-mode-status="working"]').getAttribute('aria-pressed') === 'false', 'working should no longer be armed');
 });

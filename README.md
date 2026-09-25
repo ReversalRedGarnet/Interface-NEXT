@@ -71,7 +71,9 @@ test/
   state.test.mjs      — the old-shape → inspectionState/condition migration,
                         run against representative old-shape sample data
   room-logic.test.mjs — room-logic.js's pure logic: inspection order,
-                        next-unchecked, stats, filter/search matching
+                        next-unchecked, stats, filter/search matching, and
+                        the fit-to-screen geometry (deviceFootprint,
+                        computeContentBounds, computeFitScale/FitPan)
   export.test.mjs — buildRoomRows roster-completeness (every device gets a
                     row, untouched ones export as "Not Checked") and
                     fetchRoomDevices' tolerant-failure behavior
@@ -229,10 +231,31 @@ background and left-border divider, a persistent "INSPECTOR" header label,
 and its own independent scroll) are two distinct regions, not one flat row —
 the header/breadcrumb and the toolbar stay full-width bars above the split.
 On mobile the inspector is a bottom sheet instead (unchanged). The floor
-plan auto-fits to the available space on load and on resize — no manual
-"Fit" click needed — and its zoom controls are anchored to the floor-plan
-viewport's own bottom-right corner, not floating ambiguously between it and
-the inspector.
+plan auto-fits to the available space on load, on resize, and via the
+floating strip's **Fit** button — no manual click needed on load — and its
+zoom controls are anchored to the floor-plan viewport's own bottom-right
+corner, not floating ambiguously between it and the inspector.
+
+**Fit is a true maximum contain-fit.** It's computed from the room's actual
+drawn extent — every wall/room/entrance/counter shape and every device's
+real chip footprint (`computeContentBounds` in `room-logic.js`) — not the
+room's nominal `canvasWidth`/`canvasHeight`, which is frequently larger than
+what's actually drawn (every real room but one has real margin between its
+canvas edges and its content). The scale is the largest that fits that true
+bounding box inside the floor-plan pane's *actual current* width **and**
+height (`computeFitScale`) — the original version only ever checked width,
+which is what let the zoom-control strip overlap real room content on some
+layouts; the fit view then centers that bounding box in the pane
+(`computeFitPan`), not the room's raw `(0,0)` canvas origin, with a small
+16px margin on every side rather than either butting against the edges or
+leaving a large, wasted gap.
+
+The inspector sidebar hosts three things, never blended together:
+1. **The device inspector** (below) — the default.
+2. **Inspection Mode's active UI** (below) — replaces #1 while armed.
+3. **A collapsible Legend + Stats section** — always present regardless of
+   which of the two above is showing, and separated from both by its own
+   labeled sub-section with a top divider.
 
 Every device carries two independent fields (see "Inspection state vs.
 condition" below): whether it's been looked at, and — only if it has —
@@ -253,21 +276,31 @@ next thing, check it, move on" loop, and everything administrative
   Unchecked (row-major: top-to-bottom, then left-to-right, derived from
   each device's own stored position), panning/zooming it into view and
   focusing its status control.
-- **Inspection Mode** collapses to a single toggle button when off. Clicking
-  it arms Working and reveals the Working/Minor/Major/N/A picker alongside
-  it, so one tap per device applies a status instead of opening the
-  inspector each time — the toggle button itself stays visible and switches
-  to its pressed look rather than disappearing, so there's always a
-  visible, clickable trace of how you got into the mode and how to leave it
-  from the toolbar. A banner makes the active mode impossible to miss, and
-  carries its own **Exit** button — not just text mentioning `Esc` — so the
-  mode can be entered and exited entirely by mouse or touch, with no
-  keyboard required. Clicking the toggle again, the active picker button
-  again, the banner's Exit button, or `Esc` all turn it off the same way.
-  `Undo` (in the room actions menu — see below) steps back through every
-  change, however it was made. Resetting a device back to Not Checked isn't
-  in this mode on purpose — that's a correction, not something you do while
-  sweeping the room, so it stays an inspector/`0`-key action.
+- **Inspection Mode**'s toggle button lives in the toolbar and stays there,
+  visible, when armed — switching to its pressed look rather than
+  disappearing, so there's always a visible, clickable trace of how you got
+  into the mode and how to leave it. Its *active* UI — the
+  Working/Minor/Major/N/A picker and a banner making the mode impossible to
+  miss — renders in the inspector sidebar instead, replacing the normal
+  device inspector while armed (clicking a device applies a status directly
+  and never opens the inspector during this mode, so there's nothing useful
+  for it to show anyway). The banner carries its own **Exit** button — not
+  just text mentioning `Esc` — so the mode can be entered and exited
+  entirely by mouse or touch, with no keyboard required. Clicking the
+  toggle again, the active picker button again, the banner's Exit button,
+  or `Esc` all turn it off the same way and hand the sidebar back to the
+  normal inspector. `Undo` (in the room actions menu — see below) steps
+  back through every change, however it was made. Resetting a device back
+  to Not Checked isn't in this mode on purpose — that's a correction, not
+  something you do while sweeping the room, so it stays an
+  inspector/`0`-key action.
+- **Legend + Stats** is a collapsible sub-section at the bottom of the
+  sidebar (expanded by default) — the status legend (dot + label for each
+  of the five statuses, plus "Has a note") and the header stats line ("X
+  devices · Y inspected · Z not applicable · N remaining · M issues") that
+  used to sit at the bottom of the page and in the room header,
+  respectively. Both read at body-text size (13–15px, `--text-body-lg`) now,
+  not the smaller metadata size they used to.
 - **Filters** collapse behind a **Filter** toggle button (its own label
   shows the active filter, e.g. "Filter: Working", even while collapsed, so
   an active filter is never silently forgotten). Expanding it reveals

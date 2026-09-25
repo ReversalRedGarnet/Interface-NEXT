@@ -112,3 +112,99 @@ export function buildSearchHaystack({ roomId, roomLabel, device, statusWord, not
     notes, statusWord,
   ].filter(Boolean).join(' ');
 }
+
+/* ── Fit-to-screen geometry ──────────────────────────────────────────
+ * A room's canvasWidth/canvasHeight is an authored canvas size, not
+ * necessarily what's actually drawn on it — every real room but one has
+ * real margin between its nominal canvas edges and its actual content
+ * (walls/devices), because the outline/devices were placed well inside the
+ * canvas when the room was scaffolded. Fitting to the raw canvas size
+ * wastes scale on that margin; fitting to the true content bounding box
+ * doesn't. room.js supplies the live viewport size (DOM-dependent); this
+ * file only does the pure geometry. */
+
+/** Rendered chip footprint (px), matching floor-plan.css's actual sizing
+ *  rules exactly: a long label (>5 chars) widens a chip to 64px, taking
+ *  priority over the staff bump to 52px if both would apply — the same
+ *  precedence `.pc.wide` has over `.pc.staff` in the CSS cascade there
+ *  (declared later, equal specificity). Height never changes for either
+ *  variant, only a printer's does. */
+export function deviceFootprint(device) {
+  if (device.type === 'printer') return { width: 88, height: 44 };
+  const label = device.label || device.id || '';
+  if (label.length > 5) return { width: 64, height: 42 };
+  if (device.type === 'staff') return { width: 52, height: 42 };
+  return { width: 42, height: 42 };
+}
+
+/**
+ * The true bounding box of everything actually drawn: every layout shape
+ * (outline/room/entrance/counter/wallrect rects, wall line segments) plus
+ * every device's real chip footprint. Room/entrance labels aren't measured
+ * separately — they're always centered within their own shape's rect
+ * (drawLayout in room.js), which is already included, so a reasonably
+ * sized label doesn't need its own bounds check. Doors are skipped too:
+ * a door's hinge/jamb points always sit on a wall/outline span that's
+ * already covered. Falls back to the room's nominal canvas size only when
+ * there's truly nothing to measure (no layout, no devices).
+ */
+export function computeContentBounds(layout, devices, fallbackWidth, fallbackHeight) {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const extend = (x, y) => {
+    if (x < minX) minX = x;
+    if (y < minY) minY = y;
+    if (x > maxX) maxX = x;
+    if (y > maxY) maxY = y;
+  };
+  (layout || []).forEach(o => {
+    if (o.type === 'outline' && Array.isArray(o.points)) {
+      o.points.forEach(p => extend(p[0], p[1]));
+      return;
+    }
+    if (o.x1 !== undefined && o.y1 !== undefined) {
+      extend(o.x1, o.y1);
+      extend(o.x2, o.y2);
+      return;
+    }
+    if (o.x !== undefined && o.y !== undefined) {
+      extend(o.x, o.y);
+      extend(o.x + (Number(o.width) || 0), o.y + (Number(o.height) || 0));
+    }
+  });
+  (devices || []).forEach(d => {
+    const { width, height } = deviceFootprint(d);
+    const left = Number(d.left) || 0, top = Number(d.top) || 0;
+    extend(left, top);
+    extend(left + width, top + height);
+  });
+  if (!Number.isFinite(minX)) return { minX: 0, minY: 0, maxX: fallbackWidth, maxY: fallbackHeight };
+  return { minX, minY, maxX, maxY };
+}
+
+/**
+ * The largest scale — never more than 1× (no auto-zooming past actual
+ * size) — at which `bounds` fits inside an `availableWidth`×
+ * `availableHeight` viewport, leaving `margin` px of breathing room on
+ * every side rather than butting the content against the pane's edges.
+ */
+export function computeFitScale(bounds, availableWidth, availableHeight, margin = 0) {
+  const boundsWidth = (bounds.maxX - bounds.minX) || 1;
+  const boundsHeight = (bounds.maxY - bounds.minY) || 1;
+  const w = Math.max(0, availableWidth - margin * 2);
+  const h = Math.max(0, availableHeight - margin * 2);
+  return Math.min(1, w / boundsWidth, h / boundsHeight);
+}
+
+/** The pan (translate) that centers `bounds` — not the room's raw (0,0)
+ *  origin — within an availableWidth×availableHeight viewport at `scale`.
+ *  Centering on the actual content means a room whose content doesn't
+ *  start at (0,0) (nearly every real room) still lands framed in the
+ *  middle of the pane, not shifted off to one side. */
+export function computeFitPan(bounds, availableWidth, availableHeight, scale) {
+  const boundsWidth = bounds.maxX - bounds.minX;
+  const boundsHeight = bounds.maxY - bounds.minY;
+  return {
+    x: (availableWidth - boundsWidth * scale) / 2 - bounds.minX * scale,
+    y: (availableHeight - boundsHeight * scale) / 2 - bounds.minY * scale,
+  };
+}

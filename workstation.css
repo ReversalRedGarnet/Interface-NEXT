@@ -22,12 +22,13 @@
   box-shadow: var(--shadow-elevated);
 }
 
-/* ── Header stats + toolbar ── */
+/* ── Sidebar legend + stats (moved out of the header/footer — see
+   .sidebar-legend further down) ── */
 .room-stats {
   font-family: var(--font-mono);
-  font-size: var(--text-meta);
+  font-size: var(--text-body-lg);
+  line-height: 1.5;
   color: var(--text-muted);
-  white-space: nowrap;
 }
 
 /* Two rows: the primary controls (core inspect-a-device loop) always
@@ -64,7 +65,9 @@
   padding: var(--space-2) var(--space-3);
 }
 
-.mode-group[hidden],
+/* Only .filter-row is ever independently hidden (toggled in the toolbar);
+   .mode-group's visibility is controlled by its parent #sidebar-mode in
+   the inspector sidebar instead — see .sidebar-mode below. */
 .filter-row[hidden] {
   display: none;
 }
@@ -152,17 +155,20 @@
 }
 
 /* ── Inspection Mode banner — the mode must be obvious, not just a
-   pressed button somewhere in a toolbar, and exiting it can't rely on a
+   pressed button somewhere in the toolbar, and exiting it can't rely on a
    sentence mentioning Esc: the banner carries its own clickable Exit
    button so the mode can be entered AND left entirely by mouse/touch,
    with no keyboard required. Esc still works exactly as before — the
-   button is additive, not a replacement. */
+   button is additive, not a replacement. Lives in the sidebar (see
+   .sidebar-mode below), which is narrower than the toolbar it used to sit
+   in, so it's allowed to wrap the Exit button onto its own line rather
+   than forcing everything onto one cramped row. */
 .mode-banner {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   justify-content: space-between;
-  gap: var(--space-3);
-  margin-top: var(--space-2);
+  gap: var(--space-2) var(--space-3);
   padding: var(--space-2) var(--space-3);
   border-radius: var(--radius-control);
   font-size: var(--text-body);
@@ -198,6 +204,16 @@
 .mode-banner-exit:hover {
   background: var(--surface-muted);
 }
+
+/* ── Inspection Mode's sidebar section — the picker + banner as a group,
+   replacing the normal inspector content (#inspector-normal) below it
+   while armed. See setMode() in room.js for the hidden/visible swap. */
+.sidebar-mode {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+.sidebar-mode[hidden] { display: none; }
 
 /* ── Filters fade non-matching devices; they never disappear — spatial
    context (what's near what) has to survive a filter. ── */
@@ -300,6 +316,28 @@
 }
 
 .mono { font-family: var(--font-mono); }
+
+/* ── Sidebar Legend + Stats — its own clearly separate, collapsible
+   sub-section within the inspector sidebar (never blended into the
+   Inspector/Inspection-Mode content above it), reusing the exact same
+   disclosure look .site-toggle already has elsewhere (navigation.css) so
+   it reads as an extension of the existing system, not a new one. Always
+   present regardless of which of #sidebar-mode/#inspector-normal is
+   showing above it. */
+.sidebar-legend {
+  margin-top: var(--space-4);
+  padding-top: var(--space-3);
+  border-top: var(--border-divider);
+}
+
+.legend-stats-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  margin-top: var(--space-3);
+}
+
+.legend-stats-body[hidden] { display: none; }
 
 /* ── Floating zoom/pan control strip ──
    Anchored to the floor-plan viewport's OWN bottom-right corner (it's a

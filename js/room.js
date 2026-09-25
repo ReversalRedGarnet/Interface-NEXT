@@ -15,6 +15,7 @@ import { exportRoom, exportAllRooms, ALL_ROOMS } from './export.js';
 import {
   orderDevicesForInspection, findNextUnchecked, computeStats,
   matchesFilter, matchesSearch, buildSearchHaystack,
+  computeContentBounds, computeFitScale as fitScaleFor, computeFitPan as fitPanFor,
 } from './room-logic.js';
 
 /**
@@ -84,6 +85,9 @@ const FILTERS = [
 const MIN_SCALE = 0.25;
 const MAX_SCALE = 3;
 const PAN_DRAG_THRESHOLD = 3;
+/** Small, consistent breathing room around a fit — not large empty
+ *  padding. Screen-space px, mirrors --space-4 (16px). */
+const FIT_MARGIN = 16;
 
 /** No emoji anywhere in this file — every icon is either a plain
  *  typographic character already used elsewhere in the app (←, →, ↓, ↶,
@@ -242,6 +246,11 @@ export function initRoomPage(CFG) {
 
   const deviceById = new Map(CFG.devices.map(d => [d.id, d]));
   const orderedDevices = orderDevicesForInspection(CFG.devices);
+  /** The room's true drawn extent (walls/devices/labels), not just its
+   *  nominal canvas size — see computeContentBounds in room-logic.js for
+   *  why the two frequently differ. Computed once: layout/devices are
+   *  fixed for the lifetime of this read-only page. */
+  const contentBounds = computeContentBounds(CFG.layout, CFG.devices, W, H);
 
   document.title = `${CFG.label} — Gridkeep`;
   document.getElementById('room-root').innerHTML = `
@@ -256,7 +265,6 @@ export function initRoomPage(CFG) {
               <p class="campus-crumb">${escapeHTML(CFG.campus)}</p>
             </div>
           </div>
-          <p class="room-stats" id="room-stats"></p>
         </div>
         <div class="sweep">
           <div class="sweep-bar"><span class="sweep-fill" id="sweep-fill" style="width:0%"></span></div>
@@ -268,13 +276,6 @@ export function initRoomPage(CFG) {
             <button type="button" class="toolbar-btn" id="btn-search">${ICON_SEARCH} Search <span class="kbd">/</span></button>
 
             <button type="button" class="toolbar-btn" id="btn-mode-toggle" aria-pressed="false">Inspection Mode</button>
-            <div class="mode-group floating-panel" id="mode-group" role="group" aria-label="Inspection mode: mark status" hidden>
-              <span class="quick-mark-label">Mark as</span>
-              ${MODE_STATUSES.map(m => `
-                <button type="button" class="quick-btn" data-mode-status="${m.status}" aria-pressed="false">
-                  <span class="status-dot ${m.status}"></span>${m.label}
-                </button>`).join('')}
-            </div>
 
             <button type="button" class="toolbar-btn" id="btn-filter-toggle" aria-expanded="false" aria-controls="filter-row">Filter</button>
 
@@ -299,11 +300,6 @@ export function initRoomPage(CFG) {
               <button type="button" class="filter-btn" data-filter="${f.key}" aria-pressed="${f.key === 'all'}">${f.label}</button>`).join('')}
           </div>
         </div>
-
-        <div class="mode-banner" id="mode-banner" hidden>
-          <span class="mode-banner-text" id="mode-banner-text"></span>
-          <button type="button" class="mode-banner-exit" id="btn-mode-exit" title="Exit Inspection Mode (Esc)">Exit</button>
-        </div>
       </header>
 
       <div class="workstation" id="workstation">
@@ -325,32 +321,62 @@ export function initRoomPage(CFG) {
           </div>
 
           <p class="visually-hidden" role="status" aria-live="polite" id="room-live"></p>
-
-          <div class="legend">
-            <div class="legend-item"><span class="dot working"></span>Working</div>
-            <div class="legend-item"><span class="dot minor"></span>Minor Issue</div>
-            <div class="legend-item"><span class="dot major"></span>Major Issue</div>
-            <div class="legend-item"><span class="dot unchecked"></span>Not Checked</div>
-            <div class="legend-item"><span class="dot not-applicable"></span>Not Applicable</div>
-            <div class="legend-item"><span class="dot has-notes"></span>Has a note</div>
-          </div>
         </div>
 
         <aside class="inspector-panel" id="inspector-panel" aria-label="Device inspector">
           <p class="quick-mark-label inspector-panel-label">Inspector</p>
           <div class="inspector-scroll">
-            <p class="inspector-empty" id="inspector-empty">Select a device to inspect it, or press <span class="kbd">→</span> for the next unchecked one.</p>
-            <div class="inspector-content" id="inspector-content" hidden>
-              <div class="inspector-head">
-                <h3 id="inspector-device-id"></h3>
-                <span class="save-status" id="save-status"></span>
+
+            <!-- Inspection Mode's active UI — replaces the normal inspector
+                 content below while armed; the toolbar's toggle button is
+                 still the entry point (see setMode()). -->
+            <div class="sidebar-mode" id="sidebar-mode" hidden>
+              <div class="mode-group floating-panel" id="mode-group" role="group" aria-label="Inspection mode: mark status">
+                <span class="quick-mark-label">Mark as</span>
+                ${MODE_STATUSES.map(m => `
+                  <button type="button" class="quick-btn" data-mode-status="${m.status}" aria-pressed="false">
+                    <span class="status-dot ${m.status}"></span>${m.label}
+                  </button>`).join('')}
               </div>
-              <div class="status-grid" id="inspector-status-grid"></div>
-              <div class="inspector-meta" id="inspector-meta"></div>
-              <label class="notes-label" for="inspector-notes">Notes (optional)</label>
-              <textarea id="inspector-notes" class="notes-input" rows="4" placeholder="Describe the issue…"></textarea>
-              <p class="last-updated" id="inspector-last-updated"></p>
+              <div class="mode-banner" id="mode-banner">
+                <span class="mode-banner-text" id="mode-banner-text"></span>
+                <button type="button" class="mode-banner-exit" id="btn-mode-exit" title="Exit Inspection Mode (Esc)">Exit</button>
+              </div>
             </div>
+
+            <div id="inspector-normal">
+              <p class="inspector-empty" id="inspector-empty">Select a device to inspect it, or press <span class="kbd">→</span> for the next unchecked one.</p>
+              <div class="inspector-content" id="inspector-content" hidden>
+                <div class="inspector-head">
+                  <h3 id="inspector-device-id"></h3>
+                  <span class="save-status" id="save-status"></span>
+                </div>
+                <div class="status-grid" id="inspector-status-grid"></div>
+                <div class="inspector-meta" id="inspector-meta"></div>
+                <label class="notes-label" for="inspector-notes">Notes (optional)</label>
+                <textarea id="inspector-notes" class="notes-input" rows="4" placeholder="Describe the issue…"></textarea>
+                <p class="last-updated" id="inspector-last-updated"></p>
+              </div>
+            </div>
+
+            <!-- Legend + stats — always available regardless of Inspector/
+                 Inspection-Mode state, kept as its own clearly separate,
+                 collapsible sub-section rather than blended into either. -->
+            <div class="sidebar-legend" id="sidebar-legend">
+              <button type="button" class="site-toggle sidebar-legend-toggle" id="btn-legend-toggle" aria-expanded="true" aria-controls="legend-stats-body"></button>
+              <div class="legend-stats-body" id="legend-stats-body">
+                <p class="room-stats" id="room-stats"></p>
+                <div class="legend">
+                  <div class="legend-item"><span class="dot working"></span>Working</div>
+                  <div class="legend-item"><span class="dot minor"></span>Minor Issue</div>
+                  <div class="legend-item"><span class="dot major"></span>Major Issue</div>
+                  <div class="legend-item"><span class="dot unchecked"></span>Not Checked</div>
+                  <div class="legend-item"><span class="dot not-applicable"></span>Not Applicable</div>
+                  <div class="legend-item"><span class="dot has-notes"></span>Has a note</div>
+                </div>
+              </div>
+            </div>
+
           </div>
         </aside>
       </div>
@@ -416,7 +442,10 @@ export function initRoomPage(CFG) {
   const modeBannerText = document.getElementById('mode-banner-text');
   const modeExitBtn = document.getElementById('btn-mode-exit');
   const modeToggleBtn = document.getElementById('btn-mode-toggle');
-  const modeGroup = document.getElementById('mode-group');
+  const sidebarMode = document.getElementById('sidebar-mode');
+  const inspectorNormal = document.getElementById('inspector-normal');
+  const legendToggleBtn = document.getElementById('btn-legend-toggle');
+  const legendStatsBody = document.getElementById('legend-stats-body');
   const filterToggleBtn = document.getElementById('btn-filter-toggle');
   const filterRow = document.getElementById('filter-row');
   const overflowWrap = document.getElementById('overflow-wrap');
@@ -626,14 +655,20 @@ export function initRoomPage(CFG) {
   }
 
   /* ── Inspection Mode (build on Quick Mark) ───────────────────────
-     Collapsed to a single toggle button when off; clicking it arms
-     Working (the common case) and reveals the Working/Minor/Major/N/A
-     picker alongside it — the toggle button itself stays visible and
-     switches to its pressed look (rather than disappearing), so there's
-     always a visible, clickable trace of how you got into the mode and
-     how to leave it from the toolbar itself. Clicking the already-active
-     picker button again, the banner's own Exit button, or Esc all turn it
-     off the same way and collapse the picker back down. */
+     Collapsed to a single toggle button in the toolbar when off; clicking
+     it arms Working (the common case) — the toggle button itself stays
+     visible and switches to its pressed look (rather than disappearing),
+     so there's always a visible, clickable trace of how you got into the
+     mode and how to leave it from the toolbar itself. Its active UI (the
+     Working/Minor/Major/N/A picker + the "marking X" banner and its own
+     Exit button) renders in the sidebar, replacing the normal device
+     inspector while armed — clicking a device applies a status directly
+     without ever selecting/opening the inspector (see the room click
+     handler below), so there's nothing useful for the normal inspector to
+     show during this mode anyway. Clicking the already-active picker
+     button again, the toggle again, the banner's own Exit button, or Esc
+     all turn it off the same way and hand the sidebar back to the normal
+     inspector. */
 
   function setMode(status) {
     activeModeStatus = status;
@@ -641,15 +676,24 @@ export function initRoomPage(CFG) {
     room.classList.toggle('quick-mode', !!status);
     if (status) room.dataset.quick = status; else delete room.dataset.quick;
     modeToggleBtn.setAttribute('aria-pressed', String(!!status));
-    modeGroup.hidden = !status;
+    sidebarMode.hidden = !status;
+    inspectorNormal.hidden = !!status;
     if (status) {
-      modeBanner.hidden = false;
       modeBanner.dataset.status = status;
       modeBannerText.textContent = `INSPECTION MODE — marking ${STATUS_WORDS[status]}. Click a device to apply.`;
-    } else {
-      modeBanner.hidden = true;
     }
     announce(status ? `Inspection mode on: ${STATUS_WORDS[status]}` : 'Inspection mode off');
+  }
+
+  /* ── Sidebar Legend + Stats — its own collapsible sub-section, always
+     available regardless of Inspector/Inspection-Mode state. Same
+     disclosure convention as menu.js's site-toggle ("Hide Rooms ▴" /
+     "View Rooms ▾"): the button's own label carries the open/closed
+     state, not just aria-expanded. */
+  function setLegendOpen(open) {
+    legendStatsBody.hidden = !open;
+    legendToggleBtn.setAttribute('aria-expanded', String(open));
+    legendToggleBtn.textContent = open ? 'Legend & Stats ▴' : 'Legend & Stats ▾';
   }
 
   /* ── Filters (fade, never hide — spatial context stays intact) ──
@@ -759,8 +803,8 @@ export function initRoomPage(CFG) {
   function clampScale(s) { return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)); }
 
   function computeFitScale() {
-    const available = viewport.clientWidth || W;
-    return Math.min(1, available / W);
+    const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
+    return fitScaleFor(contentBounds, vw, vh, FIT_MARGIN);
   }
 
   function clampPanAxis(pos, scaledSize, viewSize) {
@@ -801,7 +845,24 @@ export function initRoomPage(CFG) {
     zoomAt(vw / 2, vh / 2, view.scale * factor);
   }
 
-  function fitToScreen() { setView(computeFitScale(), 0, 0); }
+  /**
+   * True maximum contain-fit: centers the room's actual content bounding
+   * box (not its raw (0,0) canvas origin) in the viewport at the largest
+   * scale that fits. This deliberately bypasses setView()/clampPan() — that
+   * clamp is calibrated to the full nominal canvas size (W×H) for ordinary
+   * interactive pan/zoom, and would fight a deliberately off-(0,0) centered
+   * pan for a room whose content doesn't start at the canvas origin (true
+   * of every real room but one — see computeContentBounds).
+   */
+  function fitToScreen() {
+    const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
+    const scale = clampScale(computeFitScale());
+    const { x, y } = fitPanFor(contentBounds, vw, vh, scale);
+    view.scale = scale;
+    view.x = x;
+    view.y = y;
+    applyView();
+  }
   function actualSize() { setView(1, 0, 0); }
 
   /** Approximate chip center — good enough to center a device on screen;
@@ -968,6 +1029,8 @@ export function initRoomPage(CFG) {
   filterToggleBtn.addEventListener('click', () => setFilterOpen(!filterOpen));
   filterBtns.forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter)));
 
+  legendToggleBtn.addEventListener('click', () => setLegendOpen(legendStatsBody.hidden));
+
   function setOverflowOpen(open) {
     overflowMenu.hidden = !open;
     moreBtn.setAttribute('aria-expanded', String(open));
@@ -1091,6 +1154,7 @@ export function initRoomPage(CFG) {
   updateStatsUI();
   refreshUndo();
   renderInspector();
+  setLegendOpen(true);
   fitToScreen();
 
   const focusParam = new URLSearchParams(window.location.search).get('focus');
