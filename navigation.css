@@ -77,6 +77,23 @@
   color: var(--text-secondary);
 }
 
+/* A floor/room that isn't finalized yet — same shape as .room-link so it
+   still reads as "an entry in this list", just visibly non-interactive
+   (muted color, no hover, dashed border echoing .pc[data-status="not-
+   applicable"]'s "set aside" treatment elsewhere in the app). */
+.room-link-disabled {
+  color: var(--text-muted);
+  cursor: default;
+  border-style: dashed;
+}
+.room-link-disabled:hover {
+  border-color: var(--line);
+  background: var(--surface-muted);
+}
+.room-link-disabled .room-link-icon {
+  color: var(--text-muted);
+}
+
 /* the old flat site/room list, kept intact (room-scaffold.js's New Room
    flow patches this exact markup) but demoted to a collapsed fallback now
    that the campus view is the primary way in */

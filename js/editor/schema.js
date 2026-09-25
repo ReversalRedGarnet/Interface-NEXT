@@ -125,14 +125,38 @@ export function createDevice(devices, type, top = 0, left = 0) {
   return { id: nextDeviceId(devices, type), type, top, left };
 }
 
+/** Whether a room's layout (walls/doors/entrance/boundary — everything in
+ *  `layout[]`) is currently locked against editing. Devices/furniture
+ *  (`devices[]`) are never locked by this — see the ROOM_STATUSES comment
+ *  above for why this is a separate concept from device inspection. */
+export function isLayoutLocked(data) {
+  return normalizeRoomStatus(data?.status) === 'final';
+}
+
 export function snap(value, gridSize) {
   if (!gridSize) return value;
   return Math.round(value / gridSize) * gridSize;
 }
 
+/** "draft" | "final" — whether the room's LAYOUT (walls/doors/entrance/
+ *  boundary) is still editable. A separate concept from device
+ *  inspectionState/condition (state.js), which this never touches: a
+ *  device stays freely inspectable/editable regardless of this flag.
+ *  Anything other than the literal string "final" normalizes to "draft" —
+ *  the safe default, so a missing/malformed/unrecognized status can never
+ *  accidentally read as finalized and leak into the inspection-facing app
+ *  (see main.js/menu.js/campus.js/issues.js/room.js's own gating, all of
+ *  which treat "not literally final" as "not visible there"). */
+export const ROOM_STATUSES = ['draft', 'final'];
+
+export function normalizeRoomStatus(status) {
+  return status === 'final' ? 'final' : 'draft';
+}
+
 /** Fills in defaults for anything missing/malformed, tolerating a hand-edited file. */
 export function normalizeRoomData(data) {
   return {
+    status: normalizeRoomStatus(data?.status),
     canvasWidth: Number(data?.canvasWidth) || DEFAULT_CANVAS_WIDTH,
     canvasHeight: Number(data?.canvasHeight) || DEFAULT_CANVAS_HEIGHT,
     layout: Array.isArray(data?.layout) ? data.layout.map(s => ({ ...s })) : [],
@@ -140,12 +164,17 @@ export function normalizeRoomData(data) {
   };
 }
 
+/** A brand-new room always starts "draft", regardless of how it was
+ *  created (blank, or copied from an existing — possibly final — room's
+ *  layout via cloneRoomLayoutOnly below) — finalizing is a deliberate,
+ *  separate step in the editor, never inherited. */
 export function createBlankRoomData(canvasWidth = DEFAULT_CANVAS_WIDTH, canvasHeight = DEFAULT_CANVAS_HEIGHT) {
-  return { canvasWidth, canvasHeight, layout: [], devices: [] };
+  return { status: 'draft', canvasWidth, canvasHeight, layout: [], devices: [] };
 }
 
 export function cloneRoomData(data) {
   return {
+    status: normalizeRoomStatus(data.status),
     canvasWidth: data.canvasWidth,
     canvasHeight: data.canvasHeight,
     layout: data.layout.map(s => (Array.isArray(s.points) ? { ...s, points: s.points.map(p => [...p]) } : { ...s })),
@@ -159,9 +188,11 @@ export function cloneRoomData(data) {
  *  source, with devices cleared since a duplicate is meant to start
  *  unpopulated. canvasWidth/canvasHeight carry over too — layout
  *  coordinates are only meaningful against the canvas size they were
- *  placed on. */
+ *  placed on. status does NOT carry over — a duplicate is always a new
+ *  draft, even when copied from an already-final room, since its own
+ *  layout hasn't been reviewed yet. */
 export function cloneRoomLayoutOnly(data) {
-  return { ...cloneRoomData(data), devices: [] };
+  return { ...cloneRoomData(data), status: 'draft', devices: [] };
 }
 
 function orderedShape(shape) {
@@ -283,6 +314,7 @@ export function findAssetIdOwner(assetId, rooms, exclude) {
  *  the CRLF/LF the checkout applies via core.autocrlf). */
 export function serializeRoomData(data) {
   const ordered = {
+    status: normalizeRoomStatus(data.status),
     canvasWidth: data.canvasWidth,
     canvasHeight: data.canvasHeight,
     layout: data.layout.map(orderedShape),

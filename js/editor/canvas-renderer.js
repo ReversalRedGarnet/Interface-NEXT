@@ -125,6 +125,16 @@ function renderShape(shape, index, center) {
   }
 }
 
+/** Purely visual — tools.js is what actually blocks a locked shape's
+ *  placement/move/resize; this just gives that state a look (dimmed, a
+ *  not-allowed cursor — see .ed-locked in editor.css) before anyone tries
+ *  to drag it, rather than only finding out via the feedback that fires
+ *  once they do. */
+function markLocked(node) {
+  if (node) node.classList.add('ed-locked');
+  return node;
+}
+
 function renderDevice(device, index) {
   const { width, height } = deviceBoxSize(device);
   const g = el('g', {
@@ -154,7 +164,7 @@ function buildGridBackground(w, h, gridSize) {
  *  dozen devices, a dozen shapes), so a full rebuild per change is simpler
  *  than incremental patching and still cheap. */
 export function render(svg, data, opts = {}) {
-  const { selection = null, gridSize = 0, showGrid = true } = opts;
+  const { selection = null, gridSize = 0, showGrid = true, locked = false } = opts;
   const w = data.canvasWidth, h = data.canvasHeight;
 
   svg.setAttribute('viewBox', `0 0 ${w} ${h}`);
@@ -170,7 +180,7 @@ export function render(svg, data, opts = {}) {
   const layoutGroup = el('g', { class: 'ed-layout' });
   data.layout.forEach((shape, i) => {
     const node = renderShape(shape, i, center);
-    if (node) layoutGroup.appendChild(node);
+    if (node) layoutGroup.appendChild(locked ? markLocked(node) : node);
   });
   svg.appendChild(layoutGroup);
 

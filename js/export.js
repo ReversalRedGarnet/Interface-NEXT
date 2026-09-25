@@ -154,6 +154,41 @@ export async function fetchRoomDevices(room, dataUrlFor) {
 }
 
 /**
+ * A room's own "draft" | "final" status (see js/editor/schema.js's
+ * ROOM_STATUSES) — whether its LAYOUT is still editable, a separate
+ * concept from any device's inspectionState/condition. Every
+ * inspection-facing consumer of ALL_ROOMS (the menu listing, cross-room
+ * search, the Issues view, the campus nav, the all-rooms CSV export)
+ * needs to gate on this so a still-drafted room never leaks into a view
+ * meant for finished ones.
+ * Fails safe: a missing/unreadable/malformed data file, or any status
+ * other than the literal string "final", reads as "draft" — never as
+ * "final" by accident, since that's what would leak it.
+ */
+export async function fetchRoomStatus(room, dataUrlFor) {
+  try {
+    const stem = String(room.id).toLowerCase();
+    const url = (dataUrlFor || (s => `data/${s}.json`))(stem);
+    const res = await fetch(url);
+    if (!res.ok) return 'draft';
+    const data = await res.json();
+    return data?.status === 'final' ? 'final' : 'draft';
+  } catch {
+    return 'draft';
+  }
+}
+
+/** `rooms` narrowed to only those whose data file says "final" — the one
+ *  place every inspection-facing ALL_ROOMS consumer should filter through
+ *  before rendering/indexing/aggregating anything. Runs every room's
+ *  status fetch concurrently, same pattern fetchRoomDevices callers
+ *  already use for the roster itself. */
+export async function filterFinalRooms(rooms, dataUrlFor) {
+  const statuses = await Promise.all(rooms.map(room => fetchRoomStatus(room, dataUrlFor)));
+  return rooms.filter((room, i) => statuses[i] === 'final');
+}
+
+/**
  * Assembles the final file: header row, data rows, then a blank line and two
  * provenance rows at the *bottom*. Keeping them off the top means row 1 is
  * the real header, so Ctrl+T / auto-filter / sort all work on open.
@@ -224,9 +259,16 @@ export async function exportAllRooms(opts = {}) {
   const exporter = getExporterName();
   if (exporter === null) return;
 
+  // Draft rooms are excluded here for the same reason they're excluded from
+  // the menu/campus/search/Issues surfaces: an unreviewed layout shouldn't
+  // be silently vouched for in a report. exportRoom (a single room, from
+  // that room's own page) isn't filtered — the only page that calls it
+  // (room.js) already refuses to render at all for a draft room, so that
+  // path is unreachable for one today regardless.
   const state = loadState();
+  const rooms = await filterFinalRooms(ALL_ROOMS, opts.dataUrlFor);
   const rows = [];
-  for (const room of ALL_ROOMS) {
+  for (const room of rooms) {
     const devices = await fetchRoomDevices(room, opts.dataUrlFor);
     rows.push(...buildRoomRows(room, devices, state));
   }

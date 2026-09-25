@@ -39,8 +39,11 @@ const ISSUES_BODY = `
 
 /** `roomDevices` is `{ [stem]: devices[] }` (lowercase file stems, as fetched
  *  from data/{stem}.json); `stateEntries` uses the real, uppercase ROOM_META
- *  ids ALL_ROOMS/state.js actually key on (e.g. "COMMONS_PC1"). */
-async function mountIssues(roomDevices = {}, stateEntries = {}) {
+ *  ids ALL_ROOMS/state.js actually key on (e.g. "COMMONS_PC1"). `statusByStem`
+ *  (optional) is `{ [stem]: 'draft' | 'final' }` — any stem in `roomDevices`
+ *  not listed here defaults to 'final', so every existing call site (written
+ *  before draft/final existed) keeps behaving exactly as it did. */
+async function mountIssues(roomDevices = {}, stateEntries = {}, statusByStem = {}) {
   const dom = new JSDOM(`<!doctype html><html><body>${ISSUES_BODY}</body></html>`, {
     url: 'http://localhost/issues.html', virtualConsole: silentConsole,
   });
@@ -53,7 +56,7 @@ async function mountIssues(roomDevices = {}, stateEntries = {}) {
   global.fetch = async url => {
     const m = /data\/([a-z0-9-]+)\.json$/.exec(String(url));
     if (m && Object.prototype.hasOwnProperty.call(roomDevices, m[1])) {
-      return { ok: true, json: async () => ({ devices: roomDevices[m[1]] }) };
+      return { ok: true, json: async () => ({ devices: roomDevices[m[1]], status: statusByStem[m[1]] || 'final' }) };
     }
     return { ok: false, status: 404, statusText: 'Not Found' };
   };
@@ -144,6 +147,21 @@ await test('each issue entry carries exactly the room stem + device id its click
   assert(item, 'expected an issue entry to click');
   assertEqual(item.dataset.roomStem, 'b2-210', 'expected the real room file stem on the entry');
   assertEqual(item.dataset.deviceId, 'PC7', 'expected the device id on the entry');
+});
+
+await test('a draft (not-yet-finalized) room never contributes issues, even with real major/minor devices', async () => {
+  const { doc } = await mountIssues({
+    commons: [{ id: 'PC1' }],
+    annex: [{ id: 'PC2' }],
+  }, {
+    'COMMONS_PC1': { inspectionState: 'checked', condition: 'major', notes: '', updatedAt: null },
+    'ANNEX_PC2': { inspectionState: 'checked', condition: 'minor', notes: '', updatedAt: null },
+  }, { annex: 'draft' });
+
+  const root = doc.getElementById('issues-root');
+  assert(root.textContent.includes('PC1'), 'the final room\'s issue should still appear');
+  assert(!root.textContent.includes('PC2'), 'the draft room\'s issue should never appear');
+  assertEqual(doc.getElementById('issues-summary').textContent, '1 issue across 1 room — 1 major, 0 minor', 'summary should only count the final room');
 });
 
 await test('a room whose data file fails to fetch degrades to contributing no issues, rather than throwing', async () => {

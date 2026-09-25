@@ -8,7 +8,7 @@
  * into the room page, which room.js's own init already honors via its
  * shared focusDevice()) rather than reimplementing focus/pan/zoom here.
  */
-import { ALL_ROOMS, fetchRoomDevices } from './export.js';
+import { ALL_ROOMS, fetchRoomDevices, filterFinalRooms } from './export.js';
 import { loadState } from './state.js';
 import { roomFileStem } from './editor/room-scaffold.js';
 import { collectIssues, sortIssues, filterIssues, summarizeIssues } from './issues-logic.js';
@@ -75,13 +75,17 @@ export async function initIssuesPage() {
 
   root.innerHTML = '<p class="search-hint">Loading issues…</p>';
 
+  // Only finalized rooms are inspection-facing — a still-drafted room's
+  // layout isn't reviewed yet, so it never contributes issues here.
+  const finalRooms = await filterFinalRooms(ALL_ROOMS);
+
   const roomDevices = {};
-  await Promise.all(ALL_ROOMS.map(async room => {
+  await Promise.all(finalRooms.map(async room => {
     roomDevices[room.id] = await fetchRoomDevices(room);
   }));
 
   const state = loadState();
-  const allIssues = sortIssues(collectIssues(ALL_ROOMS, roomDevices, state));
+  const allIssues = sortIssues(collectIssues(finalRooms, roomDevices, state));
   let filter = 'all';
 
   function render() {

@@ -549,6 +549,37 @@ await test('search is a no-op query and other-room lookups failing does not brea
   assert(doc.querySelector('.search-result'), 'a device label should be searchable even though cross-room data failed to load');
 });
 
+await test('cross-room search never surfaces a draft (not-yet-finalized) room or its devices', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const realFetch = global.fetch;
+  global.fetch = async url => {
+    const m = /data\/([a-z0-9-]+)\.json$/.exec(String(url));
+    if (m === null) return realFetch(url);
+    if (m[1] === 'annex') {
+      return { ok: true, json: async () => ({ status: 'draft', devices: [{ id: 'DRAFTONLY', type: 'pc' }] }) };
+    }
+    if (m[1] === 'workshop') {
+      return { ok: true, json: async () => ({ status: 'final', devices: [{ id: 'FINALONLY', type: 'pc' }] }) };
+    }
+    return { ok: false, status: 404, statusText: 'Not Found' };
+  };
+  try {
+    click(doc.getElementById('btn-search'));
+    const searchInput = doc.getElementById('search-input');
+    searchInput.value = 'ONLY';
+    input(searchInput);
+    await new Promise(r => setTimeout(r, 0)); // let loadOtherRooms()'s fetches resolve
+    input(searchInput); // re-render results now that otherRoomsCache is populated
+
+    assert(doc.querySelector('.search-result-device')?.parentElement, 'expected at least one search result');
+    const resultText = doc.getElementById('search-results').textContent;
+    assert(resultText.includes('FINALONLY'), 'a finalized other-room device should be searchable');
+    assert(!resultText.includes('DRAFTONLY'), 'a draft other-room device must never be searchable');
+  } finally {
+    global.fetch = realFetch;
+  }
+});
+
 /* ── Zoom / pan controls (view-transform only — device data never changes) ── */
 
 await test('zoom controls run without throwing and only ever transform .room, never move device coordinates', async () => {
@@ -803,6 +834,43 @@ await test('arming Inspection Mode opens the sheet, so its picker/banner are nev
   assert(!doc.getElementById('inspector-panel').classList.contains('sheet-open'), 'fixture assumption: the sheet starts collapsed');
   click(doc.getElementById('btn-mode-toggle'));
   assert(doc.getElementById('inspector-panel').classList.contains('sheet-open'), 'arming Inspection Mode should open the sheet');
+});
+
+/* ── Draft (not-yet-finalized) rooms: visiting the URL directly ─────
+   A room's own status field (see js/editor/schema.js's ROOM_STATUSES) is
+   spread into CFG the same way every other data/*.json field already is
+   (see main.js) — initRoomPage() itself is the one gate every entry point
+   into a room page goes through, direct-URL visit included. */
+
+await test('a draft room renders a "not finalized" state instead of the normal workstation UI', async () => {
+  const data = { ...readRoom('commons'), status: 'draft' };
+  const { doc } = await mount(data);
+  assert(/isn.t finalized yet/i.test(doc.body.textContent), 'expected a clear "not finalized" message');
+  assert(!doc.getElementById('inspector-panel'), 'the normal workstation sidebar should not render for a draft room');
+  assert(!doc.querySelector('[data-id]'), 'no device should render for a draft room — nothing about it is inspection-facing yet');
+});
+
+await test('a draft room\'s "not finalized" state still offers a way back — Menu and the editor', async () => {
+  const data = { ...readRoom('commons'), status: 'draft' };
+  const { doc } = await mount(data);
+  const back = doc.querySelector('.back-btn');
+  assert(back && back.getAttribute('href') === '../index.html', 'expected a working ← Menu link');
+  const editorLink = [...doc.querySelectorAll('a')].find(a => /editor/i.test(a.getAttribute('href') || ''));
+  assert(editorLink, 'expected a link back to the editor');
+});
+
+await test('any status other than the literal string "final" gates the room — missing/unrecognized status is never treated as visible', async () => {
+  for (const status of [undefined, null, '', 'Final', 'published']) {
+    const data = { ...readRoom('commons'), status };
+    const { doc } = await mount(data);
+    assert(!doc.getElementById('inspector-panel'), `status ${JSON.stringify(status)} should still gate the room (fail safe, not fail open)`);
+  }
+});
+
+await test('a final room renders the normal workstation UI, not the "not finalized" state', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  assert(doc.getElementById('inspector-panel'), 'a final room should render its normal sidebar');
+  assert(!/isn.t finalized yet/i.test(doc.body.textContent), 'a final room should not show the not-finalized message');
 });
 
 /* ── Report ────────────────────────────────────────────────────── */

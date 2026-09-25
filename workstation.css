@@ -444,6 +444,29 @@
   padding: var(--space-2) 0;
 }
 
+/* ── Empty state (e.g. a not-yet-finalized room reached directly by URL
+   — see renderNotFinalized() in room.js) — a single centered card, reusing
+   .floating-panel for the same look every other elevated surface has. ── */
+.empty-state {
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+  max-width: 480px;
+}
+.empty-state-title {
+  font-size: var(--text-section-title);
+  font-weight: 600;
+  margin-bottom: var(--space-2);
+}
+.empty-state-body {
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  line-height: 1.6;
+  margin-bottom: var(--space-4);
+}
+.empty-state-action {
+  display: inline-flex;
+}
+
 /* ── Keyboard shortcuts help ── */
 .shortcut-list {
   display: flex;

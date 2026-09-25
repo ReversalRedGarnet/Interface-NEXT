@@ -9,7 +9,7 @@ import {
   DEVICE_TYPES, PLACEABLE_SHAPE_TYPES, LAYOUT_SHAPES, shapeDisplayName,
   normalizeRoomData, createBlankRoomData, cloneRoomLayoutOnly, serializeRoomData,
   normalizeAssetsData, serializeAssetsData, generateAssetId, registerAssetId,
-  findAssetIdOwner,
+  findAssetIdOwner, isLayoutLocked,
 } from './schema.js';
 import { render } from './canvas-renderer.js';
 import { createToolController } from './tools.js';
@@ -30,6 +30,11 @@ const editorBody = $('editor-body');
 const editorFooter = $('editor-footer');
 const roomPicker = $('room-picker');
 const newRoomBtn = $('btn-new-room');
+const roomStatusRow = $('room-status-row');
+const roomStatusBadge = $('room-status-badge');
+const markFinalBtn = $('btn-mark-final');
+const unlockLayoutBtn = $('btn-unlock-layout');
+const unlockOverlay = $('unlock-overlay');
 const toolsPanel = $('tools-panel');
 const deviceToolsEl = $('device-tools');
 const shapeToolsEl = $('shape-tools');
@@ -466,9 +471,72 @@ async function createNewRoom() {
 
 function renderAll() {
   if (!state.data) return;
-  render(svg, state.data, { selection: state.selection, gridSize: state.gridSize, showGrid: showGridInput.checked });
+  const locked = isLayoutLocked(state.data);
+  render(svg, state.data, { selection: state.selection, gridSize: state.gridSize, showGrid: showGridInput.checked, locked });
   renderProperties();
+  renderRoomStatus();
+  updatePaletteLockState(locked);
   updateDirtyUI();
+}
+
+/* ── Room status: draft/final badge + Mark as Final / Unlock Layout ──
+   "Final" locks the room's LAYOUT (layout[] — walls/doors/entrance/
+   boundary) against further edits; devices/furniture (devices[]) stay
+   freely editable either way — see schema.js's ROOM_STATUSES comment.
+   Unlocking requires an explicit confirmation (see unlockOverlay below)
+   since it re-opens something a checker may already be relying on staying
+   put; marking final doesn't, since it's the safe direction (it only ever
+   restricts, never loses data). */
+
+function renderRoomStatus() {
+  const has = !!state.data;
+  roomStatusRow.hidden = !has;
+  if (!has) return;
+  const locked = isLayoutLocked(state.data);
+  roomStatusBadge.textContent = locked ? 'Final' : 'Draft';
+  roomStatusBadge.className = `summary-pill ${locked ? 'working' : 'unchecked'}`;
+  markFinalBtn.hidden = locked;
+  unlockLayoutBtn.hidden = !locked;
+}
+
+function markAsFinal() {
+  if (!state.data || isLayoutLocked(state.data)) return;
+  state.data.status = 'final';
+  state.dirty = true;
+  setStatus('Marked Final — the layout (walls/doors/entrance/boundary) is now locked. Devices stay editable.');
+  renderAll();
+}
+
+function openUnlockConfirm() {
+  if (!state.data || !isLayoutLocked(state.data)) return;
+  unlockOverlay.classList.add('open');
+}
+function closeUnlockConfirm() {
+  unlockOverlay.classList.remove('open');
+}
+function confirmUnlock() {
+  state.data.status = 'draft';
+  state.dirty = true;
+  closeUnlockConfirm();
+  setStatus('Layout unlocked — walls, doors, entrance, and the room boundary are editable again.');
+  renderAll();
+}
+
+/* ── Locked-layout feedback (onLockedAttempt from tools.js) ──
+   Fires whenever placing/dragging/resizing a layout shape is blocked
+   because the room is final — never silent, per the spec. */
+function onLockedAttempt() {
+  setStatus('Layout is locked — Unlock Layout (in the Room panel) to edit walls, doors, the entrance, or the room boundary. Devices are still editable.', true);
+}
+
+/** Shape-placement tools only — device tools stay enabled regardless of
+ *  lock status, so disabling has to target shapeToolsEl specifically. */
+function updatePaletteLockState(locked) {
+  shapeToolsEl.querySelectorAll('.editor-tool-btn').forEach(btn => {
+    btn.disabled = locked;
+    btn.title = locked ? 'Layout is locked — Unlock Layout to place walls/shapes.' : '';
+  });
+  if (locked && state.tool?.type === 'add-shape') state.tool = { type: 'select' };
 }
 
 function updateDirtyUI() {
@@ -590,14 +658,25 @@ function assetIdField(device, index) {
   return wrap;
 }
 
+/** A locked shape's geometry as plain read-only text rows — same field()
+ *  layout the editable version uses, just no input to type into, so a
+ *  locked shape's properties panel still shows exactly what it always did,
+ *  it just can't be changed from here. */
+function readOnlyField(labelText, value) {
+  const p = document.createElement('p');
+  p.textContent = String(value);
+  return field(labelText, p);
+}
+
 function renderProperties() {
   const has = !!state.selection;
   propertiesPanel.hidden = !has;
-  deleteSelectedBtn.hidden = !has;
   propertiesFields.innerHTML = '';
-  if (!has) return;
+  if (!has) { deleteSelectedBtn.hidden = true; return; }
 
   const { kind, index } = state.selection;
+  const shapeLocked = kind === 'shape' && isLayoutLocked(state.data);
+  deleteSelectedBtn.hidden = shapeLocked;
 
   if (kind === 'device') {
     const device = state.data.devices[index];
@@ -622,6 +701,25 @@ function renderProperties() {
   typeLabel.className = 'editor-shape-type';
   typeLabel.textContent = shapeDisplayName(shape.type);
   propertiesFields.appendChild(typeLabel);
+
+  if (shapeLocked) {
+    const notice = document.createElement('p');
+    notice.className = 'editor-hint editor-locked-notice';
+    notice.textContent = 'Layout is locked — Unlock Layout (in the Room panel) to edit this.';
+    propertiesFields.appendChild(notice);
+    if (spec?.kind === 'rect') {
+      for (const f of ['x', 'y', 'width', 'height']) propertiesFields.appendChild(readOnlyField(f, shape[f]));
+    } else if (spec?.kind === 'line') {
+      for (const f of ['x1', 'y1', 'x2', 'y2']) propertiesFields.appendChild(readOnlyField(f, shape[f]));
+    } else if (spec?.kind === 'hinge') {
+      propertiesFields.appendChild(readOnlyField('hinge', shape.hinge.join(', ')));
+      propertiesFields.appendChild(readOnlyField('jamb', shape.jamb.join(', ')));
+    } else if (spec?.kind === 'polygon') {
+      propertiesFields.appendChild(readOnlyField('points', shape.points.map(p => p.join(',')).join(' / ')));
+    }
+    if (spec?.label) propertiesFields.appendChild(readOnlyField('label', shape.label || ''));
+    return;
+  }
 
   if (spec?.kind === 'rect') {
     for (const f of ['x', 'y', 'width', 'height']) {
@@ -661,8 +759,12 @@ function renderProperties() {
 function deleteSelected() {
   if (!state.selection) return;
   const { kind, index } = state.selection;
-  if (kind === 'device') state.data.devices.splice(index, 1);
-  else state.data.layout.splice(index, 1);
+  if (kind === 'device') {
+    state.data.devices.splice(index, 1);
+  } else {
+    if (isLayoutLocked(state.data)) { onLockedAttempt(); return; }
+    state.data.layout.splice(index, 1);
+  }
   state.selection = null;
   markDirtyRerender();
 }
@@ -715,7 +817,7 @@ function buildPalette() {
 createToolController(svg, () => state, patch => {
   Object.assign(state, patch);
   renderAll();
-});
+}, onLockedAttempt);
 
 connectBtn.addEventListener('click', connect);
 
@@ -735,6 +837,12 @@ newRoomOverlay.addEventListener('click', e => { if (e.target === newRoomOverlay)
 deleteSelectedBtn.addEventListener('click', deleteSelected);
 saveBtn.addEventListener('click', saveExistingRoom);
 
+markFinalBtn.addEventListener('click', markAsFinal);
+unlockLayoutBtn.addEventListener('click', openUnlockConfirm);
+$('unlock-confirm').addEventListener('click', confirmUnlock);
+$('unlock-cancel').addEventListener('click', closeUnlockConfirm);
+unlockOverlay.addEventListener('click', e => { if (e.target === unlockOverlay) closeUnlockConfirm(); });
+
 gridSizeInput.addEventListener('input', () => {
   state.gridSize = Number(gridSizeInput.value) || 0;
   renderAll();
@@ -744,6 +852,7 @@ showGridInput.addEventListener('change', renderAll);
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (newRoomOverlay.classList.contains('open')) { closeNewRoomDialog(); return; }
+    if (unlockOverlay.classList.contains('open')) { closeUnlockConfirm(); return; }
     state.tool = { type: 'select' };
     document.querySelectorAll('.editor-tool-btn.armed').forEach(b => b.classList.remove('armed'));
   }

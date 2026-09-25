@@ -234,7 +234,41 @@ function buildDeviceHTML(devices) {
   }).join('\n');
 }
 
+/**
+ * Shown instead of the normal workstation UI when a room's status (see
+ * js/editor/schema.js's ROOM_STATUSES) isn't "final" — reached either by
+ * navigating straight to a draft room's URL, or by a bookmark/link made
+ * before it was finalized. No device data is ever read/rendered here; the
+ * room simply isn't ready for inspection yet.
+ */
+function renderNotFinalized(CFG) {
+  document.title = `${CFG.label} — Gridkeep`;
+  document.getElementById('room-root').innerHTML = `
+    <div class="app">
+      <header>
+        <div class="header-inner">
+          <div class="header-title">
+            <a href="${escapeHTML(CFG.back)}" class="back-btn">← Menu</a>
+            <div>
+              <h1>${escapeHTML(CFG.label)}</h1>
+              <p class="campus-crumb">${escapeHTML(CFG.campus)}</p>
+            </div>
+          </div>
+        </div>
+      </header>
+
+      <div class="empty-state floating-panel">
+        <p class="empty-state-title">This room isn't finalized yet</p>
+        <p class="empty-state-body">Its layout is still being drafted in the editor. Once it's marked Final there, it'll appear here for inspection.</p>
+        <a class="btn-secondary empty-state-action" href="../editor.html">Open in Editor</a>
+      </div>
+    </div>
+  `;
+}
+
 export function initRoomPage(CFG) {
+  if (CFG.status !== 'final') { renderNotFinalized(CFG); return; }
+
   const roomId = CFG.id;
   const W = CFG.canvasWidth || 1200;
   const H = CFG.canvasHeight || 800;
@@ -967,6 +1001,10 @@ export function initRoomPage(CFG) {
         const res = await fetch(`../data/${stem}.json`);
         if (!res.ok) return null;
         const data = await res.json();
+        // Only finalized rooms are searchable from here — a still-drafted
+        // room's layout isn't reviewed yet, so cross-room search must never
+        // surface it (or its devices) to a checker.
+        if (data.status !== 'final') return null;
         return { id: r.id, label: r.label, stem, devices: Array.isArray(data.devices) ? data.devices : [] };
       } catch {
         return null;

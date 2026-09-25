@@ -23,7 +23,7 @@
  * helpers below (resizeRect, resizeRectOutline, shapeAnchor) are the
  * exception and are covered directly in editor.test.mjs.
  */
-import { LAYOUT_SHAPES, createDevice, createShape, snap } from './schema.js';
+import { LAYOUT_SHAPES, createDevice, createShape, snap, isLayoutLocked } from './schema.js';
 import { hitTest, clientToSvgPoint } from './canvas-renderer.js';
 
 /** Minimum drag distance (in SVG units, pre-snap) before a press-release is
@@ -198,15 +198,24 @@ function moveTargetTo(state, target, destPoint) {
  * editor state ({ data, tool, gridSize }) — mutations below write straight
  * into `state.data`. `onChange(patch)` is called after every meaningful
  * change (placement, drag step, selection, move) so the caller can merge
- * the patch and re-render.
+ * the patch and re-render. `onLockedAttempt()` — optional — is called
+ * whenever a layout-shape placement/move/resize is blocked because the
+ * room is "final" (see schema.js's isLayoutLocked); it's given no
+ * arguments and never affects `state.data` itself, purely a hook for the
+ * caller to surface feedback (editor.js flashes its status line). Devices
+ * are never subject to this — a room's device roster stays freely
+ * editable regardless of layout-lock status.
  */
-export function createToolController(svg, getState, onChange) {
+export function createToolController(svg, getState, onChange, onLockedAttempt) {
   let drag = null;   // in-progress press-drag-release gesture
   let pending = null; // { kind, index } armed by a plain click, awaiting its destination click
+
+  function flagLocked() { onLockedAttempt?.(); }
 
   function pointerDown(evt) {
     if (evt.button !== undefined && evt.button !== 0) return;
     const state = getState();
+    const locked = isLayoutLocked(state.data);
     const p = clientToSvgPoint(svg, evt.clientX, evt.clientY);
 
     if (state.tool?.type === 'add-device') {
@@ -220,6 +229,7 @@ export function createToolController(svg, getState, onChange) {
     }
 
     if (state.tool?.type === 'add-shape') {
+      if (locked) { flagLocked(); onChange({ tool: { type: 'select' } }); return; }
       const shape = createShape(state.tool.shapeType, snap(p.x, state.gridSize), snap(p.y, state.gridSize));
       state.data.layout.push(shape);
       onChange({ selection: { kind: 'shape', index: state.data.layout.length - 1 }, tool: { type: 'select' }, dirty: true });
@@ -229,6 +239,7 @@ export function createToolController(svg, getState, onChange) {
     // Click-then-click: this pointerdown is read as the destination, not a
     // new select/drag — the two modes never both act on the same click.
     if (pending) {
+      if (pending.kind === 'shape' && locked) { flagLocked(); pending = null; evt.preventDefault(); return; }
       moveTargetTo(state, pending, p);
       pending = null;
       onChange({ dirty: true });
@@ -246,9 +257,12 @@ export function createToolController(svg, getState, onChange) {
       const device = state.data.devices[hit.index];
       drag = { kind: 'device', index: hit.index, start: p, moved: false, orig: { top: device.top, left: device.left } };
     } else if (hit.kind === 'shape') {
-      drag = { kind: 'shape', index: hit.index, start: p, moved: false, orig: cloneShapeGeometry(state.data.layout[hit.index]) };
+      // Still selectable when locked (so its properties remain viewable) —
+      // just never armed to drag; see pointerMove's own locked guard for
+      // why `drag` is still set rather than left null (moved-detection).
+      drag = { kind: 'shape', index: hit.index, start: p, moved: false, orig: cloneShapeGeometry(state.data.layout[hit.index]), locked };
     } else if (hit.kind === 'shape-point') {
-      drag = { kind: 'shape-point', index: hit.index, point: hit.point, start: p, moved: false, orig: cloneShapeGeometry(state.data.layout[hit.index]) };
+      drag = { kind: 'shape-point', index: hit.index, point: hit.point, start: p, moved: false, orig: cloneShapeGeometry(state.data.layout[hit.index]), locked };
     }
 
     onChange({ selection: { kind: hit.kind === 'shape-point' ? 'shape' : hit.kind, index: hit.index } });
@@ -260,16 +274,23 @@ export function createToolController(svg, getState, onChange) {
     const state = getState();
     const p = clientToSvgPoint(svg, evt.clientX, evt.clientY);
     const dx = p.x - drag.start.x, dy = p.y - drag.start.y;
+    const wasMoved = drag.moved;
     if (Math.hypot(dx, dy) > CLICK_MOVE_THRESHOLD) drag.moved = true;
 
     if (drag.kind === 'device') {
       const device = state.data.devices[drag.index];
       device.left = snap(drag.orig.left + dx, state.gridSize);
       device.top = snap(drag.orig.top + dy, state.gridSize);
-    } else if (drag.kind === 'shape') {
-      translateShape(state.data.layout[drag.index], drag.orig, dx, dy, state.gridSize);
-    } else if (drag.kind === 'shape-point') {
-      movePoint(state.data.layout[drag.index], drag.point, drag.orig, dx, dy, state.gridSize);
+    } else if (drag.kind === 'shape' || drag.kind === 'shape-point') {
+      if (drag.locked) {
+        // The shape never actually moves — just tell the caller once per
+        // gesture (the moment it first crosses the click/drag threshold)
+        // rather than on every pointermove tick.
+        if (drag.moved && !wasMoved) flagLocked();
+        return;
+      }
+      if (drag.kind === 'shape') translateShape(state.data.layout[drag.index], drag.orig, dx, dy, state.gridSize);
+      else movePoint(state.data.layout[drag.index], drag.point, drag.orig, dx, dy, state.gridSize);
     } else {
       return;
     }

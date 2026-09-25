@@ -16,7 +16,7 @@
  */
 import { roomFileStem } from './editor/room-scaffold.js';
 import { normalizeCampusData, findBuilding, buildingDestination } from './campus-data.js';
-import { ALL_ROOMS, fetchRoomDevices } from './export.js';
+import { ALL_ROOMS, fetchRoomDevices, fetchRoomStatus } from './export.js';
 import { loadState } from './state.js';
 import { buildingStats, buildingStatusKey } from './issues-logic.js';
 
@@ -92,15 +92,55 @@ export async function initCampusPage() {
   const pickerBody = document.getElementById('floor-picker-body');
   const pickerList = document.getElementById('floor-picker-list');
 
+const ROOM_LINK_ICON = '<svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="14" height="9" rx="1"/><line x1="5.5" y1="14" x2="10.5" y2="14" stroke-linecap="round"/><line x1="8" y1="11" x2="8" y2="14" stroke-linecap="round"/></svg>';
+
+  let campusData = null;
+  const statsCache = new Map(); // buildingId -> stats from issues-logic.js's buildingStats()
+  // roomId (canonical, e.g. "COMMONS") -> "draft" | "final", filled in by
+  // populateBuildingStats() alongside stats, from the same per-floor fetch
+  // — see its own comment for why this makes both reads below reliable by
+  // the time a user could plausibly click anything.
+  const statusCache = new Map();
+
+  /** A floor is only navigable once its status is known AND final —
+   *  defaults to "not yet known" (never navigable) rather than assuming
+   *  final, so a floor whose fetch hasn't resolved yet reads the same as
+   *  one that's genuinely still draft, not as a broken/silent link. */
+  function floorIsFinal(roomId) {
+    return statusCache.get(canonicalRoomId(roomId)) === 'final';
+  }
+
   function openFloorPicker(building) {
     pickerTitle.textContent = building.label;
     pickerBody.textContent = `${building.floors.length} floors — pick one to check its devices.`;
-    pickerList.innerHTML = building.floors.map(f => `
-      <a class="room-link" href="${roomHref(f.roomId)}">
-        <span class="room-link-icon" aria-hidden="true"><svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="1" y="2" width="14" height="9" rx="1"/><line x1="5.5" y1="14" x2="10.5" y2="14" stroke-linecap="round"/><line x1="8" y1="11" x2="8" y2="14" stroke-linecap="round"/></svg></span>${escapeHTML(f.label)}
-      </a>`).join('');
+    pickerList.innerHTML = building.floors.map(f => {
+      if (floorIsFinal(f.roomId)) {
+        return `<a class="room-link" href="${roomHref(f.roomId)}">
+          <span class="room-link-icon" aria-hidden="true">${ROOM_LINK_ICON}</span>${escapeHTML(f.label)}
+        </a>`;
+      }
+      return `<span class="room-link room-link-disabled" aria-disabled="true">
+        <span class="room-link-icon" aria-hidden="true">${ROOM_LINK_ICON}</span>${escapeHTML(f.label)} — <em>Not yet finalized</em>
+      </span>`;
+    }).join('');
     overlay.classList.add('open');
   }
+
+  /** Reuses the same overlay/popup a floor-picker uses — for a single-floor
+   *  building whose one floor turns out to still be draft, so clicking it
+   *  gives a clear, on-brand message instead of silently navigating into
+   *  room.js's own not-finalized gate (still there as a backstop — see
+   *  room.js's renderNotFinalized — but bouncing through a full page load
+   *  just to show the same message is worse UX than saying so right here). */
+  function openNotFinalizedNotice(building, floor) {
+    pickerTitle.textContent = building.label;
+    pickerBody.textContent = `${floor.label} isn't finalized yet — its layout is still being drafted in the editor.`;
+    pickerList.innerHTML = `<a class="room-link" href="editor.html">
+      <span class="room-link-icon" aria-hidden="true">${ROOM_LINK_ICON}</span>Open in Editor
+    </a>`;
+    overlay.classList.add('open');
+  }
+
   function closeFloorPicker() {
     overlay.classList.remove('open');
   }
@@ -109,14 +149,15 @@ export async function initCampusPage() {
   overlay.addEventListener('click', e => { if (e.target === overlay) closeFloorPicker(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFloorPicker(); });
 
-  let campusData = null;
-  const statsCache = new Map(); // buildingId -> stats from issues-logic.js's buildingStats()
-
   function activate(buildingId) {
     const building = findBuilding(campusData, buildingId);
     const dest = buildingDestination(building);
-    if (dest.kind === 'room') window.location.href = roomHref(dest.roomId);
-    else if (dest.kind === 'floor-picker') openFloorPicker(building);
+    if (dest.kind === 'room') {
+      if (floorIsFinal(dest.roomId)) window.location.href = roomHref(dest.roomId);
+      else openNotFinalizedNotice(building, building.floors[0]);
+    } else if (dest.kind === 'floor-picker') {
+      openFloorPicker(building);
+    }
   }
 
   canvasWrap.addEventListener('click', e => {
@@ -185,15 +226,30 @@ export async function initCampusPage() {
       .find(el => el.dataset.buildingId === buildingId);
   }
 
+  /**
+   * Fetches every floor's status alongside its device roster and caches
+   * both — this is the one place either is read from disk, so it's also
+   * where statusCache gets filled in for floorIsFinal()/openFloorPicker()
+   * above to read synchronously later. Only final floors count toward the
+   * building's aggregate stats/status marker: a still-drafted floor isn't
+   * inspection-facing yet, so its devices (real or not) must never shift a
+   * building's has-issues/complete/in-progress read one way or the other.
+   */
   async function populateBuildingStats(data) {
     const state = loadState();
     await Promise.all(data.buildings.map(async building => {
       const floors = building.floors.map(f => ({ ...f, roomId: canonicalRoomId(f.roomId) }));
       const roomDevices = {};
       await Promise.all(floors.map(async floor => {
-        roomDevices[floor.roomId] = await fetchRoomDevices({ id: floor.roomId });
+        const [devices, status] = await Promise.all([
+          fetchRoomDevices({ id: floor.roomId }),
+          fetchRoomStatus({ id: floor.roomId }),
+        ]);
+        roomDevices[floor.roomId] = devices;
+        statusCache.set(floor.roomId, status);
       }));
-      const stats = buildingStats(floors, roomDevices, state);
+      const finalFloors = floors.filter(f => statusCache.get(f.roomId) === 'final');
+      const stats = buildingStats(finalFloors, roomDevices, state);
       statsCache.set(building.id, stats);
 
       const el = findBuildingEl(building.id);

@@ -35,9 +35,12 @@ silentConsole.on('jsdomError', () => {});
  *  `{ [roomId]: devices[] }`, served as `data/{stem}.json` for campus.js's own
  *  lazy per-building stats fetch — any room not listed resolves to an empty
  *  roster (fetchRoomDevices() already tolerates that), same as a room whose
- *  data file 404s in production. localStorage backs state.js's loadState()
- *  exactly as a real browser would. */
-async function mountCampus(campusJson, roomDevices = {}, stateEntries = {}) {
+ *  data file 404s in production. `statusByStem` (optional) is
+ *  `{ [stem]: 'draft' | 'final' }` — any stem in `roomDevices` not listed
+ *  here defaults to 'final', so every call site written before draft/final
+ *  existed keeps behaving exactly as it did. localStorage backs state.js's
+ *  loadState() exactly as a real browser would. */
+async function mountCampus(campusJson, roomDevices = {}, stateEntries = {}, statusByStem = {}) {
   const dom = new JSDOM('<!doctype html><html><body><div id="campus-root"></div></body></html>', {
     url: 'http://localhost/index.html', virtualConsole: silentConsole,
   });
@@ -51,8 +54,16 @@ async function mountCampus(campusJson, roomDevices = {}, stateEntries = {}) {
     const s = String(url);
     if (s.includes('campus.json')) return { ok: true, json: async () => campusJson };
     const m = /data\/([a-z0-9-]+)\.json$/.exec(s);
-    if (m && Object.prototype.hasOwnProperty.call(roomDevices, m[1])) {
-      return { ok: true, json: async () => ({ devices: roomDevices[m[1]] }) };
+    if (m) {
+      // A stem not listed in roomDevices at all still resolves successfully
+      // (empty roster, status final) — same "don't care about this room for
+      // this test" shorthand tests already relied on before draft/final
+      // existed. A genuine fetch failure is simulated by overriding
+      // global.fetch directly (see the dedicated failure test below), not
+      // through this helper.
+      const devices = roomDevices[m[1]] || [];
+      const status = statusByStem[m[1]] || 'final';
+      return { ok: true, json: async () => ({ devices, status }) };
     }
     return { ok: false, status: 404, statusText: 'Not Found' };
   };
@@ -185,6 +196,55 @@ await test('the floor picker\'s close button and Escape both close it', async ()
   click(doc.querySelector('.campus-building[data-building-id="multi"] rect'));
   key(doc, 'Escape');
   assert(!overlay.classList.contains('open'), 'Escape should close the floor picker');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   Draft (not-yet-finalized) rooms in campus nav — a floor whose room is
+   still draft must never silently navigate or error; it shows a clear
+   "not yet finalized" state instead.
+   ══════════════════════════════════════════════════════════════════ */
+
+await test('clicking a single-floor building whose room is still draft shows a "not yet finalized" notice instead of navigating', async () => {
+  const { doc } = await mountCampus(SAMPLE, { commons: [{ id: 'PC1' }] }, {}, { commons: 'draft' });
+  click(doc.querySelector('.campus-building[data-building-id="single"] rect'));
+
+  const overlay = doc.getElementById('floor-picker-overlay');
+  assert(overlay.classList.contains('open'), 'expected a notice to open rather than silently doing nothing');
+  assert(/finalized/i.test(doc.getElementById('floor-picker-body').textContent), 'expected a clear not-yet-finalized message');
+  const links = [...doc.querySelectorAll('#floor-picker-list a')];
+  assert(!links.some(a => a.getAttribute('href') === 'rooms/commons.html'), 'should not offer a link straight into the draft room');
+});
+
+await test('a final single-floor building still navigates directly once its status is confirmed final', async () => {
+  const { doc } = await mountCampus(SAMPLE, { commons: [{ id: 'PC1' }] }, {}, { commons: 'final' });
+  click(doc.querySelector('.campus-building[data-building-id="single"] rect'));
+  assert(!doc.getElementById('floor-picker-overlay').classList.contains('open'), 'a final single-floor building should navigate directly, not show a notice');
+});
+
+await test('a multi-floor picker lists a draft floor as non-clickable "Not yet finalized", alongside a normal link for the final one', async () => {
+  const { doc } = await mountCampus(SAMPLE, {
+    'b2-210': [{ id: 'PC1' }], 'b2-204': [{ id: 'PC2' }],
+  }, {}, { 'b2-210': 'final', 'b2-204': 'draft' });
+  click(doc.querySelector('.campus-building[data-building-id="multi"] rect'));
+
+  const list = doc.getElementById('floor-picker-list');
+  const links = [...list.querySelectorAll('a.room-link')];
+  assertEqual(links.map(a => a.getAttribute('href')).join(','), 'rooms/b2-210.html', 'only the final floor should be a real link');
+  assert(list.querySelector('.room-link-disabled'), 'the draft floor should render as a disabled entry');
+  assert(/not yet finalized/i.test(list.textContent), 'the draft floor\'s entry should say so');
+});
+
+await test('a draft floor never contributes to its building\'s aggregate stats or status marker', async () => {
+  const { doc } = await mountCampus(SAMPLE, {
+    'b2-210': [{ id: 'PC1' }],
+    'b2-204': [{ id: 'PC2' }],
+  }, {
+    // If the draft floor's device leaked into the aggregate, this major
+    // would flip the building to has-issues.
+    'B2-204_PC2': { inspectionState: 'checked', condition: 'major', notes: '', updatedAt: null },
+  }, { 'b2-210': 'final', 'b2-204': 'draft' });
+
+  assertEqual(marker(doc, 'multi').dataset.state, 'not-inspected', 'the draft floor\'s major device should never count toward the building\'s status marker');
 });
 
 await test('a fetch failure shows an inline error instead of throwing or leaving a blank canvas', async () => {

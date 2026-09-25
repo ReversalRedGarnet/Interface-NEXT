@@ -52,6 +52,12 @@
             </select>
           </label>
           <button class="toolbar-btn" id="btn-new-room">＋ New Room…</button>
+
+          <div class="editor-room-status" id="room-status-row" hidden>
+            <span class="summary-pill" id="room-status-badge"></span>
+            <button class="toolbar-btn" id="btn-mark-final" hidden>Mark as Final</button>
+            <button class="toolbar-btn" id="btn-unlock-layout" hidden>Unlock Layout</button>
+          </div>
         </section>
 
         <section class="editor-panel" id="tools-panel" hidden>
@@ -141,6 +147,18 @@
       <div class="popup-actions">
         <button class="btn-primary" id="new-room-create">Create</button>
         <button class="btn-secondary" id="new-room-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Unlock Layout confirmation -->
+  <div class="overlay" id="unlock-overlay" role="dialog" aria-modal="true" aria-labelledby="unlock-title">
+    <div class="popup popup-sm">
+      <h3 class="popup-title" id="unlock-title">Unlock this room's layout?</h3>
+      <p class="popup-body">This will re-allow editing walls, doors, the entrance, and the room boundary. Continue?</p>
+      <div class="popup-actions">
+        <button class="btn-danger"    id="unlock-confirm">Yes, Unlock</button>
+        <button class="btn-secondary" id="unlock-cancel">Cancel</button>
       </div>
     </div>
   </div>

@@ -8,11 +8,20 @@
  */
 import fs from 'node:fs';
 import path from 'node:path';
+import { JSDOM, VirtualConsole } from 'jsdom';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const results = [];
 
-const { buildRoomRows, fetchRoomDevices, ALL_ROOMS } = await import('../js/export.js');
+const { buildRoomRows, fetchRoomDevices, exportAllRooms, ALL_ROOMS } = await import('../js/export.js');
+
+// exportAllRooms's download() clicks a real <a href="blob:mock">, which jsdom
+// can't actually navigate to and logs a "Not implemented" jsdomError for —
+// expected here (we only care about the CSV text captured off the Blob, not
+// an actual page load), so a virtual console swallows just that noise. Same
+// pattern as campus.test.mjs/issues.test.mjs's own silentConsole.
+const silentConsole = new VirtualConsole();
+silentConsole.on('jsdomError', () => {});
 
 function readJson(rel) {
   return JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf8'));
@@ -123,6 +132,48 @@ await test('fetchRoomDevices also tolerates a non-ok response', async () => {
 
 await test('ALL_ROOMS still lists every room export.js knows about (unchanged by this pass)', async () => {
   assert(ALL_ROOMS.length >= 5, 'expected at least the 5 real rooms in ALL_ROOMS');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   exportAllRooms — draft rooms must not leak into the all-rooms report
+   ══════════════════════════════════════════════════════════════════ */
+
+await test('exportAllRooms excludes a draft room\'s devices from the CSV, and keeps a final room\'s', async () => {
+  const dom = new JSDOM('<!doctype html><html><body></body></html>', {
+    url: 'http://localhost/', virtualConsole: silentConsole,
+  });
+  global.window = dom.window;
+  global.document = dom.window.document;
+  global.window.prompt = () => 'Tester';
+
+  let capturedBlob = null;
+  global.URL.createObjectURL = blob => { capturedBlob = blob; return 'blob:mock'; };
+  global.URL.revokeObjectURL = () => {};
+
+  // One entry per real ALL_ROOMS id — B2-210 is a draft with a distinctive
+  // device id that must not survive into the report; every other room is
+  // final and should appear normally.
+  const dataByStem = {
+    commons:   { status: 'final', devices: [{ id: 'FINALDEV' }] },
+    'b2-210':  { status: 'draft', devices: [{ id: 'DRAFTDEV' }] },
+    'b2-204':  { status: 'final', devices: [] },
+    annex:     { status: 'final', devices: [] },
+    workshop:  { status: 'final', devices: [] },
+  };
+  global.fetch = async url => {
+    const m = /data\/([a-z0-9-]+)\.json$/.exec(String(url));
+    const entry = m && dataByStem[m[1]];
+    if (!entry) return { ok: false, status: 404 };
+    return { ok: true, json: async () => entry };
+  };
+
+  await exportAllRooms({ dataUrlFor: stem => `data/${stem}.json` });
+
+  assert(capturedBlob, 'expected exportAllRooms to build and download a CSV blob');
+  const text = await capturedBlob.text();
+  assert(text.includes('FINALDEV'), 'a final room\'s device should appear in the all-rooms export');
+  assert(!text.includes('DRAFTDEV'), 'a draft room\'s device should not appear in the all-rooms export');
+  assert(!text.includes('B2-210'), 'a draft room\'s own row/label should not appear at all, not just its device');
 });
 
 /* ── Report ────────────────────────────────────────────────────── */

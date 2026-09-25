@@ -40,13 +40,21 @@ body.editor-page {
   color: var(--text-muted);
 }
 
-/* ── Body: sidebar + canvas ── */
+/* ── Body: sidebar + canvas ──
+   [hidden] needs an explicit override here — a same-specificity author
+   rule declaring `display` (this one) beats the UA stylesheet's own
+   `[hidden] { display: none }` on a cascade tie, so without this the
+   editor body/footer show up before a project folder is even connected.
+   Same recurring pattern flagged and fixed repeatedly elsewhere in this
+   app (room.js's sidebar sections, menu.js's site-toggle target) — this
+   is one more instance of it, on editor.html specifically. */
 .editor-body {
   display: flex;
   gap: var(--space-4);
   flex: 1;
   min-height: 0;
 }
+.editor-body[hidden] { display: none; }
 
 .editor-sidebar {
   width: 280px;
@@ -167,6 +175,24 @@ body.editor-page {
   font-size: var(--text-meta);
   color: var(--status-minor-strong);
   margin-top: var(--space-1);
+}
+
+/* ── Room status (draft/final) ── */
+.editor-room-status {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+  flex-wrap: wrap;
+}
+.editor-room-status .toolbar-btn {
+  width: auto;
+  margin-top: 0;
+}
+
+.editor-locked-notice {
+  color: var(--status-minor-strong);
+  margin-top: 0;
 }
 
 .editor-tool-group {
@@ -336,6 +362,26 @@ circle.ed-selected {
   stroke: var(--focus);
 }
 
+/* ── Locked layout (room status "final") ──
+   Purely a visual cue — tools.js is what actually blocks placement/move/
+   resize on these, and editor.js's status line is what gives explicit
+   feedback the moment one is attempted (see onLockedAttempt). Devices
+   never get this class regardless of room status. */
+.ed-locked .ed-rect-body,
+.ed-locked .ed-wall-line,
+.ed-locked .ed-door-leaf,
+.ed-locked .ed-door-arc {
+  opacity: 0.55;
+}
+.ed-locked .ed-hit-line,
+.ed-locked .ed-rect-body,
+.ed-locked[data-kind="shape"] {
+  cursor: not-allowed;
+}
+.ed-locked .ed-handle {
+  display: none;
+}
+
 /* ── Footer / status ── */
 .editor-footer {
   display: flex;
@@ -346,6 +392,7 @@ circle.ed-selected {
   margin-top: var(--space-3);
   border-top: var(--border-divider);
 }
+.editor-footer[hidden] { display: none; }
 
 .editor-dirty {
   font-size: var(--text-meta);

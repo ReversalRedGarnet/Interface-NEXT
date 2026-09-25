@@ -35,6 +35,7 @@ const {
   normalizeRoomData, serializeRoomData, createBlankRoomData, cloneRoomLayoutOnly, createShape, createDevice, nextDeviceId, snap,
   LAYOUT_SHAPE_TYPES, PLACEABLE_SHAPE_TYPES, ENTRANCE_WIDTH, shapeDisplayName,
   generateAssetId, registerAssetId, normalizeAssetsData, serializeAssetsData, findAssetIdOwner,
+  normalizeRoomStatus, isLayoutLocked,
 } = await import('../js/editor/schema.js');
 const {
   roomFileStem, dataUrlForId, generateRoomHtml,
@@ -162,6 +163,53 @@ await test('createShape produces the documented key order for every layout shape
     const saved = JSON.parse(serializeRoomData(data));
     assertEqual(Object.keys(saved.layout[0]).join(','), expectedFields[type], `unexpected key order for shape type "${type}"`);
   }
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   1b. Room status (draft/final) — a separate concept from device
+       inspectionState/condition, never touched here
+   ══════════════════════════════════════════════════════════════════ */
+
+await test('normalizeRoomStatus defaults anything but the literal string "final" to "draft"', async () => {
+  assertEqual(normalizeRoomStatus('final'), 'final', '"final" should normalize to itself');
+  assertEqual(normalizeRoomStatus('draft'), 'draft', '"draft" should normalize to itself');
+  assertEqual(normalizeRoomStatus(undefined), 'draft', 'a missing status should default to draft, the safe default');
+  assertEqual(normalizeRoomStatus(null), 'draft', 'a null status should default to draft');
+  assertEqual(normalizeRoomStatus('Final'), 'draft', 'a wrong-case value should not silently pass as final');
+  assertEqual(normalizeRoomStatus('published'), 'draft', 'an unrecognized value should default to draft, not throw or pass through');
+});
+
+await test('createBlankRoomData starts "draft" — a brand-new room is never immediately visible to the inspection app', async () => {
+  const data = createBlankRoomData();
+  assertEqual(data.status, 'draft', 'a brand-new room should start draft');
+  assertEqual(isLayoutLocked(data), false, 'a draft room\'s layout should not be locked');
+  const saved = JSON.parse(serializeRoomData(data));
+  assertEqual(saved.status, 'draft', 'status should round-trip through serialization');
+  assertEqual(Object.keys(saved)[0], 'status', 'status should be the first key, matching the migrated seed files');
+});
+
+await test('cloneRoomLayoutOnly always resets status to "draft", even when copying an already-final room', async () => {
+  const source = normalizeRoomData({ status: 'final', canvasWidth: 1200, canvasHeight: 800, layout: [], devices: [] });
+  const copy = cloneRoomLayoutOnly(source);
+  assertEqual(copy.status, 'draft', 'a duplicated room should start draft regardless of its source\'s status');
+  assertEqual(source.status, 'final', 'cloning should not mutate the source\'s own status');
+});
+
+await test('the 5 real seed rooms are all migrated to "final"', async () => {
+  for (const room of REAL_ROOMS) {
+    const data = normalizeRoomData(readJson(`data/${room}.json`));
+    assertEqual(data.status, 'final', `data/${room}.json should be status "final"`);
+  }
+});
+
+await test('isLayoutLocked reflects status exactly, and only ever gates layout — never devices', async () => {
+  const draft = { status: 'draft', devices: [{ id: 'PC1' }] };
+  const final = { status: 'final', devices: [{ id: 'PC1' }] };
+  assertEqual(isLayoutLocked(draft), false, 'a draft room\'s layout should not be locked');
+  assertEqual(isLayoutLocked(final), true, 'a final room\'s layout should be locked');
+  // isLayoutLocked only ever answers "is the layout locked" — it takes no
+  // stance on devices at all, which is the whole point (see schema.js's
+  // ROOM_STATUSES comment): the two are entirely separate models.
 });
 
 await test('snap() rounds to the nearest grid multiple, and passes through when gridSize is falsy', async () => {
@@ -435,6 +483,134 @@ await test('a plain click does not get misread as a zero-distance drag (no movem
   assertEqual(data.devices[0].top, 40, 'a plain click alone moved the device');
   assertEqual(data.devices[0].left, 60, 'a plain click alone moved the device');
   assertEqual(state.selection?.kind, 'device', 'a plain click should still select the device');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   3b. Geometry locking — a "final" room's layout[] is protected against
+       placement/move/resize/delete; devices[] never are
+   ══════════════════════════════════════════════════════════════════ */
+
+function lockedRoomWithWall() {
+  return {
+    status: 'final',
+    canvasWidth: 1200, canvasHeight: 800,
+    layout: [{ type: 'wall', x1: 100, y1: 100, x2: 300, y2: 100 }],
+    devices: [{ id: 'PC1', type: 'pc', top: 400, left: 400 }],
+  };
+}
+
+await test('placing a new shape is blocked on a locked room, and calls onLockedAttempt', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = lockedRoomWithWall();
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'add-shape', shapeType: 'wall' }, gridSize: 0, selection: null };
+  let lockedCalls = 0;
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => { lockedCalls++; });
+
+  svg.dispatchEvent(pointerEvent('pointerdown', 50, 50));
+  assertEqual(data.layout.length, 1, 'a new shape should not have been added to a locked room\'s layout');
+  assertEqual(lockedCalls, 1, 'onLockedAttempt should fire exactly once for the blocked placement');
+  assertEqual(state.tool.type, 'select', 'the add-shape tool should disarm back to select after being blocked');
+});
+
+await test('placing a new shape still works on a draft room (unaffected by the lock)', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = { ...lockedRoomWithWall(), status: 'draft' };
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'add-shape', shapeType: 'wall' }, gridSize: 0, selection: null };
+  let lockedCalls = 0;
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => { lockedCalls++; });
+
+  svg.dispatchEvent(pointerEvent('pointerdown', 50, 50));
+  assertEqual(data.layout.length, 2, 'a new shape should be added on a draft room');
+  assertEqual(lockedCalls, 0, 'onLockedAttempt should never fire on a draft room');
+});
+
+await test('press-drag-release does not move a locked room\'s existing shape, and calls onLockedAttempt once', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = lockedRoomWithWall();
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'select' }, gridSize: 0, selection: null };
+  let lockedCalls = 0;
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => { lockedCalls++; });
+
+  const wallLine = svg.querySelector('[data-kind="shape"][data-index="0"] .ed-hit-line');
+  const before = JSON.stringify(data.layout[0]);
+  wallLine.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+  svg.dispatchEvent(pointerEvent('pointermove', 90, 90));
+  window.dispatchEvent(pointerEvent('pointerup', 90, 90));
+
+  assertEqual(JSON.stringify(data.layout[0]), before, 'a locked wall should not have moved');
+  assertEqual(lockedCalls, 1, 'onLockedAttempt should fire exactly once per blocked drag gesture, not on every pointermove tick');
+  assertEqual(state.selection?.kind, 'shape', 'the shape should still become selected (viewable), even though it can\'t be dragged');
+});
+
+await test('click-then-click does not move a locked room\'s existing shape', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = lockedRoomWithWall();
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'select' }, gridSize: 0, selection: null };
+  let lockedCalls = 0;
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => { lockedCalls++; });
+
+  const wallLine = svg.querySelector('[data-kind="shape"][data-index="0"] .ed-hit-line');
+  const before = JSON.stringify(data.layout[0]);
+  wallLine.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+  window.dispatchEvent(pointerEvent('pointerup', 10, 10));
+  svg.dispatchEvent(pointerEvent('pointerdown', 90, 90));
+  window.dispatchEvent(pointerEvent('pointerup', 90, 90));
+
+  assertEqual(JSON.stringify(data.layout[0]), before, 'a locked wall should not have moved via click-then-click either');
+  assert(lockedCalls >= 1, 'onLockedAttempt should fire for the blocked click-then-click destination click');
+});
+
+await test('a locked shape\'s resize handle does not resize it', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = { ...lockedRoomWithWall(), layout: [createShape('room', 100, 100)] };
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'select' }, gridSize: 0, selection: null };
+  let lockedCalls = 0;
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => { lockedCalls++; });
+
+  const before = JSON.stringify(data.layout[0]);
+  const handle = svg.querySelector('[data-kind="shape-point"][data-point="se"]');
+  assert(handle, 'expected an SE resize handle on the rect-kind shape');
+  handle.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+  svg.dispatchEvent(pointerEvent('pointermove', 90, 90));
+  window.dispatchEvent(pointerEvent('pointerup', 90, 90));
+
+  assertEqual(JSON.stringify(data.layout[0]), before, 'a locked shape should not have resized via its handle');
+  assertEqual(lockedCalls, 1, 'onLockedAttempt should fire once for the blocked resize');
+});
+
+await test('devices stay fully draggable and placeable on a locked (final) room', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = lockedRoomWithWall();
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'select' }, gridSize: 0, selection: null };
+  let lockedCalls = 0;
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => { lockedCalls++; });
+
+  const deviceNode = svg.querySelector('[data-kind="device"][data-index="0"]');
+  deviceNode.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+  svg.dispatchEvent(pointerEvent('pointermove', 90, 40));
+  window.dispatchEvent(pointerEvent('pointerup', 90, 40));
+
+  assert(data.devices[0].left !== 400 || data.devices[0].top !== 400, 'a device should still be draggable when the room\'s layout is locked');
+  assertEqual(lockedCalls, 0, 'moving a device should never trigger the layout-locked feedback');
+
+  // Placing a brand-new device should work too.
+  const state2 = { data, tool: { type: 'add-device', deviceType: 'pc' }, gridSize: 0, selection: null };
+  createToolController(svg, () => state2, patch => Object.assign(state2, patch), () => { lockedCalls++; });
+  svg.dispatchEvent(pointerEvent('pointerdown', 5, 5));
+  assertEqual(data.devices.length, 2, 'a new device should still be placeable on a locked room');
+  assertEqual(lockedCalls, 0, 'placing a device should never trigger the layout-locked feedback');
 });
 
 /* ══════════════════════════════════════════════════════════════════
