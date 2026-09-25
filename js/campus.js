@@ -3,12 +3,34 @@
  * index.html's #campus-root. Renders buildings from data/campus.json as
  * clickable schematic blocks; clicking one either goes straight to its
  * single floor's existing room page, or opens a floor-picker overlay when
- * it has more than one floor. Deliberately independent of the room/editor
- * internals — this file only ever reads data/campus.json and links to the
- * existing rooms/*.html pages, never room/device data itself.
+ * it has more than one floor.
+ *
+ * Building stats (device/inspected/remaining/issue counts, and the small
+ * status marker) are the one place this file does read room/device data —
+ * lazily, one building at a time, via the same fetchRoomDevices() export.js
+ * already uses for its own "Export All Rooms" roster fetch. The initial
+ * building blocks render and become clickable the moment data/campus.json
+ * itself resolves; stats fill in afterward, per building, as each one's
+ * own fetch resolves — never blocking the initial paint on every room's
+ * data file.
  */
 import { roomFileStem } from './editor/room-scaffold.js';
 import { normalizeCampusData, findBuilding, buildingDestination } from './campus-data.js';
+import { ALL_ROOMS, fetchRoomDevices } from './export.js';
+import { loadState } from './state.js';
+import { buildingStats, buildingStatusKey } from './issues-logic.js';
+
+/**
+ * data/campus.json's floor.roomId values are lowercase file stems (e.g.
+ * "commons"); every stored inspection entry is keyed by the room's real,
+ * differently-cased id (ROOM_META.id / ALL_ROOMS' id, e.g. "COMMONS" — see
+ * state.js's stateKey()). Stats have to look state up under that real id,
+ * not the stem, or every building would read as permanently 0% inspected.
+ */
+function canonicalRoomId(roomId) {
+  const stem = roomFileStem(roomId);
+  return ALL_ROOMS.find(r => roomFileStem(r.id) === stem)?.id || roomId;
+}
 
 function escapeHTML(s) {
   return String(s).replace(/[&<>"']/g, c => (
@@ -31,9 +53,15 @@ function buildingSvg(data) {
       <rect x="${x}" y="${y}" width="${width}" height="${height}" class="campus-building-shape"/>
       <text x="${cx}" y="${cy}" class="campus-building-label" text-anchor="middle" dominant-baseline="middle">${escapeHTML(b.label)}</text>
       ${sub}
+      <circle class="campus-building-status" cx="${x + width - 10}" cy="${y + 10}" r="5" data-state="not-inspected"/>
     </g>`;
   }).join('');
   return `<svg class="campus-svg" viewBox="0 0 ${data.canvasWidth} ${data.canvasHeight}" xmlns="http://www.w3.org/2000/svg" role="group" aria-label="Campus buildings">${blocks}</svg>`;
+}
+
+function rectOf(el) {
+  try { return el.getBoundingClientRect(); }
+  catch { return { left: 0, right: 0, top: 0, bottom: 0, width: 0, height: 0 }; }
 }
 
 export async function initCampusPage() {
@@ -44,6 +72,8 @@ export async function initCampusPage() {
     <div class="campus-canvas-wrap" id="campus-canvas-wrap">
       <p class="campus-loading">Loading campus…</p>
     </div>
+
+    <div class="campus-tooltip floating-panel" id="campus-tooltip" hidden></div>
 
     <div class="overlay" id="floor-picker-overlay" role="dialog" aria-modal="true" aria-labelledby="floor-picker-title">
       <div class="popup">
@@ -56,6 +86,7 @@ export async function initCampusPage() {
   `;
 
   const canvasWrap = document.getElementById('campus-canvas-wrap');
+  const tooltip = document.getElementById('campus-tooltip');
   const overlay = document.getElementById('floor-picker-overlay');
   const pickerTitle = document.getElementById('floor-picker-title');
   const pickerBody = document.getElementById('floor-picker-body');
@@ -79,6 +110,7 @@ export async function initCampusPage() {
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeFloorPicker(); });
 
   let campusData = null;
+  const statsCache = new Map(); // buildingId -> stats from issues-logic.js's buildingStats()
 
   function activate(buildingId) {
     const building = findBuilding(campusData, buildingId);
@@ -101,11 +133,81 @@ export async function initCampusPage() {
     if (target) { e.preventDefault(); activate(target.dataset.buildingId); }
   });
 
+  /* ── Hover/focus stats reveal ──
+     Default (unselected) state stays just name + floor count, drawn once by
+     buildingSvg() above — the tooltip only appears on hover or keyboard
+     focus, so the map itself never gets cluttered with numbers. mouseover/
+     mouseout (not mouseenter/mouseleave) so one delegated listener on the
+     canvas wrapper covers every building, same pattern as the click/keydown
+     handlers just above; focusin/focusout give keyboard users the same
+     reveal mouseover/mouseout give a pointer. */
+  function showTooltip(el) {
+    const building = findBuilding(campusData, el.dataset.buildingId);
+    if (!building) return;
+    const stats = statsCache.get(building.id);
+    const floorWord = building.floors.length === 1 ? 'floor' : 'floors';
+    const statsLine = stats
+      ? `${stats.total} device${stats.total === 1 ? '' : 's'} · ${stats.inspected} inspected · ${stats.unchecked} remaining · ${stats.issues} issue${stats.issues === 1 ? '' : 's'}`
+      : 'Loading stats…';
+    tooltip.innerHTML = `<strong>${escapeHTML(building.label)}</strong><br>${building.floors.length} ${floorWord}<br>${statsLine}`;
+
+    const rect = rectOf(el);
+    tooltip.style.left = `${rect.left + rect.width / 2}px`;
+    tooltip.style.top = `${rect.bottom + 8}px`;
+    tooltip.style.transform = 'translateX(-50%)';
+    tooltip.hidden = false;
+  }
+  function hideTooltip() { tooltip.hidden = true; }
+
+  canvasWrap.addEventListener('mouseover', e => {
+    const el = e.target.closest('[data-building-id]');
+    if (el && !el.contains(e.relatedTarget)) showTooltip(el);
+  });
+  canvasWrap.addEventListener('mouseout', e => {
+    const el = e.target.closest('[data-building-id]');
+    if (el && !el.contains(e.relatedTarget)) hideTooltip();
+  });
+  canvasWrap.addEventListener('focusin', e => {
+    const el = e.target.closest('[data-building-id]');
+    if (el) showTooltip(el);
+  });
+  canvasWrap.addEventListener('focusout', e => {
+    const el = e.target.closest('[data-building-id]');
+    if (el) hideTooltip();
+  });
+
+  /* ── Building stats ──
+     One fetch-and-compute pass per building, run concurrently and each
+     updating its own marker the moment it resolves — a slow/failed fetch
+     for one building never holds up another's. */
+  function findBuildingEl(buildingId) {
+    return [...canvasWrap.querySelectorAll('.campus-building')]
+      .find(el => el.dataset.buildingId === buildingId);
+  }
+
+  async function populateBuildingStats(data) {
+    const state = loadState();
+    await Promise.all(data.buildings.map(async building => {
+      const floors = building.floors.map(f => ({ ...f, roomId: canonicalRoomId(f.roomId) }));
+      const roomDevices = {};
+      await Promise.all(floors.map(async floor => {
+        roomDevices[floor.roomId] = await fetchRoomDevices({ id: floor.roomId });
+      }));
+      const stats = buildingStats(floors, roomDevices, state);
+      statsCache.set(building.id, stats);
+
+      const el = findBuildingEl(building.id);
+      const marker = el?.querySelector('.campus-building-status');
+      if (marker) marker.dataset.state = buildingStatusKey(stats);
+    }));
+  }
+
   try {
     const res = await fetch('data/campus.json');
     if (!res.ok) throw new Error(`${res.status} ${res.statusText}`);
     campusData = normalizeCampusData(await res.json());
     canvasWrap.innerHTML = buildingSvg(campusData);
+    await populateBuildingStats(campusData);
   } catch (err) {
     canvasWrap.innerHTML = `<p class="campus-loading">Couldn't load campus data: ${escapeHTML(err.message)}</p>`;
   }

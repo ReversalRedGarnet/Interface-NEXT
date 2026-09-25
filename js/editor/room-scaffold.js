@@ -77,6 +77,10 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
   <div class="site-header">
     <div class="site-header-inner">
       <span class="site-tool">Gridkeep</span>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="../index.html">Campus</a>
+        <a href="../issues.html">Issues</a>
+      </nav>
     </div>
   </div>
 

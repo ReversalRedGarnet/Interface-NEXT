@@ -6,10 +6,12 @@
  *                        file (+ the project-wide assets.json lookup,
  *                        tolerant of it being missing) and
  *                        initRoomPage(fullConfig)
+ *   • On issues.html  → window.ISSUES_PAGE is set       → initIssuesPage()
  */
 import { initMenuPage } from './menu.js';
 import { initRoomPage } from './room.js';
 import { initCampusPage } from './campus.js';
+import { initIssuesPage } from './issues.js';
 
 /** Never rejects — a missing/unreadable assets.json degrades to "no asset
  *  info available" rather than blocking the room page from loading. */
@@ -36,6 +38,8 @@ if (window.ROOM_META) {
            file directly (file://) will block the data fetch.
          </p>`;
     });
+} else if (window.ISSUES_PAGE) {
+  initIssuesPage();
 } else {
   initMenuPage();
   initCampusPage();

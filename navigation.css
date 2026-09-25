@@ -156,3 +156,34 @@
   letter-spacing: 0.06em;
   text-transform: uppercase;
 }
+
+/* Small static corner marker, not a full-building fill — overall building
+   state at a glance without cluttering the map. Starts "not-inspected"
+   (a neutral outline) the instant a building renders, then corrects itself
+   once that building's own lazy stats fetch resolves (see campus.js). Reuses
+   status.css's own status color tokens; "has-issues" reuses --status-major,
+   since an issue here means the same thing a device's own major status
+   means on a room's floor plan. */
+.campus-building-status {
+  stroke-width: 1.5;
+  transition: var(--transition);
+}
+.campus-building-status[data-state="not-inspected"] { fill: var(--surface); stroke: var(--line-strong); }
+.campus-building-status[data-state="in-progress"]   { fill: var(--focus); stroke: var(--focus); }
+.campus-building-status[data-state="complete"]      { fill: var(--status-working); stroke: var(--status-working-strong); }
+.campus-building-status[data-state="has-issues"]    { fill: var(--status-major); stroke: var(--status-major-strong); }
+
+/* Hover/focus-revealed stats popover — positioned in JS (campus.js) from
+   the hovered/focused building's own bounding box; .floating-panel
+   (workstation.css) supplies the elevated look shared with every other
+   transient panel in the system. */
+.campus-tooltip {
+  position: fixed;
+  z-index: 500;
+  padding: var(--space-2) var(--space-3);
+  font-size: var(--text-meta);
+  line-height: 1.6;
+  color: var(--text);
+  max-width: 240px;
+  pointer-events: none;
+}

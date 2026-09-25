@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Issues — Gridkeep</title>
+  <link rel="stylesheet" href="tokens.css">
+  <link rel="stylesheet" href="base.css">
+  <link rel="stylesheet" href="layout.css">
+  <link rel="stylesheet" href="controls.css">
+  <link rel="stylesheet" href="navigation.css">
+  <link rel="stylesheet" href="floor-plan.css">
+  <link rel="stylesheet" href="status.css">
+  <link rel="stylesheet" href="workstation.css">
+  <link rel="stylesheet" href="overlays.css">
+  <link rel="stylesheet" href="responsive.css">
+  <link rel="stylesheet" href="issues.css">
+</head>
+<body class="menu-page">
+
+  <script>
+    window.ISSUES_PAGE = true;
+  </script>
+
+  <div class="site-header">
+    <div class="site-header-inner">
+      <span class="site-tool">Gridkeep</span>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="index.html">Campus</a>
+        <a href="issues.html" aria-current="page">Issues</a>
+      </nav>
+    </div>
+  </div>
+
+  <div class="menu-app">
+
+    <header class="menu-header">
+      <h1>Issues</h1>
+      <p class="subtitle" id="issues-summary">Loading…</p>
+    </header>
+
+    <div class="toolbar-row" id="issues-filter-row">
+      <button type="button" class="filter-btn" data-filter="all" aria-pressed="true">All</button>
+      <button type="button" class="filter-btn" data-filter="major" aria-pressed="false">Major</button>
+      <button type="button" class="filter-btn" data-filter="minor" aria-pressed="false">Minor</button>
+    </div>
+
+    <div id="issues-root"></div>
+
+  </div><!-- /.menu-app -->
+
+  <script type="module" src="js/main.js"></script>
+
+  <footer class="site-footer">
+    <p><a href="https://github.com/ReversalRedGarnet">ReversalRedGarnet</a></p>
+  </footer>
+
+</body>
+</html>

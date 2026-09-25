@@ -33,6 +33,42 @@
   text-transform: uppercase;
 }
 
+/* ── Primary nav (every page) — Campus and Issues, the two top-level
+   destinations. aria-current="page" marks whichever one the current page
+   is, with a focus/underline treatment rather than a background fill (a
+   room page or the editor is neither, so both links sit unmarked there). */
+.site-nav {
+  display: flex;
+  gap: var(--space-4);
+}
+
+.site-nav a {
+  font-family: var(--font-body);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--text-muted);
+  text-decoration: none;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: var(--space-1) 0;
+  border-bottom: 2px solid transparent;
+  transition: var(--transition);
+}
+
+.site-nav a:hover {
+  color: var(--text);
+}
+
+.site-nav a[aria-current="page"] {
+  color: var(--text);
+  border-bottom-color: var(--focus);
+}
+
+.site-nav a:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 2px;
+}
+
 /* ── Site footer (every page) — mirrors .site-header ── */
 .site-footer {
   background: var(--surface);

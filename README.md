@@ -8,20 +8,29 @@ tap each device, and the status sticks. Reports come out as CSV.
 index.html      — campus view (birds-eye buildings/floors) + the site/room
                   menu, kept intact as a collapsed fallback (see "Campus
                   view" below)
+issues.html, issues.css — global Issues view: every device currently
+                  minor/major, across every room (see "Issues view" below)
 tokens.css, base.css, layout.css, controls.css, navigation.css,
 floor-plan.css, status.css, workstation.css, overlays.css, responsive.css
   — the visual system, split by concern (see "Visual system" below);
     loaded in that order on every page except admin/trace.html
 js/
-  main.js         — entry point (dual-mode: menu page vs room page); also
-                    fetches the project-wide data/assets.json for the room
-                    page's inspector/search (tolerant of it being missing)
+  main.js         — entry point (three modes: menu page / room page /
+                    issues page); also fetches the project-wide
+                    data/assets.json for the room page's inspector/search
+                    (tolerant of it being missing)
   menu.js         — menu page: site toggles, export-all, backup/restore
   campus.js       — campus view: renders data/campus.json as clickable
                     building blocks, floor-picker overlay for multi-floor
-                    buildings (see "Campus view" below)
+                    buildings, lazy per-building stats (see "Campus view"
+                    below)
   campus-data.js  — pure logic behind campus.js (normalize/find/decide);
                     no DOM, same split as schema.js vs canvas-renderer.js
+  issues.js       — issues page wiring: fetches every room's roster, renders
+                    the grouped/filterable list (see "Issues view" below)
+  issues-logic.js — pure logic behind issues.js AND campus.js's building
+                    stats (collectIssues/sortIssues/buildingStats/
+                    buildingStatusKey); no DOM
   room.js       — the room page as a workstation: floor-plan SVG, device
                   rendering, the inspector panel, Inspection Mode, Next
                   Unchecked, filters, search, zoom/pan (see "Room
@@ -73,8 +82,13 @@ test/
   editor.test.mjs — schema.js + room-scaffold.js: existing-room round-trip,
                     new-room 4-file generation, id-collision validation
   campus.test.mjs — campus-data.js's pure logic, data/campus.json sanity
-                    checks, and campus.js's rendering/click/keyboard
-                    behaviour driven in jsdom
+                    checks, campus.js's rendering/click/keyboard behaviour,
+                    and its lazy building-stats/tooltip behaviour, driven
+                    in jsdom
+  issues-logic.test.mjs — collectIssues/sortIssues/filterIssues/
+                    summarizeIssues/buildingStats/buildingStatusKey; no DOM
+  issues.test.mjs — drives issues.js in jsdom: grouping, filtering, the
+                    empty state, and the roster-fetch-failure fallback
 ```
 
 ## Visual system
@@ -136,6 +150,21 @@ Seeded with 3 placeholder buildings (mixed single/multi-floor) built from
 the 5 existing rooms — no new room data was invented for this prototype.
 There's no campus-view equivalent of the drag-and-drop editor yet; add or
 move a building by hand-editing `data/campus.json`.
+
+**Building stats.** Each building block stays just its name + floor count
+until hovered or keyboard-focused — no full-building color fill, so the map
+itself never gets cluttered with numbers. On hover/focus, a small floating
+panel reveals real counts ("48 devices · 43 inspected · 5 remaining · 2
+issues"), computed from that building's rooms' actual `data/*.json` rosters
++ stored inspection state via the same `computeStats` a room's own toolbar
+uses (`js/issues-logic.js`'s `buildingStats`). A small static corner marker
+on every block (not a fill) always shows overall state — not
+inspected/in progress/complete/has issues, with **has issues** taking
+priority over the others regardless of how much is left unchecked. Each
+building's roster is fetched lazily (one building at a time, concurrently)
+after the campus view itself has already rendered and become clickable, so
+a slow or missing room data file never blocks the initial paint or holds up
+any other building's stats.
 
 ## Running locally
 The pages use `fetch()` to load each room's JSON and `<script type="module">`,
@@ -390,3 +419,23 @@ fetches each room's device list itself (a room page that already has its
 own devices loaded skips that fetch and passes them straight in); rows sort
 worst-first (major, minor, unchecked, working, not applicable). See
 `test/export.test.mjs`.
+
+## Issues view
+`issues.html` is a read-only rollup of every device currently minor/major,
+across every room — built entirely on the existing inspection-state/
+condition data (`js/issues-logic.js`'s `collectIssues`), not a new
+Issue-object model: no issue ids, no lifecycle (open/in progress/resolved),
+no history. It re-fetches every room's roster the same way "Export All
+Rooms" does, so it's always roster-accurate, then filters to whatever's
+currently `checked` + `minor`/`major`.
+
+Entries group by site then room (worst condition first within a room) and
+carry a device's note, if it has one. A three-way All/Major/Minor filter
+narrows the visible list without changing the summary line's totals.
+Selecting an entry navigates to `rooms/{stem}.html?focus={deviceId}` — the
+exact same cross-room deep link search results already use, so it reuses
+room.js's own existing `focusDevice()` pan/zoom/select instead of
+reimplementing it. "Issues" sits alongside "Campus" as a primary nav
+destination in every page's header (`.site-nav`, `layout.css`). See
+`test/issues-logic.test.mjs` (pure aggregation) and `test/issues.test.mjs`
+(the page itself, driven in jsdom).

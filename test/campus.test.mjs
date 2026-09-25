@@ -31,16 +31,30 @@ const silentConsole = new VirtualConsole();
 silentConsole.on('jsdomError', () => {});
 
 /** Fresh jsdom + fresh module instance + a stubbed fetch('data/campus.json'),
- *  mirroring room.test.mjs's mount() for room.js. */
-async function mountCampus(campusJson) {
+ *  mirroring room.test.mjs's mount() for room.js. `roomDevices` (optional) is
+ *  `{ [roomId]: devices[] }`, served as `data/{stem}.json` for campus.js's own
+ *  lazy per-building stats fetch — any room not listed resolves to an empty
+ *  roster (fetchRoomDevices() already tolerates that), same as a room whose
+ *  data file 404s in production. localStorage backs state.js's loadState()
+ *  exactly as a real browser would. */
+async function mountCampus(campusJson, roomDevices = {}, stateEntries = {}) {
   const dom = new JSDOM('<!doctype html><html><body><div id="campus-root"></div></body></html>', {
     url: 'http://localhost/index.html', virtualConsole: silentConsole,
   });
   global.window = dom.window;
   global.document = dom.window.document;
+  global.localStorage = dom.window.localStorage;
+  if (Object.keys(stateEntries).length) {
+    global.localStorage.setItem('it-room-monitor-v1', JSON.stringify(stateEntries));
+  }
   global.fetch = async url => {
-    if (!String(url).includes('campus.json')) throw new Error(`mountCampus: unexpected fetch("${url}")`);
-    return { ok: true, json: async () => campusJson };
+    const s = String(url);
+    if (s.includes('campus.json')) return { ok: true, json: async () => campusJson };
+    const m = /data\/([a-z0-9-]+)\.json$/.exec(s);
+    if (m && Object.prototype.hasOwnProperty.call(roomDevices, m[1])) {
+      return { ok: true, json: async () => ({ devices: roomDevices[m[1]] }) };
+    }
+    return { ok: false, status: 404, statusText: 'Not Found' };
   };
 
   const { initCampusPage } = await import(`../js/campus.js?b=${bust++}`);
@@ -185,6 +199,95 @@ await test('a fetch failure shows an inline error instead of throwing or leaving
   const wrap = dom.window.document.getElementById('campus-canvas-wrap');
   assert(!wrap.querySelector('svg'), 'no campus SVG should render after a failed fetch');
   assert(/couldn.t load/i.test(wrap.textContent), 'expected an inline error message after a failed fetch');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   Building stats: lazy per-building fetch, the status marker, and the
+   hover/focus tooltip reveal
+   ══════════════════════════════════════════════════════════════════ */
+
+function marker(doc, buildingId) {
+  return doc.querySelector(`.campus-building[data-building-id="${buildingId}"] .campus-building-status`);
+}
+
+await test('a building with an unchecked device and no issues marks itself in-progress', async () => {
+  const { doc } = await mountCampus(SAMPLE, { commons: [{ id: 'PC1' }, { id: 'PC2' }] }, {
+    'COMMONS_PC1': { inspectionState: 'checked', condition: 'working', notes: '', updatedAt: null },
+  });
+  assertEqual(marker(doc, 'single').dataset.state, 'in-progress', 'one checked + one unchecked, no issues, should read in-progress');
+});
+
+await test('a fully-checked building with no issues marks itself complete', async () => {
+  const { doc } = await mountCampus(SAMPLE, { commons: [{ id: 'PC1' }] }, {
+    'COMMONS_PC1': { inspectionState: 'checked', condition: 'working', notes: '', updatedAt: null },
+  });
+  assertEqual(marker(doc, 'single').dataset.state, 'complete', 'a fully-checked, issue-free building should read complete');
+});
+
+await test('a building with even one minor/major device marks itself has-issues, overriding the other states', async () => {
+  const { doc } = await mountCampus(SAMPLE, { commons: [{ id: 'PC1' }] }, {
+    'COMMONS_PC1': { inspectionState: 'checked', condition: 'major', notes: '', updatedAt: null },
+  });
+  assertEqual(marker(doc, 'single').dataset.state, 'has-issues', 'a single major device should override every other state');
+});
+
+await test('a building with no touched devices at all marks itself not-inspected', async () => {
+  const { doc } = await mountCampus(SAMPLE, { commons: [{ id: 'PC1' }] });
+  assertEqual(marker(doc, 'single').dataset.state, 'not-inspected', 'an untouched building should read not-inspected');
+});
+
+await test('a multi-floor building\'s stats sum every floor, keyed by the real (differently-cased) room id, not the campus.json stem', async () => {
+  const { doc } = await mountCampus(SAMPLE, {
+    'b2-210': [{ id: 'PC1' }, { id: 'PC2' }],
+    'b2-204': [{ id: 'PC3' }],
+  }, {
+    // Real stored keys use the uppercase ROOM_META id (B2-210), never the
+    // lowercase campus.json stem (b2-210) — this is the exact mismatch
+    // canonicalRoomId() in campus.js exists to bridge.
+    'B2-210_PC1': { inspectionState: 'checked', condition: 'working', notes: '', updatedAt: null },
+    'B2-210_PC2': { inspectionState: 'checked', condition: 'minor', notes: '', updatedAt: null },
+    'B2-204_PC3': { inspectionState: 'unchecked', condition: null, notes: '', updatedAt: null },
+  });
+  assertEqual(marker(doc, 'multi').dataset.state, 'has-issues', 'the minor device on one floor should still be picked up and flip the whole building to has-issues');
+});
+
+await test('hovering a building reveals its device/inspected/remaining/issue counts in a tooltip', async () => {
+  const { doc, dom } = await mountCampus(SAMPLE, { commons: [{ id: 'PC1' }, { id: 'PC2' }] }, {
+    'COMMONS_PC1': { inspectionState: 'checked', condition: 'major', notes: '', updatedAt: null },
+  });
+  const tooltip = doc.getElementById('campus-tooltip');
+  assert(tooltip.hidden, 'tooltip should start hidden');
+
+  const g = doc.querySelector('.campus-building[data-building-id="single"]');
+  g.dispatchEvent(new dom.window.MouseEvent('mouseover', { bubbles: true }));
+  assert(!tooltip.hidden, 'tooltip should be revealed on hover');
+  assert(tooltip.textContent.includes('2 device'), `expected device count in tooltip, got: ${tooltip.textContent}`);
+  assert(tooltip.textContent.includes('1 inspected'), `expected inspected count in tooltip, got: ${tooltip.textContent}`);
+  assert(tooltip.textContent.includes('1 remaining'), `expected remaining count in tooltip, got: ${tooltip.textContent}`);
+  assert(tooltip.textContent.includes('1 issue'), `expected issue count in tooltip, got: ${tooltip.textContent}`);
+
+  g.dispatchEvent(new dom.window.MouseEvent('mouseout', { bubbles: true }));
+  assert(tooltip.hidden, 'tooltip should hide again on mouseout');
+});
+
+await test('keyboard focus reveals the same tooltip hover does, for reachability without a mouse', async () => {
+  const { doc, dom } = await mountCampus(SAMPLE, { commons: [{ id: 'PC1' }] });
+  const tooltip = doc.getElementById('campus-tooltip');
+  const g = doc.querySelector('.campus-building[data-building-id="single"]');
+
+  g.dispatchEvent(new dom.window.FocusEvent('focusin', { bubbles: true }));
+  assert(!tooltip.hidden, 'tooltip should be revealed on keyboard focus');
+
+  g.dispatchEvent(new dom.window.FocusEvent('focusout', { bubbles: true }));
+  assert(tooltip.hidden, 'tooltip should hide again on blur');
+});
+
+await test('the default (unselected) building block never renders full stats inline — only name + floor count', async () => {
+  const { doc } = await mountCampus(SAMPLE, { commons: [{ id: 'PC1' }] }, {
+    'COMMONS_PC1': { inspectionState: 'checked', condition: 'major', notes: '', updatedAt: null },
+  });
+  const g = doc.querySelector('.campus-building[data-building-id="single"]');
+  assert(!/\d+ inspected/.test(g.textContent), 'device/inspected counts should never render inline in the static block, only in the hover/focus tooltip');
 });
 
 /* ══════════════════════════════════════════════════════════════════

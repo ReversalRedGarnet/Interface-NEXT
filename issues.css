@@ -1,0 +1,57 @@
+/**
+ * issues.css — issues.html only, same as editor.css is editor.html only.
+ * Everything here builds on tokens.css and the shared .search-result/
+ * .filter-btn shapes already defined in workstation.css/controls.css —
+ * this file only adds the grouping/layout that's specific to this page.
+ */
+
+.issues-group {
+  margin-bottom: var(--space-6);
+}
+
+.issues-group h2 {
+  font-size: var(--text-body-lg);
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-2);
+  border-bottom: 1px solid var(--line);
+}
+
+.issues-room-group {
+  margin-bottom: var(--space-4);
+}
+
+.issues-room-group h3 {
+  font-family: var(--font-mono);
+  font-size: var(--text-meta);
+  font-weight: 600;
+  color: var(--text-muted);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  margin-bottom: var(--space-2);
+}
+
+.issues-list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+/* Same shape as a search result (workstation.css), just allowed to wrap a
+   third row for the note instead of staying a single baseline-aligned line. */
+.issue-item {
+  flex-wrap: wrap;
+  width: 100%;
+}
+
+.issue-item-main {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.issue-item-note {
+  flex-basis: 100%;
+  color: var(--text-muted);
+  font-size: var(--text-meta);
+  margin-top: 2px;
+}
