@@ -110,6 +110,30 @@ await test('Escape with no tool armed is a harmless no-op', async () => {
   assert(doc.querySelectorAll('.editor-tool-btn.armed').length === 0, 'nothing should be armed');
 });
 
+/* ── Delete Room — static wiring only; the actual delete flow needs a
+   loaded room (File System Access, no jsdom substitute — see
+   editor.test.mjs's own header), so its logic is covered there via the
+   pure room-scaffold.js/campus-data.js reversal functions instead. ── */
+
+await test('the Room section has a Delete Room trigger, hidden until a room is loaded', async () => {
+  const { doc } = await mountEditor();
+  const btn = doc.getElementById('btn-delete-room');
+  assert(btn, 'expected #btn-delete-room in the Room section');
+  assert(doc.getElementById('sidebar-room').contains(btn), 'Delete Room should live in the Room section');
+  assert(btn.hidden, 'Delete Room should stay hidden until a room is loaded, same as Mark Final/Unlock Layout');
+});
+
+await test('the Delete Room confirmation reuses the existing overlay/popup pattern, with a hidden-by-default Final warning', async () => {
+  const { doc } = await mountEditor();
+  const overlay = doc.getElementById('delete-room-overlay');
+  assert(overlay && overlay.classList.contains('overlay'), 'expected #delete-room-overlay using the shared .overlay style');
+  assert(overlay.querySelector('.popup.popup-sm'), 'expected the same .popup.popup-sm shape Unlock Layout\'s dialog uses');
+  assert(doc.getElementById('delete-room-confirm')?.classList.contains('btn-danger'), 'the confirm action should be styled as destructive');
+  const warning = doc.getElementById('delete-room-final-warning');
+  assert(warning, 'expected a Final-room warning element');
+  assert(warning.hidden, 'the Final warning should be hidden by default (only a final room\'s confirmation shows it)');
+});
+
 /* ── Report ────────────────────────────────────────────────────────── */
 const failed = results.filter(r => r[0] === 'FAIL');
 for (const [status, name, msg] of results) {

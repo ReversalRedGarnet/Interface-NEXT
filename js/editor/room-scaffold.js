@@ -203,6 +203,57 @@ export function patchIndexHtml(html, { id, label, campus }) {
   return before + card + after;
 }
 
+/** Removes a room's `<a class="room-link">` from index.html — the reverse
+ *  of patchIndexHtml. If that leaves its `<div class="room-list">` with no
+ *  other room-link in it, the whole site-card (and its leading `<!-- {campus}
+ *  -->` comment, if immediately adjacent) is removed too — the mirror of
+ *  patchIndexHtml only ever creating a new card when a site doesn't already
+ *  have one. A no-op (returns `html` unchanged) if the room isn't present. */
+export function removeFromIndexHtml(html, id) {
+  const hrefAttr = `href="rooms/${roomFileStem(id)}.html"`;
+  const hrefIdx = html.indexOf(hrefAttr);
+  if (hrefIdx === -1) return html;
+
+  const anchorStart = html.lastIndexOf('<a class="room-link"', hrefIdx);
+  if (anchorStart === -1) return html;
+  const anchorCloseIdx = findMatchingTagClose(html, anchorStart, 'a');
+  const anchorEnd = anchorCloseIdx + '</a>'.length;
+
+  // Trim *all* trailing whitespace (not just same-line indentation) back to
+  // the previous sibling's closing tag — the separator between anchors is
+  // itself whitespace (`\n` + indent), so leaving any of it behind here
+  // would double up with the whitespace already sitting on the other side
+  // of the removed anchor, leaving a blank line patchIndexHtml never wrote.
+  const beforeAnchor = html.slice(0, anchorStart).replace(/\s+$/, '');
+  const withoutAnchor = beforeAnchor + html.slice(anchorEnd);
+
+  const roomListStart = withoutAnchor.lastIndexOf('<div class="room-list"', beforeAnchor.length);
+  if (roomListStart === -1) return withoutAnchor;
+  const roomListCloseIdx = findMatchingTagClose(withoutAnchor, roomListStart, 'div');
+  if (withoutAnchor.slice(roomListStart, roomListCloseIdx).includes('class="room-link"')) {
+    return withoutAnchor; // other rooms remain in this site's list
+  }
+
+  const cardStart = withoutAnchor.lastIndexOf('<div class="site-card">', roomListStart);
+  if (cardStart === -1) return withoutAnchor;
+  const cardCloseIdx = findMatchingTagClose(withoutAnchor, cardStart, 'div');
+  const cardEnd = cardCloseIdx + '</div>'.length;
+
+  // Fold in the card's own leading comment (`<!-- {campus} -->`) if it's
+  // immediately before the card, so removing the last room in a site
+  // doesn't leave a stray comment with nothing under it.
+  let cutStart = cardStart;
+  const beforeCardTrimmedLen = withoutAnchor.slice(0, cardStart).replace(/\s+$/, '').length;
+  if (withoutAnchor.slice(0, beforeCardTrimmedLen).endsWith('-->')) {
+    const commentOpenIdx = withoutAnchor.lastIndexOf('<!--', beforeCardTrimmedLen);
+    if (commentOpenIdx !== -1) cutStart = commentOpenIdx;
+  }
+
+  const before = withoutAnchor.slice(0, cutStart).replace(/\s+$/, '');
+  const after = withoutAnchor.slice(cardEnd);
+  return before + after;
+}
+
 /* ── 3. js/export.js — ALL_ROOMS ─────────────────────────────────── */
 
 const ALL_ROOMS_MARKER = 'export const ALL_ROOMS = [';
@@ -229,6 +280,18 @@ export function patchExportJs(source, { id, label, campus }) {
   const after = source.slice(closeIdx);
   const entry = `\n  { id: ${jsStringLiteral(id)}, label: ${jsStringLiteral(label)}, campus: ${jsStringLiteral(campus)} },\n`;
   return before + entry + after;
+}
+
+/** Removes an existing `{ id: '...', ... }` entry from ALL_ROOMS — the
+ *  reverse of patchExportJs. Every entry patchExportJs writes (and every
+ *  real one in js/export.js today) is its own single line, so a per-line
+ *  filter is enough; a no-op (returns `source` unchanged) if `id` isn't
+ *  present, rather than throwing — deleting an already-gone room should
+ *  degrade gracefully, not fail the whole operation. */
+export function removeFromExportJs(source, id) {
+  const idLit = String(id).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  const entryRe = new RegExp(`^\\s*\\{\\s*id:\\s*'${idLit}'\\s*,.*\\},?\\s*$`);
+  return source.split('\n').filter(line => !entryRe.test(line)).join('\n');
 }
 
 /* ── 4. Cross-file id collision check ────────────────────────────── */

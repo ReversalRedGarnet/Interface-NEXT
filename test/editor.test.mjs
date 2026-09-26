@@ -39,9 +39,10 @@ const {
 } = await import('../js/editor/schema.js');
 const {
   roomFileStem, dataUrlForId, generateRoomHtml,
-  extractIndexRoomStems, extractIndexSites, patchIndexHtml,
-  extractAllRoomsIds, patchExportJs, validateNewRoomId,
+  extractIndexRoomStems, extractIndexSites, patchIndexHtml, removeFromIndexHtml,
+  extractAllRoomsIds, patchExportJs, removeFromExportJs, validateNewRoomId,
 } = await import('../js/editor/room-scaffold.js');
+const { removeRoomFromCampusData, serializeCampusData } = await import('../js/campus-data.js');
 const { render, clientToSvgPoint } = await import('../js/editor/canvas-renderer.js');
 const { createToolController, resizeRect, resizeRectOutline, isAxisAlignedRect4 } = await import('../js/editor/tools.js');
 const { isCorrectPasscode, isSessionUnlocked, markSessionUnlocked } = await import('../js/editor/passcode-gate.js');
@@ -341,6 +342,116 @@ await test('end-to-end: creating a new room produces four internally-consistent,
   const allRoomsAfter = extractAllRoomsIds(newExportJs);
   assert(allRoomsAfter.includes('B2-220'), 'ALL_ROOMS missing the new id');
   assert(newExportJs.includes("label: 'B2-220', campus: 'Northgate Site'"), 'ALL_ROOMS entry fields do not match the room being created');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   1b. Delete Room — the reverse of createNewRoom()
+   ══════════════════════════════════════════════════════════════════ */
+
+await test('removeFromExportJs removes exactly the matching ALL_ROOMS entry and leaves the rest untouched', async () => {
+  const original = readFile('js/export.js');
+  const before = extractAllRoomsIds(original);
+  const removed = removeFromExportJs(original, 'ANNEX');
+  const after = extractAllRoomsIds(removed);
+
+  assertEqual(after.length, before.length - 1, 'expected exactly one fewer ALL_ROOMS entry');
+  assert(!after.includes('ANNEX'), 'ANNEX should be gone from ALL_ROOMS');
+  assert(before.filter(id => id !== 'ANNEX').every((id, i) => after[i] === id), 'the remaining entries were reordered or altered');
+});
+
+await test('removeFromExportJs is a no-op for an id that was never there', async () => {
+  const original = readFile('js/export.js');
+  assertEqual(removeFromExportJs(original, 'DOES-NOT-EXIST'), original, 'removing an absent id should return the source unchanged');
+});
+
+await test('removeFromIndexHtml removes only the matching room-link, leaving sibling rooms in the same site untouched', async () => {
+  const original = readFile('index.html');
+  const updated = removeFromIndexHtml(original, 'B2-210');
+  assert(!updated.includes('href="rooms/b2-210.html"'), 'B2-210\'s link should be gone');
+  assert(updated.includes('href="rooms/b2-204.html"'), 'B2-204 (same site) should be untouched');
+  assert(updated.includes('href="rooms/commons.html"'), 'Commons (same site) should be untouched');
+});
+
+await test('removeFromIndexHtml removes the whole site-card when that was its last room', async () => {
+  const indexHtml = readFile('index.html');
+  const room = { id: 'ZZ-TEMP', label: 'ZZ Temp', campus: 'Solo Test Site' };
+  const withRoom = patchIndexHtml(indexHtml, room);
+  assert(withRoom.includes('Solo Test Site'), 'fixture setup: the new site card should exist before removal');
+
+  const withoutRoom = removeFromIndexHtml(withRoom, room.id);
+  assert(!withoutRoom.includes('href="rooms/zz-temp.html"'), 'the room-link should be gone');
+  assert(!withoutRoom.includes('Solo Test Site'), 'a site-card with no rooms left in it should be removed entirely, not left empty');
+  assertEqual(withoutRoom, indexHtml, 'removing the only room just added should exactly restore the original index.html');
+});
+
+await test('removeFromIndexHtml is a no-op for a room that was never there', async () => {
+  const original = readFile('index.html');
+  assertEqual(removeFromIndexHtml(original, 'DOES-NOT-EXIST'), original, 'removing an absent room should return index.html unchanged');
+});
+
+await test('end-to-end: create then delete a room exactly restores index.html and js/export.js', async () => {
+  const indexHtml = readFile('index.html');
+  const exportJs = readFile('js/export.js');
+  const room = { id: 'B2-221', label: 'B2-221', campus: 'Northgate Site' };
+
+  const createdIndex = patchIndexHtml(indexHtml, room);
+  const createdExport = patchExportJs(exportJs, room);
+  assert(createdIndex !== indexHtml && createdExport !== exportJs, 'fixture setup: creating should actually change both files');
+
+  const restoredIndex = removeFromIndexHtml(createdIndex, room.id);
+  const restoredExport = removeFromExportJs(createdExport, room.id);
+  assertEqual(restoredIndex, indexHtml, 'index.html should be byte-for-byte restored after create+delete');
+  assertEqual(restoredExport, exportJs, 'js/export.js should be byte-for-byte restored after create+delete');
+});
+
+await test('removeRoomFromCampusData unlinks a room from its building/floor and reports which one', async () => {
+  const campusData = JSON.parse(readFile('data/campus.json'));
+  const { data, removed } = removeRoomFromCampusData(campusData, 'commons');
+
+  assertEqual(removed.length, 1, 'commons should be referenced exactly once in campus.json');
+  assertEqual(removed[0].buildingLabel, 'Commons Hall', 'wrong building reported for commons');
+  const commonsHall = data.buildings.find(b => b.id === 'commons-hall');
+  assert(!commonsHall, 'a building left with no floors after removal should be dropped entirely, not kept empty');
+});
+
+await test('removeRoomFromCampusData only removes the matching floor, keeping a building\'s other floors intact', async () => {
+  const campusData = JSON.parse(readFile('data/campus.json'));
+  const { data, removed } = removeRoomFromCampusData(campusData, 'b2-210');
+
+  assertEqual(removed.length, 1, 'b2-210 should be referenced exactly once');
+  const tower = data.buildings.find(b => b.id === 'northgate-tower');
+  assert(tower, 'northgate-tower should still exist — it has another floor (b2-204)');
+  assertEqual(tower.floors.length, 1, 'only b2-210\'s floor should be removed');
+  assertEqual(tower.floors[0].roomId, 'b2-204', 'b2-204 should be the one floor left');
+});
+
+await test('removeRoomFromCampusData is a no-op (same data reference) for a room campus.json never referenced', async () => {
+  const campusData = JSON.parse(readFile('data/campus.json'));
+  const result = removeRoomFromCampusData(campusData, 'gpl'); // an imported draft room, never placed
+  assertEqual(result.removed.length, 0, 'gpl was never placed in campus.json');
+  assert(result.data === campusData, 'a no-op should return the exact same object, not a needless copy');
+});
+
+await test('serializeCampusData round-trips data/campus.json exactly (unedited)', async () => {
+  const original = readFile('data/campus.json');
+  const roundTripped = serializeCampusData(JSON.parse(original));
+  assertEqual(normalizeTrailingNewline(roundTripped), normalizeTrailingNewline(original), 'data/campus.json did not round-trip byte-for-byte');
+});
+
+await test('serializeCampusData keeps every OTHER building/floor\'s exact formatting after one is removed — no whole-file reformat', async () => {
+  const original = readFile('data/campus.json');
+  const { data } = removeRoomFromCampusData(JSON.parse(original), 'commons');
+  const rewritten = serializeCampusData(data);
+
+  // northgate-tower and riverside-block never referenced "commons" — their
+  // own lines (compact single-line shape/floor objects, matching the
+  // file's existing hand-authored style) should appear completely
+  // untouched, not expanded/reformatted just because something elsewhere
+  // in the same file changed.
+  assert(rewritten.includes('"shape": { "x": 380, "y": 60, "width": 200, "height": 340 },'), 'northgate-tower\'s shape line should be untouched');
+  assert(rewritten.includes('{ "roomId": "b2-210", "label": "B2-210" },'), 'b2-210\'s floor line should be untouched');
+  assert(rewritten.includes('{ "roomId": "annex", "label": "Annex Lab" },'), 'annex\'s floor line should be untouched');
+  assert(!rewritten.includes('commons-hall'), 'commons-hall (now empty) should be gone');
 });
 
 await test('cloneRoomLayoutOnly copies layout/canvas size but starts with no devices', async () => {

@@ -96,6 +96,8 @@
             <div class="editor-room-status" id="room-status-row" hidden>
               <span class="summary-pill" id="room-status-badge"></span>
             </div>
+
+            <button class="toolbar-btn sidebar-block-btn" id="btn-delete-room" hidden>Delete Room…</button>
           </div>
 
           <!-- 2. Tools — the device/shape placement palette, a compact
@@ -246,6 +248,19 @@
       <div class="popup-actions">
         <button class="btn-danger"    id="unlock-confirm">Yes, Unlock</button>
         <button class="btn-secondary" id="unlock-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Delete Room confirmation -->
+  <div class="overlay" id="delete-room-overlay" role="dialog" aria-modal="true" aria-labelledby="delete-room-title">
+    <div class="popup popup-sm">
+      <h3 class="popup-title" id="delete-room-title">Delete this room?</h3>
+      <p class="popup-body">This permanently deletes its data and page files, and removes it from the room list, index.html, and js/export.js. This can't be undone from here.</p>
+      <p class="popup-body editor-locked-notice" id="delete-room-final-warning" hidden>This room is marked <strong>Final</strong> — it may be live and in use right now. Deleting it removes it immediately for anyone using the app.</p>
+      <div class="popup-actions">
+        <button class="btn-danger"    id="delete-room-confirm">Yes, Delete</button>
+        <button class="btn-secondary" id="delete-room-cancel">Cancel</button>
       </div>
     </div>
   </div>

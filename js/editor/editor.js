@@ -15,10 +15,11 @@ import { render, renderDevice } from './canvas-renderer.js';
 import { createToolController } from './tools.js';
 import {
   roomFileStem, dataUrlForId, generateRoomHtml,
-  extractIndexRoomStems, extractIndexSites, patchIndexHtml,
-  extractAllRoomsIds, patchExportJs,
+  extractIndexRoomStems, extractIndexSites, patchIndexHtml, removeFromIndexHtml,
+  extractAllRoomsIds, patchExportJs, removeFromExportJs,
   validateNewRoomId,
 } from './room-scaffold.js';
+import { removeRoomFromCampusData, serializeCampusData } from '../campus-data.js';
 import { computeContentBounds, zoomModifierLabel } from '../room-logic.js';
 import { createViewController } from '../view-controls.js';
 import { createDisclosure } from '../disclosure.js';
@@ -76,6 +77,9 @@ const roomStatusBadge = $('room-status-badge');
 const markFinalBtn = $('btn-mark-final');
 const unlockLayoutBtn = $('btn-unlock-layout');
 const unlockOverlay = $('unlock-overlay');
+const deleteRoomBtn = $('btn-delete-room');
+const deleteRoomOverlay = $('delete-room-overlay');
+const deleteRoomFinalWarning = $('delete-room-final-warning');
 const toolsPanel = $('tools-panel');
 const deviceToolsEl = $('device-tools');
 const shapeToolsEl = $('shape-tools');
@@ -173,6 +177,18 @@ async function writeTextFile(dirHandle, name, text, { create = false } = {}) {
   const writable = await fh.createWritable();
   await writable.write(text);
   await writable.close();
+}
+
+/** Deletes `name` from `dirHandle` if it's there; a no-op (not an error) if
+ *  it's already gone — Delete Room should degrade gracefully on an
+ *  already-deleted room rather than failing the whole operation over one
+ *  missing file. */
+async function removeEntryIfExists(dirHandle, name) {
+  try {
+    await dirHandle.removeEntry(name);
+  } catch (err) {
+    if (err.name !== 'NotFoundError') throw err;
+  }
 }
 
 async function listFileNames(dirHandle) {
@@ -624,6 +640,7 @@ const viewDisclosure = createDisclosure({
 function renderRoomStatus() {
   const has = !!state.data;
   roomStatusRow.hidden = !has;
+  deleteRoomBtn.hidden = !has;
   if (!has) return;
   const locked = isLayoutLocked(state.data);
   roomStatusBadge.textContent = locked ? 'Final' : 'Draft';
@@ -660,6 +677,93 @@ function confirmUnlock() {
    because the room is final — never silent, per the spec. */
 function onLockedAttempt() {
   setStatus('Layout is locked — Unlock Layout (in the Room panel) to edit walls, doors, the entrance, or the room boundary. Devices are still editable.', true);
+}
+
+/* ── Delete Room — the reverse of createNewRoom(): deletes the currently
+   loaded room's data/*.json and rooms/*.html, and un-registers it from
+   every touch-point createNewRoom() writes (ALL_ROOMS in js/export.js,
+   its <a class="room-link"> in index.html), plus data/campus.json if it's
+   placed in a building there — createNewRoom() never writes that file, but
+   a room can still end up referenced there by manual/future placement, so
+   this is the one touch-point that's a cleanup rather than a strict mirror.
+   Requires the same explicit confirmation Reset Room/Unlock Layout already
+   do; a "final" room's confirmation says so explicitly, since that room may
+   already be in front of a real checker. Does not, and cannot, clear any
+   localStorage inspection-state a browser already holds for this room's
+   old device ids — that's per-browser, out of reach of a static-file
+   operation, same limitation exportStateJSON's own docs already note. */
+
+function openDeleteRoomConfirm() {
+  if (!state.data) return;
+  deleteRoomFinalWarning.hidden = !isLayoutLocked(state.data);
+  deleteRoomOverlay.classList.add('open');
+}
+function closeDeleteRoomConfirm() {
+  deleteRoomOverlay.classList.remove('open');
+}
+
+/** Back to the same "nothing loaded" state the page starts in — the
+ *  inverse of showRoomSections() plus clearing the canvas and state. */
+function resetToNoRoomLoaded() {
+  state.mode = null;
+  state.roomId = null;
+  state.roomLabel = null;
+  state.roomCampus = null;
+  state.data = null;
+  state.selection = null;
+  state.tool = { type: 'select' };
+  state.dirty = false;
+  svg.replaceChildren();
+  toolsPanel.hidden = true;
+  propertiesPanel.hidden = true;
+  sidebarViewSection.hidden = true;
+  sidebarLegendSection.hidden = true;
+  sidebarHelpSection.hidden = true;
+  editorFooter.hidden = true;
+  renderRoomStatus();
+  roomPicker.value = '';
+}
+
+async function confirmDeleteRoom() {
+  if (!state.data) return;
+  const id = state.roomId;
+  const stem = roomFileStem(id);
+
+  try {
+    const dataDir = await rootHandle.getDirectoryHandle('data');
+    const roomsDir = await rootHandle.getDirectoryHandle('rooms');
+    const jsDir = await rootHandle.getDirectoryHandle('js');
+
+    await removeEntryIfExists(dataDir, `${stem}.json`);
+    await removeEntryIfExists(roomsDir, `${stem}.html`);
+
+    const exportJsText = await readTextFile(jsDir, 'export.js');
+    await writeTextFile(jsDir, 'export.js', removeFromExportJs(exportJsText, id));
+
+    const indexHtmlText = await readTextFile(rootHandle, 'index.html');
+    await writeTextFile(rootHandle, 'index.html', removeFromIndexHtml(indexHtmlText, id));
+
+    let campusNote = '';
+    try {
+      const campusText = await readTextFile(dataDir, 'campus.json');
+      const { data: newCampusData, removed } = removeRoomFromCampusData(JSON.parse(campusText), stem);
+      if (removed.length) {
+        await writeTextFile(dataDir, 'campus.json', serializeCampusData(newCampusData));
+        const where = removed.map(r => `${r.buildingLabel} (${r.floorLabel})`).join(', ');
+        campusNote = ` Also unlinked from ${where} in data/campus.json.`;
+      }
+    } catch {
+      // Missing/unreadable/malformed campus.json — nothing to unlink.
+    }
+
+    resetToNoRoomLoaded();
+    closeDeleteRoomConfirm();
+    await refreshRoomPicker();
+    setStatus(`Deleted ${id}: data/${stem}.json, rooms/${stem}.html, and its entries in index.html and js/export.js.${campusNote}`);
+  } catch (err) {
+    closeDeleteRoomConfirm();
+    setStatus(`Delete failed: ${err.message}`, true);
+  }
 }
 
 /** Shape-placement tools only — device tools stay enabled regardless of
@@ -1087,6 +1191,11 @@ $('unlock-confirm').addEventListener('click', confirmUnlock);
 $('unlock-cancel').addEventListener('click', closeUnlockConfirm);
 unlockOverlay.addEventListener('click', e => { if (e.target === unlockOverlay) closeUnlockConfirm(); });
 
+deleteRoomBtn.addEventListener('click', openDeleteRoomConfirm);
+$('delete-room-confirm').addEventListener('click', confirmDeleteRoom);
+$('delete-room-cancel').addEventListener('click', closeDeleteRoomConfirm);
+deleteRoomOverlay.addEventListener('click', e => { if (e.target === deleteRoomOverlay) closeDeleteRoomConfirm(); });
+
 gridSizeInput.addEventListener('input', () => {
   state.gridSize = Number(gridSizeInput.value) || 0;
   renderAll();
@@ -1097,6 +1206,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (newRoomOverlay.classList.contains('open')) { closeNewRoomDialog(); return; }
     if (unlockOverlay.classList.contains('open')) { closeUnlockConfirm(); return; }
+    if (deleteRoomOverlay.classList.contains('open')) { closeDeleteRoomConfirm(); return; }
     if (helpCtl.isOpen()) { helpCtl.close(); return; }
     state.tool = { type: 'select' };
     document.querySelectorAll('.editor-tool-btn.armed').forEach(b => b.classList.remove('armed'));

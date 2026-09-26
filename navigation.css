@@ -5,13 +5,13 @@
  * this file is the list/card/building layout around them.
  */
 
-/* site card grid — align-items:start stops the grid stretching every
-   card in a row to match the tallest one, so an unopened card no longer
-   visually "grows" when its sibling's room-list expands */
+/* site card grid — align-items:stretch (grid's own default, made explicit
+   here) so every card in a row matches the row's tallest card, rather than
+   each sizing to its own content and leaving a ragged bottom edge. */
 .site-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
-  align-items: start;
+  align-items: stretch;
   gap: var(--space-6);
   margin-bottom: var(--space-8);
 }
