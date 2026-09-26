@@ -626,6 +626,69 @@ await test('devices stay fully draggable and placeable on a locked (final) room'
   assertEqual(lockedCalls, 0, 'placing a device should never trigger the layout-locked feedback');
 });
 
+/* ── Sticky tool placement ────────────────────────────────────────────
+   A placement tool used to disarm back to Select after a single
+   placement (tools.js's own onChange patch used to include
+   `tool: { type: 'select' }`); it's now sticky — the tool stays whatever
+   editor.js's armTool() set it to, so repeated clicks place repeated
+   items without re-arming. Toggling off / switching tools / Escape are
+   editor.js-level UI behavior (armTool, the Escape handler) — see
+   editor-chrome.test.mjs for those; these tests cover tools.js's own
+   half: that a successful placement never touches `state.tool` itself. */
+
+await test('an armed add-device tool stays armed after placing — repeated clicks place repeated devices', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = { status: 'draft', canvasWidth: 1200, canvasHeight: 800, layout: [], devices: [] };
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'add-device', deviceType: 'pc' }, gridSize: 0, selection: null };
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => {});
+
+  svg.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+  svg.dispatchEvent(pointerEvent('pointerdown', 40, 40));
+  svg.dispatchEvent(pointerEvent('pointerdown', 70, 70));
+
+  assertEqual(data.devices.length, 3, 'three clicks with a still-armed add-device tool should place three devices');
+  assertEqual(state.tool.type, 'add-device', 'the tool should still be armed after multiple placements');
+  assertEqual(state.tool.deviceType, 'pc', 'the armed tool\'s own device type should be unchanged');
+});
+
+await test('an armed add-shape tool stays armed after placing on a draft room — repeated clicks place repeated shapes', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = { status: 'draft', canvasWidth: 1200, canvasHeight: 800, layout: [], devices: [] };
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'add-shape', shapeType: 'wall' }, gridSize: 0, selection: null };
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => {});
+
+  svg.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+  svg.dispatchEvent(pointerEvent('pointerdown', 40, 40));
+
+  assertEqual(data.layout.length, 2, 'two clicks with a still-armed add-shape tool should place two shapes');
+  assertEqual(state.tool.type, 'add-shape', 'the tool should still be armed after multiple placements');
+});
+
+await test('a re-armed add-shape tool on a locked room still refuses every placement attempt under the sticky model, never placing anything', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = lockedRoomWithWall();
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'add-shape', shapeType: 'wall' }, gridSize: 0, selection: null };
+  let lockedCalls = 0;
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => { lockedCalls++; });
+
+  svg.dispatchEvent(pointerEvent('pointerdown', 50, 50));
+  assertEqual(data.layout.length, 1, 'blocked — no shape should have been added');
+  assertEqual(state.tool.type, 'select', 'a blocked placement still disarms back to select, same as before sticky placement');
+
+  // Sticky re-arming (as the palette button would do if clicked again)
+  // must not let a second attempt slip past the lock either.
+  state.tool = { type: 'add-shape', shapeType: 'wall' };
+  svg.dispatchEvent(pointerEvent('pointerdown', 90, 90));
+  assertEqual(data.layout.length, 1, 'still blocked on a second, re-armed attempt — sticky re-arming does not bypass the lock');
+  assertEqual(lockedCalls, 2, 'onLockedAttempt should fire once per blocked attempt');
+});
+
 /* ══════════════════════════════════════════════════════════════════
    4. Grid controls actually render, pillar is gone, door merges into
       entrance

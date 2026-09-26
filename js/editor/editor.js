@@ -82,6 +82,7 @@ const shapeToolsEl = $('shape-tools');
 const gridSizeInput = $('grid-size');
 const showGridInput = $('show-grid');
 const propertiesPanel = $('properties-panel');
+const propertiesEmpty = $('properties-empty');
 const propertiesFields = $('properties-fields');
 const deleteSelectedBtn = $('btn-delete-selected');
 const saveBtn = $('btn-save');
@@ -101,6 +102,9 @@ const edZoomFitBtn = $('ed-zoom-fit');
 const edZoom100Btn = $('ed-zoom-100');
 const edZoomFullscreenBtn = $('ed-zoom-fullscreen');
 const edZoomHint = $('ed-zoom-hint');
+
+const viewToggleBtn = $('btn-editor-view-toggle');
+const viewBody = $('editor-view-body');
 
 const legendToggleBtn = $('btn-editor-legend-toggle');
 const legendBody = $('editor-legend-body');
@@ -540,6 +544,7 @@ async function createNewRoom() {
  *  canvas. */
 function showRoomSections() {
   toolsPanel.hidden = false;
+  propertiesPanel.hidden = false;
   sidebarViewSection.hidden = false;
   sidebarLegendSection.hidden = false;
   sidebarHelpSection.hidden = false;
@@ -594,6 +599,17 @@ const viewCtl = createViewController({
     zoomFullscreen: edZoomFullscreenBtn,
   },
   hintEl: edZoomHint,
+});
+
+/** Collapsible like Legend (same shared disclosure component, see
+ *  disclosure.js) — defaults collapsed, since Tools/Properties are reached
+ *  for far more often than the View controls. */
+const viewDisclosure = createDisclosure({
+  toggleBtn: viewToggleBtn,
+  body: viewBody,
+  openLabel: 'View ▴',
+  closedLabel: 'View ▾',
+  defaultOpen: false,
 });
 
 /* ── Room status: draft/final badge + Mark as Final / Unlock Layout ──
@@ -785,9 +801,14 @@ function readOnlyField(labelText, value) {
   return field(labelText, p);
 }
 
+/** The Properties section itself is never hidden once a room is loaded
+ *  (see showRoomSections) — only its own inner content toggles, between a
+ *  one-line "Nothing selected" placeholder and the full fields, so the
+ *  section never disappears and jumps the sections around it. */
 function renderProperties() {
   const has = !!state.selection;
-  propertiesPanel.hidden = !has;
+  propertiesEmpty.hidden = has;
+  propertiesFields.hidden = !has;
   propertiesFields.innerHTML = '';
   if (!has) { deleteSelectedBtn.hidden = true; return; }
 
@@ -909,12 +930,51 @@ function buildDeviceTypeList() {
   });
 }
 
+/** Builds a device type's canvas-accurate swatch — the same SVG node
+ *  renderDevice() would draw on the canvas itself — shared by the Legend
+ *  (true-to-scale, via buildDeviceLegend) and the Tools palette (uniformly
+ *  small, via buildPalette) so a device type's icon can never drift between
+ *  the two. */
+function buildDeviceSwatchSvg(type) {
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const pad = 3;
+  const sample = { type, id: type };
+  const { width, height } = deviceBoxSize(sample);
+  const swatch = document.createElementNS(svgNS, 'svg');
+  swatch.setAttribute('viewBox', `-${pad} -${pad} ${width + pad * 2} ${height + pad * 2}`);
+  swatch.appendChild(renderDevice(sample, 0));
+  return { swatch, width, height };
+}
+
+/** Generic per-kind icon for the Tools palette's Shapes group — schematic,
+ *  not literal (several shape types share a kind: floor/room/counter/
+ *  wallrect are all rect-kind), same plain-outline-SVG house style as
+ *  room.js's own icons (see its ICON_SEARCH/ICON_FULLSCREEN). Static markup
+ *  built from a fixed, non-user-controlled set of shape kinds, so building
+ *  it via innerHTML below is safe. */
+const SHAPE_KIND_ICON = {
+  rect: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="3" width="12" height="10"/></svg>',
+  line: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"><line x1="2" y1="8" x2="14" y2="8"/></svg>',
+  hinge: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round"><path d="M2 14V3"/><path d="M2 3 A11 11 0 0 1 13 14" stroke-dasharray="2 2"/></svg>',
+  polygon: '<svg viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"><polygon points="2,14 2,5 8,2 14,6 14,14"/></svg>',
+};
+
+/** A compact icon+label grid (see editor.css's .editor-tool-row) rather
+ *  than a full-width stacked list — same set of tools, same click/arm
+ *  behavior (armTool), just far less vertical space. */
 function buildPalette() {
   DEVICE_TYPES.forEach(type => {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'toolbar-btn editor-tool-btn';
-    btn.textContent = type;
+    btn.title = type;
+    const { swatch } = buildDeviceSwatchSvg(type);
+    swatch.classList.add('editor-tool-icon');
+    btn.appendChild(swatch);
+    const label = document.createElement('span');
+    label.className = 'editor-tool-label';
+    label.textContent = type;
+    btn.appendChild(label);
     btn.addEventListener('click', () => armTool({ type: 'add-device', deviceType: type }, btn));
     deviceToolsEl.appendChild(btn);
   });
@@ -923,7 +983,11 @@ function buildPalette() {
     const btn = document.createElement('button');
     btn.type = 'button';
     btn.className = 'toolbar-btn editor-tool-btn';
-    btn.textContent = shapeDisplayName(type);
+    const label = shapeDisplayName(type);
+    btn.title = label;
+    const kind = LAYOUT_SHAPES[type]?.kind;
+    btn.innerHTML = `${SHAPE_KIND_ICON[kind] || ''}<span class="editor-tool-label">${label}</span>`;
+    btn.querySelector('svg')?.classList.add('editor-tool-icon');
     btn.addEventListener('click', () => armTool({ type: 'add-shape', shapeType: type }, btn));
     shapeToolsEl.appendChild(btn);
   });
@@ -936,20 +1000,14 @@ function buildPalette() {
 
 function buildDeviceLegend() {
   deviceLegendEl.innerHTML = '';
-  const svgNS = 'http://www.w3.org/2000/svg';
-  const pad = 3;
   DEVICE_TYPES.forEach(type => {
     const item = document.createElement('div');
     item.className = 'legend-item';
 
-    const sample = { type, id: type };
-    const { width, height } = deviceBoxSize(sample);
-    const swatch = document.createElementNS(svgNS, 'svg');
-    swatch.setAttribute('viewBox', `-${pad} -${pad} ${width + pad * 2} ${height + pad * 2}`);
+    const { swatch, width, height } = buildDeviceSwatchSvg(type);
     swatch.setAttribute('width', String(width));
     swatch.setAttribute('height', String(height));
     swatch.classList.add('editor-legend-swatch');
-    swatch.appendChild(renderDevice(sample, 0));
     item.appendChild(swatch);
 
     const label = document.createElement('span');

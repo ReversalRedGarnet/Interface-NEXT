@@ -224,7 +224,11 @@ export function createToolController(svg, getState, onChange, onLockedAttempt) {
         snap(p.y, state.gridSize), snap(p.x, state.gridSize),
       );
       state.data.devices.push(device);
-      onChange({ selection: { kind: 'device', index: state.data.devices.length - 1 }, tool: { type: 'select' }, dirty: true });
+      // Sticky placement: the tool stays armed after a successful placement,
+      // so clicking again places another instance without re-arming — see
+      // editor.js's armTool() for how a tool gets un-armed (clicking it
+      // again, picking a different tool, or Escape).
+      onChange({ selection: { kind: 'device', index: state.data.devices.length - 1 }, dirty: true });
       return;
     }
 
@@ -232,7 +236,7 @@ export function createToolController(svg, getState, onChange, onLockedAttempt) {
       if (locked) { flagLocked(); onChange({ tool: { type: 'select' } }); return; }
       const shape = createShape(state.tool.shapeType, snap(p.x, state.gridSize), snap(p.y, state.gridSize));
       state.data.layout.push(shape);
-      onChange({ selection: { kind: 'shape', index: state.data.layout.length - 1 }, tool: { type: 'select' }, dirty: true });
+      onChange({ selection: { kind: 'shape', index: state.data.layout.length - 1 }, dirty: true });
       return;
     }
 

@@ -80,8 +80,9 @@
         <div class="inspector-scroll" id="editor-sidebar-scroll">
 
           <!-- 1. Room — existing-room picker, New Room, and the Draft/
-               Final status badge + its Mark as Final / Unlock Layout
-               actions. -->
+               Final status badge. Mark as Final / Unlock Layout themselves
+               now live in the persistent footer (see below) — they're
+               deliberate commit actions, the same category as Save. -->
           <div class="sidebar-section sidebar-room" id="sidebar-room">
             <p class="quick-mark-label sidebar-section-label">Room</p>
             <label class="editor-field">
@@ -94,12 +95,14 @@
 
             <div class="editor-room-status" id="room-status-row" hidden>
               <span class="summary-pill" id="room-status-badge"></span>
-              <button class="toolbar-btn" id="btn-mark-final" hidden>Mark as Final</button>
-              <button class="toolbar-btn" id="btn-unlock-layout" hidden>Unlock Layout</button>
             </div>
           </div>
 
-          <!-- 2. Tools — the device/shape placement palette. -->
+          <!-- 2. Tools — the device/shape placement palette, a compact
+               icon+label grid (see editor.css's .editor-tool-row) rather
+               than a full-width stacked list. Arming a tool is sticky — it
+               stays armed across repeated placements; see armTool() and
+               tools.js's pointerDown. -->
           <div class="sidebar-section sidebar-tools" id="tools-panel" hidden>
             <p class="quick-mark-label sidebar-section-label">Tools</p>
             <div class="editor-tool-group">
@@ -110,7 +113,7 @@
               <span class="editor-tool-group-label">Shapes</span>
               <div class="editor-tool-row" id="shape-tools"></div>
             </div>
-            <p class="editor-hint">Arm a tool, click the canvas to place it. Escape returns to Select. Reposition anything by dragging it, or click it once and click a destination point instead. Drag a wall's or outline's small handles to reshape it; a rectangular shape's corner handles resize it (always staying a rectangle); an entrance is a fixed width and only moves, not resizes.</p>
+            <p class="editor-hint">Arm a tool, click the canvas to place it — it stays armed for placing more. Click it again to un-arm, pick another tool to switch, or press Escape. Reposition anything by dragging it, or click it once and click a destination point instead. Drag a wall's or outline's small handles to reshape it; a rectangular shape's corner handles resize it (always staying a rectangle); an entrance is a fixed width and only moves, not resizes.</p>
             <label class="editor-field editor-field-inline">
               <span>Grid size</span>
               <input type="number" id="grid-size" min="0" step="1" value="10">
@@ -122,25 +125,34 @@
           </div>
 
           <!-- 3. Properties — detail/edit fields for whatever's currently
-               selected on the canvas; hidden with nothing selected. -->
+               selected on the canvas. Always present once a room is loaded
+               (never hidden outright) — collapses to a one-line placeholder
+               with nothing selected, and expands the moment something is,
+               so the section above/below it never jumps around. -->
           <div class="sidebar-section sidebar-properties" id="properties-panel" hidden>
             <p class="quick-mark-label sidebar-section-label">Properties</p>
-            <div id="properties-fields"></div>
+            <p class="editor-hint" id="properties-empty">Nothing selected</p>
+            <div id="properties-fields" hidden></div>
             <button class="btn-danger" id="btn-delete-selected" hidden>Delete</button>
             <datalist id="device-type-list"></datalist>
           </div>
 
           <!-- 4. View — zoom/pan/fit, same control set and behavior as the
-               room page's own View section (see room.js's zoom/pan block). -->
+               room page's own View section (see room.js's zoom/pan block).
+               Collapsible like Legend below (same disclosure.js component),
+               defaulting to collapsed since it's reached for less often
+               than Tools/Properties. -->
           <div class="sidebar-section sidebar-view" id="sidebar-view" hidden>
-            <p class="quick-mark-label sidebar-section-label">View</p>
-            <div class="zoom-controls" id="zoom-controls">
-              <button type="button" class="toolbar-btn" id="ed-zoom-out" aria-label="Zoom out">−</button>
-              <button type="button" class="toolbar-btn" id="ed-zoom-fit" aria-label="Fit to screen">Fit</button>
-              <button type="button" class="toolbar-btn" id="ed-zoom-100" aria-label="Actual size">100%</button>
-              <button type="button" class="toolbar-btn" id="ed-zoom-in" aria-label="Zoom in">+</button>
-              <button type="button" class="toolbar-btn" id="ed-zoom-fullscreen" aria-label="Fullscreen"><svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 5V1h4"/><path d="M11 1h4v4"/><path d="M15 11v4h-4"/><path d="M5 15H1v-4"/></svg></button>
-              <span class="zoom-hint" id="ed-zoom-hint"></span>
+            <button type="button" class="site-toggle sidebar-view-toggle" id="btn-editor-view-toggle" aria-expanded="false" aria-controls="editor-view-body"></button>
+            <div class="legend-stats-body" id="editor-view-body" hidden>
+              <div class="zoom-controls" id="zoom-controls">
+                <button type="button" class="toolbar-btn" id="ed-zoom-out" aria-label="Zoom out">−</button>
+                <button type="button" class="toolbar-btn" id="ed-zoom-fit" aria-label="Fit to screen">Fit</button>
+                <button type="button" class="toolbar-btn" id="ed-zoom-100" aria-label="Actual size">100%</button>
+                <button type="button" class="toolbar-btn" id="ed-zoom-in" aria-label="Zoom in">+</button>
+                <button type="button" class="toolbar-btn" id="ed-zoom-fullscreen" aria-label="Fullscreen"><svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 5V1h4"/><path d="M11 1h4v4"/><path d="M15 11v4h-4"/><path d="M5 15H1v-4"/></svg></button>
+                <span class="zoom-hint" id="ed-zoom-hint"></span>
+              </div>
             </div>
           </div>
 
@@ -168,8 +180,14 @@
     </div>
 
     <div class="editor-footer" id="editor-footer" hidden>
-      <span id="dirty-indicator" class="editor-dirty"></span>
-      <button class="btn-primary" id="btn-save" disabled><svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v7"/><path d="M5 6l3 3 3-3"/><path d="M2.5 12.5h11"/></svg> Save</button>
+      <div class="editor-footer-status-actions">
+        <button class="toolbar-btn" id="btn-mark-final" hidden>Mark as Final</button>
+        <button class="toolbar-btn" id="btn-unlock-layout" hidden>Unlock Layout</button>
+      </div>
+      <div class="editor-footer-save">
+        <span id="dirty-indicator" class="editor-dirty"></span>
+        <button class="btn-primary" id="btn-save" disabled><svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round" stroke-linejoin="round"><path d="M8 2v7"/><path d="M5 6l3 3 3-3"/><path d="M2.5 12.5h11"/></svg> Save</button>
+      </div>
     </div>
 
     <p class="editor-status" id="editor-status" role="status" aria-live="polite"></p>
