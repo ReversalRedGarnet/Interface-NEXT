@@ -64,6 +64,21 @@ body.editor-page {
   margin-bottom: var(--space-3);
 }
 
+/* The one field on this card — sized up well past the ordinary
+   .editor-field input baseline (13px/8+12px padding, sized for a compact
+   sidebar form field) since this is the single, full-width, easy-to-misread
+   thing standing between someone and the whole editor. #id-level specificity
+   is deliberate here, not just convenience: .editor-field's own
+   input[type="password"] rule is declared later in this file, so a class-only
+   override at the same specificity would lose that cascade tie depending on
+   source order — an ID sidesteps that instead of relying on rule ordering. */
+#editor-lock-input {
+  font-size: var(--text-section-title);
+  padding: var(--space-3) var(--space-4);
+  width: 100%;
+  letter-spacing: 0.08em;
+}
+
 .editor-lock-card .editor-status-error {
   margin-bottom: var(--space-3);
 }
@@ -128,6 +143,7 @@ body.editor-page {
 
 .editor-field input[type="text"],
 .editor-field input[type="number"],
+.editor-field input[type="password"],
 .editor-field select,
 .editor-field textarea {
   font-family: var(--font-body);

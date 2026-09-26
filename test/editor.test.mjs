@@ -894,6 +894,140 @@ await test('a locked shape\'s resize handle does not resize it', async () => {
   assertEqual(lockedCalls, 1, 'onLockedAttempt should fire once for the blocked resize');
 });
 
+/* ── Drag-to-resize for every OTHER shape type: rect-kind corner-resize
+   (room/wallrect/floor/entrance/counter) and the rect-outline-4 case were
+   already covered above via the pure resizeRect/resizeRectOutline
+   functions directly — these drive the same resize through the actual
+   pointer controller (movePoint) for the two shape kinds that weren't
+   exercised that way yet: wall endpoints and a genuinely non-rectangular
+   outline's free vertices. `door` is deliberately excluded — unlike every
+   other layout shape, it renders no resize handle at all (see
+   canvas-renderer.js's renderDoor and the "no per-point resize handles"
+   test above it in this file) — a fixed ENTRANCE_WIDTH with no
+   per-instance resizing, by design. ── */
+
+await test('dragging a wall endpoint handle resizes it (changes its length/angle) through the actual pointer controller', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = { canvasWidth: 1200, canvasHeight: 800, layout: [{ type: 'wall', x1: 100, y1: 100, x2: 300, y2: 100 }], devices: [] };
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'select' }, gridSize: 0, selection: null };
+  createToolController(svg, () => state, patch => Object.assign(state, patch));
+
+  const handle = svg.querySelector('[data-kind="shape-point"][data-point="x2y2"]');
+  assert(handle, 'expected an x2y2 endpoint handle on the wall');
+  const p0 = clientToSvgPoint(svg, 10, 10);
+  const p1 = clientToSvgPoint(svg, 60, 40);
+  handle.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+  svg.dispatchEvent(pointerEvent('pointermove', 60, 40));
+  window.dispatchEvent(pointerEvent('pointerup', 60, 40));
+
+  assertEqual(data.layout[0].x1, 100, 'the un-dragged endpoint (x1y1) should stay fixed');
+  assertEqual(data.layout[0].y1, 100, 'the un-dragged endpoint (x1y1) should stay fixed');
+  assertEqual(data.layout[0].x2, 300 + (p1.x - p0.x), 'the dragged endpoint did not land at the new X');
+  assertEqual(data.layout[0].y2, 100 + (p1.y - p0.y), 'the dragged endpoint did not land at the new Y');
+});
+
+await test('a wall endpoint resize snaps to the grid, same as placement/move already do', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = { canvasWidth: 1200, canvasHeight: 800, layout: [{ type: 'wall', x1: 100, y1: 100, x2: 300, y2: 100 }], devices: [] };
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'select' }, gridSize: 25, selection: null };
+  createToolController(svg, () => state, patch => Object.assign(state, patch));
+
+  const handle = svg.querySelector('[data-kind="shape-point"][data-point="x2y2"]');
+  const p0 = clientToSvgPoint(svg, 0, 0);
+  const p1 = clientToSvgPoint(svg, 1, 1); // an arbitrary small move, snapped against gridSize=25
+  handle.dispatchEvent(pointerEvent('pointerdown', 0, 0));
+  svg.dispatchEvent(pointerEvent('pointermove', 1, 1));
+  window.dispatchEvent(pointerEvent('pointerup', 1, 1));
+
+  assertEqual(data.layout[0].x2, snap(300 + (p1.x - p0.x), 25), 'wall endpoint resize did not snap using state.gridSize');
+  assertEqual(data.layout[0].y2, snap(100 + (p1.y - p0.y), 25), 'wall endpoint resize did not snap using state.gridSize');
+});
+
+await test('a locked wall\'s endpoint handle does not resize it, same as a locked rect shape\'s corner handle', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = lockedRoomWithWall();
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'select' }, gridSize: 0, selection: null };
+  let lockedCalls = 0;
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => { lockedCalls++; });
+
+  const before = JSON.stringify(data.layout[0]);
+  const handle = svg.querySelector('[data-kind="shape-point"][data-point="x2y2"]');
+  handle.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+  svg.dispatchEvent(pointerEvent('pointermove', 90, 90));
+  window.dispatchEvent(pointerEvent('pointerup', 90, 90));
+
+  assertEqual(JSON.stringify(data.layout[0]), before, 'a locked wall should not have resized via its endpoint handle');
+  assertEqual(lockedCalls, 1, 'onLockedAttempt should fire once for the blocked resize');
+});
+
+await test('dragging a free (genuinely non-rectangular) outline vertex resizes just that vertex, snapped to the grid', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const sourceOutline = readJson('data/commons.json').layout.find(s => s.type === 'outline');
+  assert(!isAxisAlignedRect4(sourceOutline.points), 'fixture assumption: commons\' outline should be a genuine (non-rect-4) polygon');
+  const data = {
+    canvasWidth: 1200, canvasHeight: 800,
+    layout: [{ type: 'outline', points: sourceOutline.points.map(p => [...p]) }],
+    devices: [],
+  };
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'select' }, gridSize: 25, selection: null };
+  createToolController(svg, () => state, patch => Object.assign(state, patch));
+
+  const handle = svg.querySelector('[data-kind="shape-point"][data-point="0"]');
+  assert(handle, 'expected a per-vertex handle at index 0');
+  const otherPointsBefore = data.layout[0].points.slice(1).map(p => [...p]);
+  const p0 = clientToSvgPoint(svg, 0, 0);
+  const p1 = clientToSvgPoint(svg, 1, 1);
+  handle.dispatchEvent(pointerEvent('pointerdown', 0, 0));
+  svg.dispatchEvent(pointerEvent('pointermove', 1, 1));
+  window.dispatchEvent(pointerEvent('pointerup', 1, 1));
+
+  assertEqual(data.layout[0].points[0][0], snap(sourceOutline.points[0][0] + (p1.x - p0.x), 25), 'dragged vertex did not land at the new (snapped) X');
+  assertEqual(data.layout[0].points[0][1], snap(sourceOutline.points[0][1] + (p1.y - p0.y), 25), 'dragged vertex did not land at the new (snapped) Y');
+  assertEqual(JSON.stringify(data.layout[0].points.slice(1)), JSON.stringify(otherPointsBefore), 'every other vertex should stay exactly where it was');
+});
+
+await test('a locked room\'s outline vertex handle does not resize it', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const outline = createShape('outline', 0, 0);
+  const data = { status: 'final', canvasWidth: 1200, canvasHeight: 800, layout: [outline], devices: [] };
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+
+  const state = { data, tool: { type: 'select' }, gridSize: 0, selection: null };
+  let lockedCalls = 0;
+  createToolController(svg, () => state, patch => Object.assign(state, patch), () => { lockedCalls++; });
+
+  const before = JSON.stringify(data.layout[0]);
+  const handle = svg.querySelector('[data-kind="shape-point"][data-point="0"]');
+  handle.dispatchEvent(pointerEvent('pointerdown', 10, 10));
+  svg.dispatchEvent(pointerEvent('pointermove', 90, 90));
+  window.dispatchEvent(pointerEvent('pointerup', 90, 90));
+
+  assertEqual(JSON.stringify(data.layout[0]), before, 'a locked outline should not have resized via a vertex handle');
+  assertEqual(lockedCalls, 1, 'onLockedAttempt should fire once for the blocked resize');
+});
+
+await test('devices/furniture render no resize handle at all — they stay move-only, unaffected by shape resize', async () => {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  const data = {
+    canvasWidth: 1200, canvasHeight: 800, layout: [],
+    devices: [
+      { id: 'PC1', type: 'pc', top: 0, left: 0 },
+      { id: 'FURN1', type: 'furniture', top: 0, left: 100, label: 'Cabinet' },
+    ],
+  };
+  render(svg, data, { selection: null, gridSize: 0, showGrid: false });
+  assertEqual(svg.querySelectorAll('.ed-device .ed-handle').length, 0, 'no device (including furniture) should render a resize handle');
+  assertEqual(svg.querySelectorAll('.ed-device [data-kind="shape-point"]').length, 0, 'no device (including furniture) should have a resize hit-target');
+});
+
 await test('devices stay fully draggable and placeable on a locked (final) room', async () => {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
   const data = lockedRoomWithWall();
