@@ -19,10 +19,10 @@ import {
   extractAllRoomsIds, patchExportJs,
   validateNewRoomId,
 } from './room-scaffold.js';
-import {
-  computeContentBounds, computeFitScale as fitScaleFor, computeFitPan as fitPanFor,
-  zoomModifierLabel,
-} from '../room-logic.js';
+import { computeContentBounds, zoomModifierLabel } from '../room-logic.js';
+import { createViewController } from '../view-controls.js';
+import { createDisclosure } from '../disclosure.js';
+import { createHelpOverlay } from '../help-overlay.js';
 import { isCorrectPasscode, isSessionUnlocked, markSessionUnlocked } from './passcode-gate.js';
 
 /* ── DOM refs ─────────────────────────────────────────────────────── */
@@ -363,7 +363,7 @@ async function loadRoom(id, label, campus) {
   editorFooter.hidden = false;
   setStatus(`Loaded data/${stem}.json`);
   renderAll();
-  resetView();
+  viewCtl.resetView();
 }
 
 async function saveExistingRoom() {
@@ -526,7 +526,7 @@ async function createNewRoom() {
     editorFooter.hidden = false;
     setStatus(`Created ${id}: data/${roomFileStem(id)}.json, rooms/${roomFileStem(id)}.html, index.html, and js/export.js.`);
     renderAll();
-    resetView();
+    viewCtl.resetView();
   } catch (err) {
     newRoomErrors.textContent = err.message;
   }
@@ -557,25 +557,17 @@ function renderAll() {
 }
 
 /* ── Zoom / pan / fit (View section) ──────────────────────────────────
-   Ported from room.js's own zoom/pan block: same constants, same fit-math
-   (via room-logic.js's computeContentBounds/computeFitScale/computeFitPan —
-   imported, not re-derived), same view-transform approach. The one real
-   difference: room.js's content never changes after load, so it computes
-   `contentBounds` once; the editor's room DATA changes constantly as it's
-   edited, so bounds are recomputed fresh on every fit instead of cached.
-   The transform applies to `canvasFrame` (a plain div sized to the room's
+   Shared with room.js (see view-controls.js) — this page's own
+   contribution is just which elements it transforms, and that its content
+   bounds are recomputed fresh on every fit (its room DATA changes
+   constantly as it's edited) rather than cached once like room.js's. The
+   transform applies to `canvasFrame` (a plain div sized to the room's
    canvasWidth/canvasHeight), not the SVG's own viewBox — tools.js's
    clientToSvgPoint() reads the SVG's getScreenCTM(), which already folds in
    any ancestor CSS transform, so panning/zooming this frame needs no
-   changes there at all. */
-
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 3;
-const PAN_DRAG_THRESHOLD = 3;
-const FIT_MARGIN = 16;
-
-let view = { scale: 1, x: 0, y: 0 };
-let fitIsCurrent = true;
+   changes there at all. Panning is also gated on the Select tool and
+   excludes shapes/devices (`[data-kind]`), unlike room.js which has no tool
+   concept and only excludes devices (`[data-id]`) — see `shouldPan` below. */
 
 function syncFrameSize() {
   canvasFrame.style.width = `${state.data.canvasWidth}px`;
@@ -587,120 +579,22 @@ function currentContentBounds() {
   return computeContentBounds(layout, devices, W, H);
 }
 
-function clampScale(s) { return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)); }
-
-function computeFitScale() {
-  const W = state.data.canvasWidth, H = state.data.canvasHeight;
-  const vw = canvasViewport.clientWidth || W, vh = canvasViewport.clientHeight || H;
-  return fitScaleFor(currentContentBounds(), vw, vh, FIT_MARGIN);
-}
-
-function clampPanAxis(pos, scaledSize, viewSize) {
-  if (scaledSize <= viewSize) return 0;
-  return Math.min(0, Math.max(viewSize - scaledSize, pos));
-}
-
-function clampPan(x, y, scale) {
-  const W = state.data.canvasWidth, H = state.data.canvasHeight;
-  const vw = canvasViewport.clientWidth || W, vh = canvasViewport.clientHeight || H;
-  return {
-    x: clampPanAxis(x, W * scale, vw),
-    y: clampPanAxis(y, H * scale, vh),
-  };
-}
-
-function applyView() {
-  canvasFrame.style.transformOrigin = 'top left';
-  canvasFrame.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
-}
-
-function setView(scale, x, y) {
-  if (scale !== view.scale) fitIsCurrent = false;
-  view.scale = clampScale(scale);
-  const clamped = clampPan(x, y, view.scale);
-  view.x = clamped.x;
-  view.y = clamped.y;
-  applyView();
-}
-
-function zoomAt(viewportX, viewportY, newScale) {
-  newScale = clampScale(newScale);
-  const roomX = (viewportX - view.x) / view.scale;
-  const roomY = (viewportY - view.y) / view.scale;
-  setView(newScale, viewportX - roomX * newScale, viewportY - roomY * newScale);
-}
-
-function zoomByFactor(factor) {
-  const W = state.data.canvasWidth, H = state.data.canvasHeight;
-  const vw = canvasViewport.clientWidth || W, vh = canvasViewport.clientHeight || H;
-  zoomAt(vw / 2, vh / 2, view.scale * factor);
-}
-
-function fitToScreen() {
-  if (!state.data) return;
-  const W = state.data.canvasWidth, H = state.data.canvasHeight;
-  const vw = canvasViewport.clientWidth || W, vh = canvasViewport.clientHeight || H;
-  const scale = clampScale(computeFitScale());
-  const { x, y } = fitPanFor(currentContentBounds(), vw, vh, scale);
-  view.scale = scale;
-  view.x = x;
-  view.y = y;
-  applyView();
-  fitIsCurrent = true;
-}
-function actualSize() { setView(1, 0, 0); }
-
-/** Called once per newly loaded/created room — resets pan/zoom to a fresh
- *  fit rather than carrying over whatever the previous room's view was. The
- *  requestAnimationFrame re-fit mirrors room.js's own workaround: right
- *  after a room's data first populates the sidebar, the viewport may not
- *  have finished laying out yet, so clientWidth/Height can still read their
- *  old (or zero) values at the point fitToScreen() is first called. */
-function resetView() {
-  fitToScreen();
-  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => fitToScreen());
-}
-
-function handleViewportResize() {
-  if (!state.data) return;
-  if (fitIsCurrent) fitToScreen();
-  else setView(view.scale, view.x, view.y);
-}
-window.addEventListener('resize', handleViewportResize);
-if (typeof ResizeObserver === 'function') {
-  new ResizeObserver(handleViewportResize).observe(canvasViewport);
-}
-
-let panDrag = null;
-canvasViewport.addEventListener('pointerdown', e => {
-  // Only pans in Select mode, and only when the pointerdown didn't land on
-  // an actual device/shape/handle — the same target check tools.js's own
-  // hitTest() makes, so the two never fight over the same gesture: either
-  // tools.js starts a real drag (this stays out of the way) or nothing was
-  // hit and only a pan may start.
-  if (state.tool?.type !== 'select') return;
-  if (e.target.closest?.('[data-kind]')) return;
-  if (e.button !== undefined && e.button !== 0) return;
-  panDrag = { startX: e.clientX, startY: e.clientY, origX: view.x, origY: view.y, moved: false };
+const viewCtl = createViewController({
+  viewport: canvasViewport,
+  frame: canvasFrame,
+  getCanvasSize: () => ({ w: state.data.canvasWidth, h: state.data.canvasHeight }),
+  getContentBounds: currentContentBounds,
+  isReady: () => !!state.data,
+  shouldPan: e => state.tool?.type === 'select' && !e.target.closest?.('[data-kind]'),
+  buttons: {
+    zoomOut: edZoomOutBtn,
+    zoomIn: edZoomInBtn,
+    zoomFit: edZoomFitBtn,
+    zoom100: edZoom100Btn,
+    zoomFullscreen: edZoomFullscreenBtn,
+  },
+  hintEl: edZoomHint,
 });
-window.addEventListener('pointermove', e => {
-  if (!panDrag) return;
-  const dx = e.clientX - panDrag.startX, dy = e.clientY - panDrag.startY;
-  if (Math.hypot(dx, dy) > PAN_DRAG_THRESHOLD) panDrag.moved = true;
-  if (!panDrag.moved) return;
-  setView(view.scale, panDrag.origX + dx, panDrag.origY + dy);
-});
-window.addEventListener('pointerup', () => { panDrag = null; });
-
-// Plain wheel scroll over the canvas behaves like normal page scroll; zoom
-// only kicks in with Ctrl/Cmd held, matching room.js's own wheel handler.
-canvasViewport.addEventListener('wheel', e => {
-  if (!(e.ctrlKey || e.metaKey)) return;
-  e.preventDefault();
-  const rect = canvasViewport.getBoundingClientRect();
-  const factor = e.deltaY < 0 ? 1.1 : 0.9;
-  zoomAt(e.clientX - rect.left, e.clientY - rect.top, view.scale * factor);
-}, { passive: false });
 
 /* ── Room status: draft/final badge + Mark as Final / Unlock Layout ──
    "Final" locks the room's LAYOUT (layout[] — walls/doors/entrance/
@@ -1066,31 +960,43 @@ function buildDeviceLegend() {
   });
 }
 
-function setEditorLegendOpen(open) {
-  legendBody.hidden = !open;
-  legendToggleBtn.setAttribute('aria-expanded', String(open));
-  legendToggleBtn.textContent = open ? 'Legend ▴' : 'Legend ▾';
-}
+/** Collapsible, built on the same shared disclosure component room.js's own
+ *  Legend & Stats section uses (see disclosure.js). */
+const legendCtl = createDisclosure({
+  toggleBtn: legendToggleBtn,
+  body: legendBody,
+  openLabel: 'Legend ▴',
+  closedLabel: 'Legend ▾',
+  defaultOpen: false,
+});
 
 /* ── Help / shortcuts ──────────────────────────────────────────────── */
 
-function buildEditorShortcutList() {
-  const rows = [
-    ['Click canvas', 'Place the armed tool, or select what’s under the pointer'],
-    ['Drag, or click then click a destination', 'Move the selected device or shape'],
-    ['Corner / endpoint handles', 'Resize or reshape the selected shape'],
-    ['Delete', 'Delete the selected device or shape'],
-    ['Escape', 'Return to Select, or close an open dialog'],
-    ['F', 'Fit the floor plan to screen'],
-    [`${zoomModifierLabel()}+scroll`, 'Zoom the floor plan (plain scroll behaves normally)'],
-    ['?', 'Open this help'],
-  ];
-  editorShortcutList.innerHTML = rows.map(([kbd, desc]) => `
-    <div><dt class="kbd">${kbd}</dt><dd>${desc}</dd></div>`).join('');
-}
+/** Data for the shared help-overlay component (see help-overlay.js) — the
+ *  rendering itself is one implementation shared with room.js's own
+ *  shortcut list. */
+const EDITOR_HELP_ROWS = [
+  ['Click canvas', 'Place the armed tool, or select what’s under the pointer'],
+  ['Drag, or click then click a destination', 'Move the selected device or shape'],
+  ['Corner / endpoint handles', 'Resize or reshape the selected shape'],
+  ['Delete', 'Delete the selected device or shape'],
+  ['Escape', 'Return to Select, or close an open dialog'],
+  ['F', 'Fit the floor plan to screen'],
+  [`${zoomModifierLabel()}+scroll`, 'Zoom the floor plan (plain scroll behaves normally)'],
+  ['?', 'Open this help'],
+];
 
-function openEditorHelp() { editorHelpOverlay.classList.add('open'); }
-function closeEditorHelp() { editorHelpOverlay.classList.remove('open'); }
+/** No focus-trap/return-focus here — matches this page's own pre-existing
+ *  simpler overlay behavior (its New Room / Unlock dialogs don't have it
+ *  either), unlike room.js's own Help overlay which keeps its fuller
+ *  behavior via focusManagement:true (see help-overlay.js). */
+const helpCtl = createHelpOverlay({
+  overlay: editorHelpOverlay,
+  list: editorShortcutList,
+  rows: EDITOR_HELP_ROWS,
+  openBtn: editorHelpBtn,
+  closeBtn: editorHelpCloseBtn,
+});
 
 /* ── Wiring ───────────────────────────────────────────────────────── */
 
@@ -1129,26 +1035,11 @@ gridSizeInput.addEventListener('input', () => {
 });
 showGridInput.addEventListener('change', renderAll);
 
-edZoomOutBtn.addEventListener('click', () => zoomByFactor(0.8));
-edZoomInBtn.addEventListener('click', () => zoomByFactor(1.25));
-edZoomFitBtn.addEventListener('click', fitToScreen);
-edZoom100Btn.addEventListener('click', actualSize);
-edZoomFullscreenBtn.addEventListener('click', () => {
-  if (document.fullscreenElement) document.exitFullscreen?.();
-  else canvasViewport.requestFullscreen?.();
-});
-
-legendToggleBtn.addEventListener('click', () => setEditorLegendOpen(legendBody.hidden));
-
-editorHelpBtn.addEventListener('click', openEditorHelp);
-editorHelpCloseBtn.addEventListener('click', closeEditorHelp);
-editorHelpOverlay.addEventListener('click', e => { if (e.target === editorHelpOverlay) closeEditorHelp(); });
-
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (newRoomOverlay.classList.contains('open')) { closeNewRoomDialog(); return; }
     if (unlockOverlay.classList.contains('open')) { closeUnlockConfirm(); return; }
-    if (editorHelpOverlay.classList.contains('open')) { closeEditorHelp(); return; }
+    if (helpCtl.isOpen()) { helpCtl.close(); return; }
     state.tool = { type: 'select' };
     document.querySelectorAll('.editor-tool-btn.armed').forEach(b => b.classList.remove('armed'));
   }
@@ -1158,8 +1049,8 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (typing) return;
-  if (e.key === '?') { e.preventDefault(); openEditorHelp(); return; }
-  if (e.key.toLowerCase() === 'f' && state.data) { e.preventDefault(); fitToScreen(); }
+  if (e.key === '?') { e.preventDefault(); helpCtl.open(); return; }
+  if (e.key.toLowerCase() === 'f' && state.data) { e.preventDefault(); viewCtl.fitToScreen(); }
 });
 
 window.addEventListener('beforeunload', e => {
@@ -1169,6 +1060,3 @@ window.addEventListener('beforeunload', e => {
 buildPalette();
 buildDeviceTypeList();
 buildDeviceLegend();
-setEditorLegendOpen(false);
-buildEditorShortcutList();
-edZoomHint.textContent = `${zoomModifierLabel()}+scroll to zoom`;

@@ -15,9 +15,12 @@ import { exportRoom, exportAllRooms, ALL_ROOMS } from './export.js';
 import {
   computeStats,
   matchesFilter, matchesSearch, buildSearchHaystack,
-  computeContentBounds, computeFitScale as fitScaleFor, computeFitPan as fitPanFor,
+  computeContentBounds,
   zoomModifierLabel,
 } from './room-logic.js';
+import { createViewController } from './view-controls.js';
+import { createDisclosure } from './disclosure.js';
+import { createHelpOverlay } from './help-overlay.js';
 
 /**
  * Every device carries two independent fields (see state.js): an
@@ -83,12 +86,21 @@ const FILTERS = [
   { key: 'notes',          label: 'Notes' },
 ];
 
-const MIN_SCALE = 0.25;
-const MAX_SCALE = 3;
-const PAN_DRAG_THRESHOLD = 3;
-/** Small, consistent breathing room around a fit — not large empty
- *  padding. Screen-space px, mirrors --space-4 (16px). */
-const FIT_MARGIN = 16;
+/** Data for the shared help-overlay component (see help-overlay.js) — the
+ *  rendering itself is one implementation shared with the editor's own
+ *  shortcut list. */
+const HELP_ROWS = [
+  ['1', 'Mark selected device Working'],
+  ['2', 'Mark selected device Minor'],
+  ['3', 'Mark selected device Major'],
+  ['0', 'Reset selected device to Not Checked'],
+  ['N', 'Add/edit note on selected device'],
+  ['U', 'Undo last status change'],
+  ['/', 'Search'],
+  ['F', 'Fit floor plan to screen'],
+  [`${zoomModifierLabel()}+scroll`, 'Zoom the floor plan (plain scroll behaves normally)'],
+  ['Esc', 'Exit inspection mode / close menus and dialogs'],
+];
 
 /** No emoji anywhere in this file — every icon is either a plain
  *  typographic character already used elsewhere in the app (←, ↓, ↶,
@@ -421,7 +433,7 @@ export function initRoomPage(CFG) {
                 <button type="button" class="toolbar-btn" id="zoom-100" aria-label="Actual size">100%</button>
                 <button type="button" class="toolbar-btn" id="zoom-in" aria-label="Zoom in">+</button>
                 <button type="button" class="toolbar-btn" id="zoom-fullscreen" aria-label="Fullscreen">${ICON_FULLSCREEN}</button>
-                <span class="zoom-hint">${zoomModifierLabel()}+scroll to zoom</span>
+                <span class="zoom-hint" id="zoom-hint"></span>
               </div>
             </div>
 
@@ -446,18 +458,7 @@ export function initRoomPage(CFG) {
       <div class="popup">
         <button class="popup-close" id="help-close" aria-label="Close">✕</button>
         <h3 class="popup-title" id="help-title">Keyboard shortcuts</h3>
-        <dl class="shortcut-list">
-          <div><dt class="kbd">1</dt><dd>Mark selected device Working</dd></div>
-          <div><dt class="kbd">2</dt><dd>Mark selected device Minor</dd></div>
-          <div><dt class="kbd">3</dt><dd>Mark selected device Major</dd></div>
-          <div><dt class="kbd">0</dt><dd>Reset selected device to Not Checked</dd></div>
-          <div><dt class="kbd">N</dt><dd>Add/edit note on selected device</dd></div>
-          <div><dt class="kbd">U</dt><dd>Undo last status change</dd></div>
-          <div><dt class="kbd">/</dt><dd>Search</dd></div>
-          <div><dt class="kbd">F</dt><dd>Fit floor plan to screen</dd></div>
-          <div><dt class="kbd">${zoomModifierLabel()}+scroll</dt><dd>Zoom the floor plan (plain scroll behaves normally)</dd></div>
-          <div><dt class="kbd">Esc</dt><dd>Exit inspection mode / close menus and dialogs</dd></div>
-        </dl>
+        <dl class="shortcut-list" id="help-shortcut-list"></dl>
       </div>
     </div>
 
@@ -738,15 +739,17 @@ export function initRoomPage(CFG) {
   }
 
   /* ── Sidebar Legend + Stats — its own collapsible sub-section, always
-     available regardless of Inspector/Inspection-Mode state. Same
-     disclosure convention as menu.js's site-toggle ("Hide Rooms ▴" /
-     "View Rooms ▾"): the button's own label carries the open/closed
-     state, not just aria-expanded. */
-  function setLegendOpen(open) {
-    legendStatsBody.hidden = !open;
-    legendToggleBtn.setAttribute('aria-expanded', String(open));
-    legendToggleBtn.textContent = open ? 'Legend & Stats ▴' : 'Legend & Stats ▾';
-  }
+     available regardless of Inspector/Inspection-Mode state, built on the
+     same shared disclosure component the editor's own Legend uses (see
+     disclosure.js) — the button's own label carries the open/closed state,
+     not just aria-expanded, same convention menu.js's site-toggle uses. */
+  const legendCtl = createDisclosure({
+    toggleBtn: legendToggleBtn,
+    body: legendStatsBody,
+    openLabel: 'Legend & Stats ▴',
+    closedLabel: 'Legend & Stats ▾',
+    defaultOpen: false,
+  });
 
   /* ── Mobile bottom sheet ──────────────────────────────────────────
      Below 700px the whole sidebar (now six sections deep) collapses to a
@@ -863,92 +866,25 @@ export function initRoomPage(CFG) {
     setSheetOpen(true);
   }
 
-  /* ── Zoom / pan — a view transform only; device coordinates never change ── */
-  let view = { scale: 1, x: 0, y: 0 };
-  /** True whenever `view` still reflects the last computed fit — set on
-   *  every fitToScreen() call, cleared the moment the user deliberately
-   *  changes scale (the zoom buttons, Ctrl/Cmd+wheel, or Actual Size).
-   *  Pan-only actions (drag, the resize handler's own re-clamp) never
-   *  touch it. This is what lets a live window resize re-fit automatically
-   *  right up until the user has manually zoomed away from fit — after
-   *  that, resizing only re-clamps pan at their chosen scale instead of
-   *  silently overriding it (see the resize listener below). */
-  let fitIsCurrent = true;
-
-  function clampScale(s) { return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)); }
-
-  function computeFitScale() {
-    const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
-    return fitScaleFor(contentBounds, vw, vh, FIT_MARGIN);
-  }
-
-  function clampPanAxis(pos, scaledSize, viewSize) {
-    if (scaledSize <= viewSize) return 0;
-    return Math.min(0, Math.max(viewSize - scaledSize, pos));
-  }
-
-  function clampPan(x, y, scale) {
-    const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
-    return {
-      x: clampPanAxis(x, W * scale, vw),
-      y: clampPanAxis(y, H * scale, vh),
-    };
-  }
-
-  function applyView() {
-    room.style.transformOrigin = 'top left';
-    room.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
-  }
-
-  /** Pan-only calls (drag, the resize handler's own re-clamp) always pass
-   *  `view.scale` straight back in, so this comparison — against the raw,
-   *  not-yet-clamped argument, never a value recomputed via a different
-   *  code path — only ever flips `fitIsCurrent` off for a call that's
-   *  actually asking for a different scale (zoomAt, actualSize,
-   *  focusDevice's targeted zoom-to-device). No float-equality fragility:
-   *  it's the same value being compared, not two independently derived
-   *  ones. */
-  function setView(scale, x, y) {
-    if (scale !== view.scale) fitIsCurrent = false;
-    view.scale = clampScale(scale);
-    const clamped = clampPan(x, y, view.scale);
-    view.x = clamped.x;
-    view.y = clamped.y;
-    applyView();
-  }
-
-  function zoomAt(viewportX, viewportY, newScale) {
-    newScale = clampScale(newScale);
-    const roomX = (viewportX - view.x) / view.scale;
-    const roomY = (viewportY - view.y) / view.scale;
-    setView(newScale, viewportX - roomX * newScale, viewportY - roomY * newScale);
-  }
-
-  function zoomByFactor(factor) {
-    const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
-    zoomAt(vw / 2, vh / 2, view.scale * factor);
-  }
-
-  /**
-   * True maximum contain-fit: centers the room's actual content bounding
-   * box (not its raw (0,0) canvas origin) in the viewport at the largest
-   * scale that fits. This deliberately bypasses setView()/clampPan() — that
-   * clamp is calibrated to the full nominal canvas size (W×H) for ordinary
-   * interactive pan/zoom, and would fight a deliberately off-(0,0) centered
-   * pan for a room whose content doesn't start at the canvas origin (true
-   * of every real room but one — see computeContentBounds).
-   */
-  function fitToScreen() {
-    const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
-    const scale = clampScale(computeFitScale());
-    const { x, y } = fitPanFor(contentBounds, vw, vh, scale);
-    view.scale = scale;
-    view.x = x;
-    view.y = y;
-    applyView();
-    fitIsCurrent = true;
-  }
-  function actualSize() { setView(1, 0, 0); }
+  /* ── Zoom / pan / fit (View section) — a view transform only; device
+     coordinates never change. Shared with the editor (see view-controls.js)
+     — this page's own contribution is just which elements it transforms and
+     that its `contentBounds` never changes after load, unlike the editor's
+     constantly-edited room data. */
+  const viewCtl = createViewController({
+    viewport,
+    frame: room,
+    getCanvasSize: () => ({ w: W, h: H }),
+    getContentBounds: () => contentBounds,
+    buttons: {
+      zoomOut: zoomOutBtn,
+      zoomIn: zoomInBtn,
+      zoomFit: zoomFitBtn,
+      zoom100: zoom100Btn,
+      zoomFullscreen: zoomFullscreenBtn,
+    },
+    hintEl: document.getElementById('zoom-hint'),
+  });
 
   /** Approximate chip center — good enough to center a device on screen;
    *  exact chip size varies by type/label and isn't worth tracking here. */
@@ -965,9 +901,9 @@ export function initRoomPage(CFG) {
     const device = deviceById.get(deviceId);
     if (!device) return;
     const vw = viewport.clientWidth || W, vh = viewport.clientHeight || H;
-    const targetScale = Math.max(view.scale, Math.min(1, computeFitScale() * 1.4));
+    const targetScale = Math.max(viewCtl.scale, Math.min(1, viewCtl.computeFitScale() * 1.4));
     const [cx, cy] = deviceCenter(device);
-    setView(targetScale, vw / 2 - cx * targetScale, vh / 2 - cy * targetScale);
+    viewCtl.setView(targetScale, vw / 2 - cx * targetScale, vh / 2 - cy * targetScale);
     if (opts.select !== false) selectDevice(deviceId, opts);
   }
 
@@ -1086,8 +1022,20 @@ export function initRoomPage(CFG) {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 
-  [resetOverlay, searchOverlay, helpOverlay].forEach(o =>
+  [resetOverlay, searchOverlay].forEach(o =>
     o.addEventListener('keydown', e => trapTab(e, o)));
+
+  /* ── Keyboard shortcuts help — shared with the editor (see
+     help-overlay.js); focusManagement:true keeps this page's existing
+     focus-trap/return-focus behavior, same as Reset/Search above. */
+  const helpCtl = createHelpOverlay({
+    overlay: helpOverlay,
+    list: helpOverlay.querySelector('.shortcut-list'),
+    rows: HELP_ROWS,
+    openBtn: document.getElementById('btn-help'),
+    closeBtn: document.getElementById('help-close'),
+    focusManagement: true,
+  });
 
   /* ── Events ────────────────────────────────────────────────── */
 
@@ -1109,7 +1057,6 @@ export function initRoomPage(CFG) {
   filterToggleBtn.addEventListener('click', () => setFilterOpen(!filterOpen));
   filterBtns.forEach(btn => btn.addEventListener('click', () => setFilter(btn.dataset.filter)));
 
-  legendToggleBtn.addEventListener('click', () => setLegendOpen(legendStatsBody.hidden));
   sheetToggleBtn.addEventListener('click', () => setSheetOpen(sheetToggleBtn.getAttribute('aria-expanded') !== 'true'));
 
   function setOverflowOpen(open) {
@@ -1129,49 +1076,9 @@ export function initRoomPage(CFG) {
   });
   inspectorNotesEl.addEventListener('blur', flushNotesSave);
 
-  zoomOutBtn.addEventListener('click', () => zoomByFactor(0.8));
-  zoomInBtn.addEventListener('click', () => zoomByFactor(1.25));
-  zoomFitBtn.addEventListener('click', fitToScreen);
-  zoom100Btn.addEventListener('click', actualSize);
-  zoomFullscreenBtn.addEventListener('click', () => {
-    if (document.fullscreenElement) document.exitFullscreen?.();
-    else viewport.requestFullscreen?.();
-  });
-
-  // Plain wheel scroll over the floor plan behaves like normal page scroll
-  // (we don't touch the event at all) — zoom only kicks in with Ctrl/Cmd
-  // held, matching the browser's own "zoom the page" gesture so it never
-  // hijacks an ordinary scroll.
-  viewport.addEventListener('wheel', e => {
-    if (!(e.ctrlKey || e.metaKey)) return;
-    e.preventDefault();
-    const rect = viewport.getBoundingClientRect();
-    const factor = e.deltaY < 0 ? 1.1 : 0.9;
-    zoomAt(e.clientX - rect.left, e.clientY - rect.top, view.scale * factor);
-  }, { passive: false });
-
-  let panDrag = null;
-  viewport.addEventListener('pointerdown', e => {
-    if (e.target.closest?.('[data-id]')) return;
-    if (e.button !== undefined && e.button !== 0) return;
-    panDrag = { startX: e.clientX, startY: e.clientY, origX: view.x, origY: view.y, moved: false };
-  });
-  window.addEventListener('pointermove', e => {
-    if (!panDrag) return;
-    const dx = e.clientX - panDrag.startX, dy = e.clientY - panDrag.startY;
-    if (Math.hypot(dx, dy) > PAN_DRAG_THRESHOLD) panDrag.moved = true;
-    if (!panDrag.moved) return;
-    setView(view.scale, panDrag.origX + dx, panDrag.origY + dy);
-  });
-  window.addEventListener('pointerup', () => { panDrag = null; });
-
   document.getElementById('btn-search').addEventListener('click', openSearch);
   document.getElementById('search-close').addEventListener('click', closeSearch);
   searchOverlay.addEventListener('click', e => { if (e.target === searchOverlay) closeSearch(); });
-
-  document.getElementById('btn-help').addEventListener('click', () => openOverlay(helpOverlay));
-  document.getElementById('help-close').addEventListener('click', () => closeOverlay(helpOverlay));
-  helpOverlay.addEventListener('click', e => { if (e.target === helpOverlay) closeOverlay(helpOverlay); });
 
   document.getElementById('btn-reset').addEventListener('click', () => openOverlay(resetOverlay));
   document.getElementById('reset-confirm').addEventListener('click', () => { resetRoom(); closeOverlay(resetOverlay); });
@@ -1182,7 +1089,7 @@ export function initRoomPage(CFG) {
   document.getElementById('btn-export-all').addEventListener('click', () => exportAllRooms({ dataUrlFor: stem => `../data/${stem}.json` }));
 
   document.addEventListener('keydown', e => {
-    if (e.key === '?') { e.preventDefault(); openOverlay(helpOverlay); return; }
+    if (e.key === '?') { e.preventDefault(); helpCtl.open(); return; }
     if ((e.key === '/' && !e.ctrlKey && !e.metaKey) || (e.key.toLowerCase() === 'k' && (e.ctrlKey || e.metaKey))) {
       const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
       if (typing) return;
@@ -1191,8 +1098,8 @@ export function initRoomPage(CFG) {
       return;
     }
     if (e.key === 'Escape') {
-      const anyOpen = [resetOverlay, searchOverlay, helpOverlay].some(o => o.classList.contains('open'));
-      if (anyOpen) { closeOverlay(resetOverlay); closeSearch(); closeOverlay(helpOverlay); }
+      const anyOpen = [resetOverlay, searchOverlay].some(o => o.classList.contains('open')) || helpCtl.isOpen();
+      if (anyOpen) { closeOverlay(resetOverlay); closeSearch(); helpCtl.close(); }
       else if (!overflowMenu.hidden) setOverflowOpen(false);
       else if (filterOpen) setFilterOpen(false);
       else if (activeModeStatus) setMode(null);
@@ -1202,7 +1109,7 @@ export function initRoomPage(CFG) {
     const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
     if (typing) return;
 
-    if (e.key.toLowerCase() === 'f') { e.preventDefault(); fitToScreen(); return; }
+    if (e.key.toLowerCase() === 'f') { e.preventDefault(); viewCtl.fitToScreen(); return; }
     if (e.key.toLowerCase() === 'u') { e.preventDefault(); undoLast(); return; }
     if (!selectedDeviceId) return;
     if (e.key === '1') { e.preventDefault(); applyChange(selectedDeviceId, changeFor('working')); return; }
@@ -1220,39 +1127,18 @@ export function initRoomPage(CFG) {
     if (selectedDeviceId) renderInspector({ keepFocus: true });
   });
 
-  /** Re-fits on any viewport size change — window resize, or (via the
-   *  ResizeObserver below) a layout change that isn't a window resize at
-   *  all, like a split-screen/multi-window drag — but only while the view
-   *  still reflects the last fit (`fitIsCurrent`). The old rule compared
-   *  `view.scale === computeFitScale()` freshly every time, which broke
-   *  the moment the viewport actually changed size: the *old* scale almost
-   *  never equals the *newly recomputed* fit scale for the *new* size, so
-   *  a live resize from desktop down to mobile width silently never
-   *  re-fit, just re-clamped pan at the old (now too-large) scale. Once
-   *  the user has manually zoomed away from fit, resizing intentionally
-   *  falls back to that same re-clamp instead — a deliberate zoom should
-   *  survive a resize, not get silently overridden back to fit. */
-  function handleViewportResize() {
-    if (fitIsCurrent) fitToScreen();
-    else setView(view.scale, view.x, view.y);
-  }
-  window.addEventListener('resize', handleViewportResize);
-  if (typeof ResizeObserver === 'function') {
-    new ResizeObserver(handleViewportResize).observe(viewport);
-  }
-
   paintAll();
   applyFilterToAll();
   updateStatsUI();
   refreshUndo();
   renderInspector();
   // Six sections now compete for sidebar space (see the SIDEBAR ORGANIZATION
-  // restructure) — Legend & Stats defaults to collapsed so it doesn't push
-  // the Inspector below the fold; the mobile sheet defaults collapsed too,
-  // for the same "don't overwhelm the screen" reason (see setSheetOpen).
-  setLegendOpen(false);
+  // restructure) — Legend & Stats defaults to collapsed (see legendCtl above)
+  // so it doesn't push the Inspector below the fold; the mobile sheet
+  // defaults collapsed too, for the same "don't overwhelm the screen" reason
+  // (see setSheetOpen).
   setSheetOpen(false);
-  fitToScreen();
+  viewCtl.fitToScreen();
 
   const focusParam = new URLSearchParams(window.location.search).get('focus');
   if (focusParam && deviceById.has(focusParam)) {
@@ -1271,6 +1157,6 @@ export function initRoomPage(CFG) {
     // that without disturbing anything the user's done since. Skipped
     // entirely when a ?focus= param is about to pan/zoom to a specific
     // device instead, so this never fights that.
-    requestAnimationFrame(() => fitToScreen());
+    requestAnimationFrame(() => viewCtl.fitToScreen());
   }
 }
