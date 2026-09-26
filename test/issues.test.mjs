@@ -74,7 +74,7 @@ await test('with nothing minor/major anywhere, the page shows the empty state, n
   const { doc } = await mountIssues({ commons: [{ id: 'PC1' }] }, {
     'COMMONS_PC1': { inspectionState: 'checked', condition: 'working', notes: '', updatedAt: null },
   });
-  assertEqual(doc.getElementById('issues-summary').textContent, 'No issues.', 'expected the empty-state summary line');
+  assertEqual(doc.getElementById('issues-summary').textContent, 'No issues — every inspected device across every finalized room is Working.', 'expected the empty-state summary line');
   assert(/no issues/i.test(doc.getElementById('issues-root').textContent), 'expected an explicit "No issues" message, not blank whitespace');
 });
 
@@ -99,7 +99,7 @@ await test('working, unchecked, and not-applicable devices never appear in the i
     'COMMONS_PC2': { inspectionState: 'not-applicable', condition: null, notes: '', updatedAt: null },
     // PC3 has no entry at all — untouched/unchecked.
   });
-  assertEqual(doc.getElementById('issues-summary').textContent, 'No issues.', 'none of working/not-applicable/unchecked should count as an issue');
+  assertEqual(doc.getElementById('issues-summary').textContent, 'No issues — every inspected device across every finalized room is Working.', 'none of working/not-applicable/unchecked should count as an issue');
 });
 
 await test('the Major/Minor filter buttons narrow the list; All restores it', async () => {
@@ -168,7 +168,7 @@ await test('a room whose data file fails to fetch degrades to contributing no is
   const { doc } = await mountIssues({}, {
     'COMMONS_PC1': { inspectionState: 'checked', condition: 'major', notes: '', updatedAt: null },
   });
-  assertEqual(doc.getElementById('issues-summary').textContent, 'No issues.', 'a device outside any successfully-fetched roster should not surface as an issue');
+  assertEqual(doc.getElementById('issues-summary').textContent, 'No issues — every inspected device across every finalized room is Working.', 'a device outside any successfully-fetched roster should not surface as an issue');
 });
 
 /* ── Report ────────────────────────────────────────────────────────── */

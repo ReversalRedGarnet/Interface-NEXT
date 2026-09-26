@@ -1,5 +1,3 @@
-# Gridkeep
-
 A floor-plan view of every tracked device in a room. Checkers walk the room,
 tap each device, and the status sticks. Reports come out as CSV.
 

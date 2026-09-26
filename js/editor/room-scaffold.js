@@ -50,7 +50,7 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>${escapeHtml(label)} — Gridkeep</title>
+  <title>${escapeHtml(label)}</title>
   <link rel="stylesheet" href="../tokens.css">
   <link rel="stylesheet" href="../base.css">
   <link rel="stylesheet" href="../layout.css">
@@ -76,7 +76,7 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
 
   <div class="site-header">
     <div class="site-header-inner">
-      <span class="site-tool">Gridkeep</span>
+      <span class="site-tool"></span>
       <nav class="site-nav" aria-label="Primary">
         <a href="../index.html">Campus</a>
         <a href="../issues.html">Issues</a>
@@ -89,7 +89,6 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
   <script type="module" src="../js/main.js"></script>
 
   <footer class="site-footer">
-    <p><a href="https://github.com/ReversalRedGarnet">ReversalRedGarnet</a></p>
   </footer>
 
 </body>

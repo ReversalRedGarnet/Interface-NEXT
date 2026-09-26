@@ -14,6 +14,7 @@ import { roomFileStem } from './editor/room-scaffold.js';
 import { collectIssues, sortIssues, filterIssues, summarizeIssues } from './issues-logic.js';
 
 const CONDITION_LABELS = { major: 'Major', minor: 'Minor' };
+const NO_ISSUES_TEXT = 'No issues — every inspected device across every finalized room is Working.';
 
 function escapeHTML(s) {
   return String(s).replace(/[&<>"']/g, c => (
@@ -92,11 +93,11 @@ export async function initIssuesPage() {
     const summary = summarizeIssues(allIssues);
     summaryEl.textContent = summary.total
       ? `${summary.total} issue${summary.total === 1 ? '' : 's'} across ${summary.rooms} room${summary.rooms === 1 ? '' : 's'} — ${summary.major} major, ${summary.minor} minor`
-      : 'No issues.';
+      : NO_ISSUES_TEXT;
 
     const issues = filterIssues(allIssues, filter);
     if (!issues.length) {
-      root.innerHTML = `<p class="search-hint">${allIssues.length ? 'No issues match this filter.' : 'No issues.'}</p>`;
+      root.innerHTML = `<p class="search-hint">${allIssues.length ? 'No issues match this filter.' : NO_ISSUES_TEXT}</p>`;
       return;
     }
     root.innerHTML = renderGroups(groupIssues(issues));

@@ -246,7 +246,7 @@ function buildDeviceHTML(devices) {
  * room simply isn't ready for inspection yet.
  */
 function renderNotFinalized(CFG) {
-  document.title = `${CFG.label} — Gridkeep`;
+  document.title = CFG.label;
   document.getElementById('room-root').innerHTML = `
     <div class="app">
       <header>
@@ -289,7 +289,7 @@ export function initRoomPage(CFG) {
    *  fixed for the lifetime of this read-only page. */
   const contentBounds = computeContentBounds(CFG.layout, CFG.devices, W, H);
 
-  document.title = `${CFG.label} — Gridkeep`;
+  document.title = CFG.label;
   document.getElementById('room-root').innerHTML = `
     <div class="app workstation-app">
 
@@ -406,7 +406,7 @@ export function initRoomPage(CFG) {
             <div class="sidebar-section sidebar-inspector" id="sidebar-inspector">
               <div id="inspector-normal">
                 <p class="quick-mark-label sidebar-section-label">Inspector</p>
-                <p class="inspector-empty" id="inspector-empty">Select a device to inspect it.</p>
+                <p class="inspector-empty" id="inspector-empty">Select a device to inspect it, or press / to search for one.</p>
                 <div class="inspector-content" id="inspector-content" hidden>
                   <div class="inspector-head">
                     <h3 id="inspector-device-id"></h3>

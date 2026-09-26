@@ -35,7 +35,7 @@ export async function hideNonFinalRoomLinks(doc = document, dataUrlFor = stem =>
     if (list.children.length === 0 && !list.querySelector('.room-list-empty')) {
       const note = doc.createElement('p');
       note.className = 'room-list-empty search-hint';
-      note.textContent = 'No finalized rooms yet.';
+      note.textContent = 'No finalized rooms yet — a room only appears here once it\'s been reviewed and marked Final in the editor.';
       list.appendChild(note);
     }
   });

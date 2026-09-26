@@ -774,7 +774,7 @@ await test('ArrowRight is unbound — ArrowRight does nothing, with or without a
 await test('the inspector\'s empty-state text no longer references Next Unchecked or the → shortcut', async () => {
   const { doc } = await mount(readRoom('commons'));
   const text = doc.getElementById('inspector-empty').textContent;
-  assert(text === 'Select a device to inspect it.', `expected the empty-state text with the Next Unchecked clause dropped, got: "${text}"`);
+  assert(text === 'Select a device to inspect it, or press / to search for one.', `expected the empty-state text with the Next Unchecked clause dropped, got: "${text}"`);
 });
 
 await test('the keyboard-shortcuts help overlay no longer lists a → / Next Unchecked entry', async () => {
