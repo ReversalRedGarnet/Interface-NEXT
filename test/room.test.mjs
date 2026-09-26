@@ -11,6 +11,7 @@
 import { JSDOM } from 'jsdom';
 import fs from 'node:fs';
 import path from 'node:path';
+import { WALKTHROUGH_STEPS } from '../js/onboarding.js';
 
 const ROOT = path.join(import.meta.dirname, '..');
 const results = [];
@@ -25,7 +26,7 @@ function readRoom(name) {
  *  Node's fetch rejects a relative URL with no base, which room.js already
  *  treats as "that other room didn't load", so this exercises the same
  *  tolerant-failure path a real network hiccup would. */
-async function mount(data, meta = {}, seed = null, url = 'http://localhost/rooms/test.html') {
+async function mount(data, meta = {}, seed = null, url = 'http://localhost/rooms/test.html', { onboarded = true, brokenStorage = false } = {}) {
   const dom = new JSDOM('<!doctype html><html><body><div id="room-root"></div></body></html>', {
     url,
     pretendToBeVisual: true,
@@ -42,7 +43,23 @@ async function mount(data, meta = {}, seed = null, url = 'http://localhost/rooms
     observe() {} unobserve() {} disconnect() {}
   };
   window.localStorage.clear();
+  // Every test here is about ordinary room behavior, not first-run
+  // onboarding — default to "already seen the walkthrough" so it never
+  // pops open and steals Escape/focus out from under them. The walkthrough
+  // tests below override this explicitly to get a genuine first-visit.
+  if (onboarded) window.localStorage.setItem('gridkeep-onboarded', 'true');
   if (seed) window.localStorage.setItem('it-room-monitor-v1', JSON.stringify(seed));
+
+  // Simulates a genuinely broken storage (private browsing, etc.) — swapped
+  // in AFTER the setup above (which needs real storage) but BEFORE
+  // initRoomPage runs, since that's the call this is meant to test.
+  if (brokenStorage) {
+    global.localStorage = {
+      getItem() { throw new Error('storage disabled'); },
+      setItem() { throw new Error('storage disabled'); },
+      removeItem() { throw new Error('storage disabled'); },
+    };
+  }
 
   const { initRoomPage } = await import(`../js/room.js?b=${bust++}`);
   const cfg = {
@@ -881,6 +898,82 @@ await test('a final room renders the normal workstation UI, not the "not finaliz
   const { doc } = await mount(readRoom('commons'));
   assert(doc.getElementById('inspector-panel'), 'a final room should render its normal sidebar');
   assert(!/isn.t finalized yet/i.test(doc.body.textContent), 'a final room should not show the not-finalized message');
+});
+
+/* ── First-run walkthrough (see js/onboarding.js) ─────────────────
+   mount() defaults to { onboarded: true } (see its own comment above) so
+   every OTHER test in this file mounts as a returning visitor and is never
+   interrupted by this — these tests explicitly opt into a fresh,
+   never-seen-it-before session instead. */
+
+await test('a genuine first visit (no onboarding flag yet) shows the walkthrough automatically, focused on its first step', async () => {
+  const { doc } = await mount(readRoom('commons'), {}, null, undefined, { onboarded: false });
+  assert(doc.getElementById('walkthrough-overlay').classList.contains('open'), 'the walkthrough should auto-open on a genuine first visit');
+  assert(doc.getElementById('walkthrough-title').textContent === WALKTHROUGH_STEPS[0].title, 'it should open on step 1, not some other step');
+  assert(doc.activeElement === doc.getElementById('walkthrough-next'), 'focus should move into the walkthrough on auto-open, same as every other modal here');
+});
+
+await test('a returning visit (onboarding flag already set) does not show the walkthrough automatically', async () => {
+  const { doc } = await mount(readRoom('commons')); // default: onboarded already true
+  assert(!doc.getElementById('walkthrough-overlay').classList.contains('open'), 'the walkthrough should stay closed once the flag is set');
+});
+
+await test('the walkthrough steps forward and back correctly, hiding Back on the first step and restoring it after', async () => {
+  const { doc } = await mount(readRoom('commons'), {}, null, undefined, { onboarded: false });
+  const back = doc.getElementById('walkthrough-back');
+  const next = doc.getElementById('walkthrough-next');
+  assert(back.hidden, 'Back should be hidden on the first step');
+  click(next);
+  assert(!back.hidden, 'Back should appear once past the first step');
+  assert(doc.getElementById('walkthrough-title').textContent === WALKTHROUGH_STEPS[1].title, 'Next should advance to step 2');
+  click(back);
+  assert(doc.getElementById('walkthrough-title').textContent === WALKTHROUGH_STEPS[0].title, 'Back should return to step 1');
+  assert(back.hidden, 'Back should hide again once back on the first step');
+});
+
+await test('dismissing the walkthrough via its close (X) button sets the onboarding flag, so it never auto-shows again', async () => {
+  const { doc, window } = await mount(readRoom('commons'), {}, null, undefined, { onboarded: false });
+  click(doc.getElementById('walkthrough-close'));
+  assert(!doc.getElementById('walkthrough-overlay').classList.contains('open'), 'closing via X should close the overlay');
+  assert(window.localStorage.getItem('gridkeep-onboarded') === 'true', 'closing via X should persist the "seen" flag');
+});
+
+await test('stepping through to the final step\'s "Got it" button dismisses the walkthrough and sets the flag', async () => {
+  const { doc, window } = await mount(readRoom('commons'), {}, null, undefined, { onboarded: false });
+  const next = doc.getElementById('walkthrough-next');
+  assert(next.textContent === 'Next', 'the button should read "Next" before the final step');
+  for (let i = 0; i < WALKTHROUGH_STEPS.length - 1; i++) click(next);
+  assert(next.textContent === 'Got it', 'the button should read "Got it" on the final step');
+  click(next);
+  assert(!doc.getElementById('walkthrough-overlay').classList.contains('open'), '"Got it" should close the overlay');
+  assert(window.localStorage.getItem('gridkeep-onboarded') === 'true', '"Got it" should persist the "seen" flag');
+});
+
+await test('Escape dismisses the walkthrough and sets the flag, same as the X button', async () => {
+  const { doc, window } = await mount(readRoom('commons'), {}, null, undefined, { onboarded: false });
+  key(doc, 'Escape');
+  assert(!doc.getElementById('walkthrough-overlay').classList.contains('open'), 'Escape should close the walkthrough');
+  assert(window.localStorage.getItem('gridkeep-onboarded') === 'true', 'Escape should persist the "seen" flag, same as any other dismissal');
+});
+
+await test('a genuinely broken localStorage never crashes the room page, and fails toward NOT auto-showing the walkthrough', async () => {
+  const { doc } = await mount(readRoom('commons'), {}, null, undefined, { onboarded: false, brokenStorage: true });
+  assert(!doc.getElementById('walkthrough-overlay').classList.contains('open'),
+    'a storage failure should fail toward "do not auto-show", never toward showing or crashing');
+  assert(doc.getElementById('inspector-panel'), 'the room page itself should still render normally despite the storage failure');
+  selectViaClick(doc, 'PC1');
+  assert(doc.getElementById('inspector-content'), 'the room should remain fully interactive (device selection still works) despite the storage failure');
+});
+
+await test('"Show walkthrough again" inside Help re-opens the walkthrough on demand, regardless of the flag', async () => {
+  const { doc } = await mount(readRoom('commons')); // onboarded: true — would not auto-show on its own
+  assert(!doc.getElementById('walkthrough-overlay').classList.contains('open'), 'setup: should not be open yet');
+  click(doc.getElementById('btn-help'));
+  assert(doc.getElementById('help-overlay').classList.contains('open'), 'setup: Help should be open');
+  click(doc.getElementById('btn-show-walkthrough'));
+  assert(!doc.getElementById('help-overlay').classList.contains('open'), 'opening the walkthrough from Help should close Help');
+  assert(doc.getElementById('walkthrough-overlay').classList.contains('open'), 'the walkthrough should re-open on demand even though the flag is already set');
+  assert(doc.getElementById('walkthrough-title').textContent === WALKTHROUGH_STEPS[0].title, 'reopening should restart at step 1');
 });
 
 /* ── Report ────────────────────────────────────────────────────── */

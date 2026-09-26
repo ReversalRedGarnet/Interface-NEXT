@@ -21,6 +21,7 @@ import {
 import { createViewController } from './view-controls.js';
 import { createDisclosure } from './disclosure.js';
 import { createHelpOverlay } from './help-overlay.js';
+import { WALKTHROUGH_STEPS, shouldAutoShowWalkthrough, markWalkthroughSeen } from './onboarding.js';
 
 /**
  * Every device carries two independent fields (see state.js): an
@@ -459,6 +460,23 @@ export function initRoomPage(CFG) {
         <button class="popup-close" id="help-close" aria-label="Close">✕</button>
         <h3 class="popup-title" id="help-title">Keyboard shortcuts</h3>
         <dl class="shortcut-list" id="help-shortcut-list"></dl>
+        <div class="popup-actions">
+          <button class="btn-secondary" id="btn-show-walkthrough">Show walkthrough again</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- First-run walkthrough (see js/onboarding.js) -->
+    <div class="overlay" id="walkthrough-overlay" role="dialog" aria-modal="true" aria-labelledby="walkthrough-title">
+      <div class="popup">
+        <button class="popup-close" id="walkthrough-close" aria-label="Close">✕</button>
+        <h3 class="popup-title" id="walkthrough-title"></h3>
+        <p class="popup-body" id="walkthrough-body"></p>
+        <div class="walkthrough-dots" id="walkthrough-dots" aria-hidden="true"></div>
+        <div class="popup-actions">
+          <button class="btn-secondary" id="walkthrough-back">Back</button>
+          <button class="btn-primary" id="walkthrough-next">Next</button>
+        </div>
       </div>
     </div>
 
@@ -482,6 +500,12 @@ export function initRoomPage(CFG) {
   const resetOverlay = document.getElementById('reset-overlay');
   const searchOverlay = document.getElementById('search-overlay');
   const helpOverlay = document.getElementById('help-overlay');
+  const walkthroughOverlay = document.getElementById('walkthrough-overlay');
+  const walkthroughTitleEl = document.getElementById('walkthrough-title');
+  const walkthroughBodyEl = document.getElementById('walkthrough-body');
+  const walkthroughDotsEl = document.getElementById('walkthrough-dots');
+  const walkthroughBackBtn = document.getElementById('walkthrough-back');
+  const walkthroughNextBtn = document.getElementById('walkthrough-next');
   const searchInput = document.getElementById('search-input');
   const searchResultsEl = document.getElementById('search-results');
   const modeBtns = document.querySelectorAll('#mode-group .quick-btn');
@@ -1022,7 +1046,7 @@ export function initRoomPage(CFG) {
     else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
   }
 
-  [resetOverlay, searchOverlay].forEach(o =>
+  [resetOverlay, searchOverlay, walkthroughOverlay].forEach(o =>
     o.addEventListener('keydown', e => trapTab(e, o)));
 
   /* ── Keyboard shortcuts help — shared with the editor (see
@@ -1035,6 +1059,60 @@ export function initRoomPage(CFG) {
     openBtn: document.getElementById('btn-help'),
     closeBtn: document.getElementById('help-close'),
     focusManagement: true,
+  });
+
+  /* ── First-run walkthrough (see js/onboarding.js) — teaches the WORKFLOW
+     to someone who's never used the app, distinct from the Help overlay
+     above (which stays a keyboard-shortcut reference, untouched). Shown
+     automatically once per browser/device (see the shouldAutoShowWalkthrough
+     check at the bottom of this function); re-openable any time via "Show
+     walkthrough again" in Help. Uses the same openOverlay/closeOverlay/
+     trapTab machinery as Reset/Search/Help above — just another modal
+     dialog, not a new pattern. */
+  let walkthroughStep = 0;
+
+  function renderWalkthroughStep() {
+    const step = WALKTHROUGH_STEPS[walkthroughStep];
+    walkthroughTitleEl.textContent = step.title;
+    walkthroughBodyEl.textContent = step.body;
+    walkthroughDotsEl.innerHTML = WALKTHROUGH_STEPS.map((_, i) =>
+      `<span class="walkthrough-dot${i === walkthroughStep ? ' active' : ''}"></span>`).join('');
+    walkthroughBackBtn.hidden = walkthroughStep === 0;
+    walkthroughNextBtn.textContent = walkthroughStep === WALKTHROUGH_STEPS.length - 1 ? 'Got it' : 'Next';
+  }
+
+  function openWalkthrough() {
+    walkthroughStep = 0;
+    renderWalkthroughStep();
+    openOverlay(walkthroughOverlay, walkthroughNextBtn);
+  }
+
+  // A no-op if the walkthrough isn't actually open — safe to call
+  // unconditionally from the shared Escape handler below, alongside
+  // Reset/Search/Help's own close calls, without falsely marking the
+  // walkthrough "seen" just because some OTHER overlay was closed.
+  function dismissWalkthrough() {
+    if (!walkthroughOverlay.classList.contains('open')) return;
+    markWalkthroughSeen();
+    closeOverlay(walkthroughOverlay);
+  }
+
+  walkthroughNextBtn.addEventListener('click', () => {
+    if (walkthroughStep === WALKTHROUGH_STEPS.length - 1) { dismissWalkthrough(); return; }
+    walkthroughStep++;
+    renderWalkthroughStep();
+  });
+  walkthroughBackBtn.addEventListener('click', () => {
+    if (walkthroughStep === 0) return;
+    walkthroughStep--;
+    renderWalkthroughStep();
+  });
+  document.getElementById('walkthrough-close').addEventListener('click', dismissWalkthrough);
+  walkthroughOverlay.addEventListener('click', e => { if (e.target === walkthroughOverlay) dismissWalkthrough(); });
+
+  document.getElementById('btn-show-walkthrough').addEventListener('click', () => {
+    helpCtl.close();
+    openWalkthrough();
   });
 
   /* ── Events ────────────────────────────────────────────────── */
@@ -1098,8 +1176,8 @@ export function initRoomPage(CFG) {
       return;
     }
     if (e.key === 'Escape') {
-      const anyOpen = [resetOverlay, searchOverlay].some(o => o.classList.contains('open')) || helpCtl.isOpen();
-      if (anyOpen) { closeOverlay(resetOverlay); closeSearch(); helpCtl.close(); }
+      const anyOpen = [resetOverlay, searchOverlay, walkthroughOverlay].some(o => o.classList.contains('open')) || helpCtl.isOpen();
+      if (anyOpen) { closeOverlay(resetOverlay); closeSearch(); helpCtl.close(); dismissWalkthrough(); }
       else if (!overflowMenu.hidden) setOverflowOpen(false);
       else if (filterOpen) setFilterOpen(false);
       else if (activeModeStatus) setMode(null);
@@ -1159,4 +1237,6 @@ export function initRoomPage(CFG) {
     // device instead, so this never fights that.
     requestAnimationFrame(() => viewCtl.fitToScreen());
   }
+
+  if (shouldAutoShowWalkthrough()) openWalkthrough();
 }

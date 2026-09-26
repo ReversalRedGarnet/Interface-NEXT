@@ -84,3 +84,23 @@
   margin: var(--space-2) 0 var(--space-4);
   line-height: 1.55;
 }
+
+/* ── Walkthrough step indicator ──
+   A plain neutral dot row — not .dot's inspection-status colors, which
+   would wrongly imply Working/Minor/Major meaning here. */
+.walkthrough-dots {
+  display: flex;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+}
+
+.walkthrough-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--line-strong);
+}
+
+.walkthrough-dot.active {
+  background: var(--focus);
+}
