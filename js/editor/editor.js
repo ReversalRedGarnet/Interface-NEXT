@@ -24,6 +24,7 @@ import {
   ROOM_TEMPLATE_DEFAULT_SIZE, ROOM_TEMPLATE_DEFAULT_COUNT, templateNeedsCount,
   generateTemplateRoomData,
 } from './room-templates.js';
+import { toImageCoords, loadPhotoFile, drawPolygon } from '../photo-trace.js';
 import { computeContentBounds, zoomModifierLabel } from '../room-logic.js';
 import { createViewController } from '../view-controls.js';
 import { createDisclosure } from '../disclosure.js';
@@ -134,9 +135,24 @@ const nrCountField = $('nr-count-field');
 const nrCountLabel = $('nr-count-label');
 const nrCount = $('nr-count');
 const nrTemplateHint = $('nr-template-hint');
+const nrTraceField = $('nr-trace-field');
+const nrTraceStatus = $('nr-trace-status');
+const btnTracePhoto = $('btn-trace-photo');
 const nrCopyFrom = $('nr-copy-from');
 const nrWidth = $('nr-width');
 const nrHeight = $('nr-height');
+
+const tracePhotoOverlay = $('trace-photo-overlay');
+const tracePhotoCloseBtn = $('trace-photo-close');
+const tracePhotoCancelBtn = $('trace-photo-cancel');
+const tracePhotoInput = $('trace-photo-input');
+const tracePhotoLoadStatus = $('trace-photo-load-status');
+const tracePhotoCanvas = $('trace-photo-canvas');
+const tracePhotoEmpty = $('trace-photo-empty');
+const tracePhotoPointsCount = $('trace-photo-points-count');
+const btnTraceUndoPoint = $('btn-trace-undo-point');
+const btnTraceCancelShape = $('btn-trace-cancel-shape');
+const btnTraceUseOutline = $('btn-trace-use-outline');
 
 /* ── State ────────────────────────────────────────────────────────── */
 
@@ -449,13 +465,25 @@ async function openNewRoomDialog() {
 
 const NR_COUNT_LABELS = { 'computer-lab': 'How many PCs?', office: 'How many desks?' };
 
+/** Set the moment "Use This Outline" is clicked in the trace dialog — the
+ *  traced point list plus the reference photo's own natural pixel size (a
+ *  room's canvasWidth/canvasHeight, same as any other room). Cleared
+ *  whenever Room Type switches away from "trace-photo" (see
+ *  onRoomTypeChange) so a stale trace can never silently get used after
+ *  switching to a different creation method and back. */
+let tracedOutline = null;
+
 /** Room Type and "Copy layout from" are two different, mutually exclusive
  *  ways to seed a new room's starting content — picking a template here
  *  resets/disables Copy-from (see onCopyFromChange for the reverse
  *  direction), and each template gets its own default canvas size (see
  *  ROOM_TEMPLATE_DEFAULT_SIZE) and, for the two that ask for one, its own
  *  device-count field and default. Blank leaves everything exactly as it
- *  behaved before Room Type existed. */
+ *  behaved before Room Type existed. "Trace from Photo" is handled here too
+ *  — its own canvas size comes from the traced photo, not a fixed default,
+ *  so its width/height fields stay disabled until a photo's actually been
+ *  traced (see btnTraceUseOutline below), the same reasoning Copy-from's
+ *  own lock already uses. */
 function onRoomTypeChange() {
   const templateId = nrRoomType.value;
   const needsCount = templateNeedsCount(templateId);
@@ -464,22 +492,32 @@ function onRoomTypeChange() {
     nrCountLabel.textContent = NR_COUNT_LABELS[templateId];
     nrCount.value = ROOM_TEMPLATE_DEFAULT_COUNT[templateId];
   }
-  nrTemplateHint.hidden = templateId === 'blank';
-
-  nrCopyFrom.disabled = templateId !== 'blank';
-  if (templateId !== 'blank') {
-    nrCopyFrom.value = '';
-    // Release copy-from's own canvas-size lock (see onCopyFromChange) — a
-    // template's size is a starting suggestion, not fixed like a copied
-    // layout's coordinates are.
-    nrWidth.disabled = false;
-    nrHeight.disabled = false;
+  nrTemplateHint.hidden = templateId === 'blank' || templateId === 'trace-photo';
+  nrTraceField.hidden = templateId !== 'trace-photo';
+  if (templateId !== 'trace-photo') {
+    tracedOutline = null;
+    nrTraceStatus.textContent = 'No photo traced yet.';
   }
 
-  if (!nrCopyFrom.value) {
-    const size = ROOM_TEMPLATE_DEFAULT_SIZE[templateId] || ROOM_TEMPLATE_DEFAULT_SIZE.blank;
-    nrWidth.value = size.width;
-    nrHeight.value = size.height;
+  nrCopyFrom.disabled = templateId !== 'blank';
+  if (templateId !== 'blank') nrCopyFrom.value = '';
+
+  // Exactly one place decides the canvas-size fields' enabled state and
+  // value, regardless of which template was previously selected — trace-photo
+  // locks them (there's no sensible default before a photo's traced; see
+  // btnTraceUseOutline below), every other template/Blank releases
+  // copy-from's own lock (see onCopyFromChange) and applies its own default.
+  if (templateId === 'trace-photo') {
+    nrWidth.disabled = true;
+    nrHeight.disabled = true;
+  } else {
+    nrWidth.disabled = false;
+    nrHeight.disabled = false;
+    if (!nrCopyFrom.value) {
+      const size = ROOM_TEMPLATE_DEFAULT_SIZE[templateId] || ROOM_TEMPLATE_DEFAULT_SIZE.blank;
+      nrWidth.value = size.width;
+      nrHeight.value = size.height;
+    }
   }
 }
 
@@ -519,6 +557,124 @@ async function onCopyFromChange() {
 function closeNewRoomDialog() {
   newRoomOverlay.classList.remove('open');
 }
+
+/* ── Trace Walls from Photo ───────────────────────────────────────────
+   A second, small overlay layered on top of the New Room dialog — reuses
+   js/photo-trace.js's shared click-trace mechanic (also used by
+   admin/trace.html) for a room's `outline` layout shape instead of a
+   campus building's bounding box. The reference photo is decoded straight
+   onto the canvas and never persisted anywhere (see photo-trace.js's
+   loadPhotoFile) — same guarantee admin/trace.html already makes. */
+
+let traceImage = null;       // the loaded <img>, drawn as the canvas background
+let tracePoints = [];        // in-progress outline, in native photo-pixel space
+let tracePhotoCtx = null;    // fetched lazily — see getTracePhotoCtx()
+
+/** Deferred rather than fetched at module load: jsdom's 2D canvas context
+ *  needs the optional `canvas` npm package this project deliberately
+ *  doesn't depend on (dev-only jsdom is the only test dependency — see
+ *  package.json), so calling getContext() eagerly would break every test
+ *  that merely mounts editor.js, not just ones that touch this feature.
+ *  Actual pixel drawing here isn't unit-tested for the same reason
+ *  canvas-renderer.js's SVG output isn't — only real browser use exercises
+ *  it, same convention this project already follows throughout. */
+function getTracePhotoCtx() {
+  return tracePhotoCtx || (tracePhotoCtx = tracePhotoCanvas.getContext('2d'));
+}
+
+function updateTracePointsUI() {
+  tracePhotoPointsCount.textContent = `${tracePoints.length} point${tracePoints.length === 1 ? '' : 's'}`;
+  btnTraceUndoPoint.disabled = tracePoints.length === 0;
+  btnTraceCancelShape.disabled = tracePoints.length === 0;
+  btnTraceUseOutline.disabled = tracePoints.length < 3;
+}
+
+function redrawTraceCanvas() {
+  if (!traceImage) return;
+  const ctx = getTracePhotoCtx();
+  ctx.clearRect(0, 0, tracePhotoCanvas.width, tracePhotoCanvas.height);
+  ctx.drawImage(traceImage, 0, 0);
+  if (tracePoints.length) {
+    drawPolygon(ctx, tracePhotoCanvas.width, tracePoints, {
+      stroke: '#4dff88', fill: tracePoints.length >= 3 ? 'rgba(77,255,136,0.15)' : null, closed: false,
+    });
+  }
+}
+
+function openTracePhotoDialog() {
+  traceImage = null;
+  tracePoints = [];
+  tracePhotoInput.value = '';
+  tracePhotoLoadStatus.textContent = 'No photo loaded.';
+  tracePhotoEmpty.hidden = false;
+  updateTracePointsUI();
+  tracePhotoOverlay.classList.add('open');
+}
+
+function closeTracePhotoDialog() {
+  tracePhotoOverlay.classList.remove('open');
+}
+
+tracePhotoInput.addEventListener('change', async () => {
+  const file = tracePhotoInput.files[0];
+  if (!file) return;
+  try {
+    const img = await loadPhotoFile(file);
+    traceImage = img;
+    tracePhotoCanvas.width = img.naturalWidth;
+    tracePhotoCanvas.height = img.naturalHeight;
+    tracePoints = [];
+    updateTracePointsUI();
+    redrawTraceCanvas();
+    tracePhotoEmpty.hidden = true;
+    tracePhotoLoadStatus.textContent = `${file.name} — ${img.naturalWidth}×${img.naturalHeight}px`;
+  } catch (err) {
+    tracePhotoLoadStatus.textContent = err.message;
+  }
+});
+
+tracePhotoCanvas.addEventListener('click', evt => {
+  if (!traceImage) return;
+  tracePoints.push(toImageCoords(tracePhotoCanvas, evt.clientX, evt.clientY));
+  updateTracePointsUI();
+  redrawTraceCanvas();
+});
+
+btnTraceUndoPoint.addEventListener('click', () => {
+  tracePoints.pop();
+  updateTracePointsUI();
+  redrawTraceCanvas();
+});
+
+btnTraceCancelShape.addEventListener('click', () => {
+  tracePoints = [];
+  updateTracePointsUI();
+  redrawTraceCanvas();
+});
+
+/** Walls/outline only, by design — no device tracing here (see this
+ *  feature's own spec: templates already established "layout only, devices
+ *  placed manually after", and a drone/aerial photo doesn't show devices
+ *  anyway). Keeps the FULL traced point list (unlike admin/trace.html's own
+ *  export, which reduces a shape to its bounding box for campus.json) since
+ *  a room's `outline` schema shape supports a real polygon. */
+btnTraceUseOutline.addEventListener('click', () => {
+  if (tracePoints.length < 3) return;
+  tracedOutline = {
+    points: tracePoints.map(p => [...p]),
+    canvasWidth: traceImage.naturalWidth,
+    canvasHeight: traceImage.naturalHeight,
+  };
+  nrWidth.value = tracedOutline.canvasWidth;
+  nrHeight.value = tracedOutline.canvasHeight;
+  nrTraceStatus.textContent = `Outline traced — ${tracedOutline.points.length} points, ${tracedOutline.canvasWidth}×${tracedOutline.canvasHeight}.`;
+  closeTracePhotoDialog();
+});
+
+btnTracePhoto.addEventListener('click', openTracePhotoDialog);
+tracePhotoCloseBtn.addEventListener('click', closeTracePhotoDialog);
+tracePhotoCancelBtn.addEventListener('click', closeTracePhotoDialog);
+tracePhotoOverlay.addEventListener('click', e => { if (e.target === tracePhotoOverlay) closeTracePhotoDialog(); });
 
 async function writeNewRoomFiles({ id, label, campus, roomData }, registry) {
   const stem = roomFileStem(id);
@@ -563,6 +719,9 @@ async function createNewRoom() {
 
   const problems = [];
   if (!campus) problems.push('Site is required.');
+  if (!copyFromId && templateId === 'trace-photo' && !tracedOutline) {
+    problems.push('Trace a photo first, or choose a different Room type.');
+  }
 
   const registry = await gatherRegistry();
   problems.push(...validateNewRoomId(id, registry));
@@ -580,6 +739,14 @@ async function createNewRoom() {
       newRoomErrors.textContent = `Couldn't read the layout to copy from: ${err.message}`;
       return;
     }
+  } else if (templateId === 'trace-photo') {
+    // Walls/outline only — same "layout only, devices placed manually
+    // after" pattern the Room Type templates already use; see
+    // btnTraceUseOutline above for where tracedOutline gets set.
+    roomData = {
+      ...createBlankRoomData(canvasWidth, canvasHeight),
+      layout: [{ type: 'outline', points: tracedOutline.points.map(p => [...p]) }],
+    };
   } else if (templateId && templateId !== 'blank') {
     const count = templateNeedsCount(templateId) ? Number(nrCount.value) : undefined;
     roomData = generateTemplateRoomData(templateId, canvasWidth, canvasHeight, count);
@@ -1264,6 +1431,7 @@ showGridInput.addEventListener('change', renderAll);
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
+    if (tracePhotoOverlay.classList.contains('open')) { closeTracePhotoDialog(); return; }
     if (newRoomOverlay.classList.contains('open')) { closeNewRoomDialog(); return; }
     if (unlockOverlay.classList.contains('open')) { closeUnlockConfirm(); return; }
     if (deleteRoomOverlay.classList.contains('open')) { closeDeleteRoomConfirm(); return; }

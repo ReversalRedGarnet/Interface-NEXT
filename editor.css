@@ -109,6 +109,39 @@ body.editor-page {
   color: var(--text-muted);
 }
 
+/* ── Trace Walls from Photo (New Room's "Trace from Photo" option) ──
+   The canvas itself is sized to the loaded photo's natural resolution (see
+   js/photo-trace.js), same as admin/trace.html — CSS here only scales the
+   *displayed* size down to fit the popup, never the coordinate space a
+   click is read in. */
+.trace-photo-canvas-wrap {
+  position: relative;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-control);
+  background: #000;
+  overflow: auto;
+  max-height: 50vh;
+  margin: var(--space-3) 0;
+}
+
+#trace-photo-canvas {
+  display: block;
+  max-width: 100%;
+  height: auto;
+  cursor: crosshair;
+}
+
+#trace-photo-empty {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  margin: 0;
+  pointer-events: none;
+}
+
 /* ── Body: canvas + sidebar ──
    Reuses room.html's own .workstation/.floor-pane/.inspector-panel classes
    (see workstation.css) so the editor is structurally the same app — canvas

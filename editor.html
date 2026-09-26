@@ -223,6 +223,7 @@
           <option value="computer-lab">Computer Lab</option>
           <option value="office">Office</option>
           <option value="network-room">Network Room</option>
+          <option value="trace-photo">Trace from Photo…</option>
         </select>
       </label>
       <label class="editor-field" id="nr-count-field" hidden>
@@ -230,6 +231,11 @@
         <input type="number" id="nr-count" min="1" step="1">
       </label>
       <p class="editor-hint" id="nr-template-hint" hidden>Generates a starting layout (walls, entrance, devices) — a normal, fully-editable draft room, same as Blank.</p>
+      <div class="editor-field" id="nr-trace-field" hidden>
+        <span>Outline</span>
+        <button type="button" class="toolbar-btn sidebar-block-btn" id="btn-trace-photo">Trace Walls from Photo…</button>
+        <p class="editor-hint" id="nr-trace-status">No photo traced yet.</p>
+      </div>
       <label class="editor-field">
         <span>Copy layout from (optional)</span>
         <select id="nr-copy-from">
@@ -250,6 +256,44 @@
       <div class="popup-actions">
         <button class="btn-primary" id="new-room-create">Create</button>
         <button class="btn-secondary" id="new-room-cancel">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Trace Walls from Photo — a New Room "Room type" option. Reuses the
+       same click-trace mechanic as admin/trace.html (see js/photo-trace.js)
+       for a room's `outline` layout shape instead of a campus building's
+       bounding box: no building-name/floor-count prompts, no campus.json
+       export, and the full traced point list is kept (not reduced to a
+       bounding box). The reference photo is never uploaded or stored —
+       canvas reference only, exactly like admin/trace.html. -->
+  <div class="overlay" id="trace-photo-overlay" role="dialog" aria-modal="true" aria-labelledby="trace-photo-title">
+    <div class="popup popup-lg">
+      <button class="popup-close" id="trace-photo-close" aria-label="Close">✕</button>
+      <h3 class="popup-title" id="trace-photo-title">Trace Walls from Photo</h3>
+      <p class="popup-body">Load a reference photo, then click to trace the room's outline (walls/boundary only — devices are placed manually afterward, same as every other room). The photo itself is never uploaded or saved.</p>
+
+      <div class="editor-connect">
+        <label class="toolbar-btn" for="trace-photo-input">Load photo</label>
+        <input type="file" id="trace-photo-input" accept="image/*" hidden>
+        <span class="editor-connect-status" id="trace-photo-load-status">No photo loaded.</span>
+      </div>
+
+      <div class="trace-photo-canvas-wrap" id="trace-photo-canvas-wrap">
+        <canvas id="trace-photo-canvas" width="800" height="450"></canvas>
+        <p class="editor-hint" id="trace-photo-empty">Load a photo to start tracing.</p>
+      </div>
+
+      <div class="editor-connect">
+        <span class="editor-hint">Click to add a point. Need at least 3 points to finish.</span>
+        <span class="editor-connect-status" id="trace-photo-points-count">0 points</span>
+        <button type="button" class="toolbar-btn" id="btn-trace-undo-point" disabled>↶ Undo point</button>
+        <button type="button" class="toolbar-btn" id="btn-trace-cancel-shape" disabled>✕ Clear points</button>
+      </div>
+
+      <div class="popup-actions">
+        <button class="btn-primary" id="btn-trace-use-outline" disabled>Use This Outline</button>
+        <button class="btn-secondary" id="trace-photo-cancel">Cancel</button>
       </div>
     </div>
   </div>

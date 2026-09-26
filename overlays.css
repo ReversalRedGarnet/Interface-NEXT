@@ -37,6 +37,7 @@
 }
 
 .popup-sm { max-width: 300px; }
+.popup-lg { max-width: 720px; }
 
 @keyframes popup-in {
   from { opacity: 0; }

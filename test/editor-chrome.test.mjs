@@ -144,10 +144,10 @@ await test('the Delete Room confirmation reuses the existing overlay/popup patte
    change-listener that reacts to Room Type does not), so it's testable here
    the same way tool-arming is: no loaded room or rootHandle needed. ── */
 
-await test('the New Room dialog offers the four Room Type options', async () => {
+await test('the New Room dialog offers the five Room Type options (Blank, the 3 templates, and Trace from Photo)', async () => {
   const { doc } = await mountEditor();
   const options = [...doc.getElementById('nr-room-type').options].map(o => o.value);
-  assert(options.join(',') === 'blank,computer-lab,office,network-room', `unexpected Room Type options: ${options.join(',')}`);
+  assert(options.join(',') === 'blank,computer-lab,office,network-room,trace-photo', `unexpected Room Type options: ${options.join(',')}`);
 });
 
 await test('picking Computer Lab reveals the device-count field (defaulted to 24) and disables Copy layout from', async () => {
@@ -181,6 +181,61 @@ await test('switching back to Blank hides the count field/hint and re-enables Co
   assert(doc.getElementById('nr-count-field').hidden, 'Blank should not show a count field');
   assert(doc.getElementById('nr-template-hint').hidden, 'Blank should not show the template hint');
   assert(!doc.getElementById('nr-copy-from').disabled, 'Blank should leave Copy layout from usable again');
+});
+
+/* ── Trace from Photo — the outline-tracing dialog itself needs a real
+   2D canvas context (no jsdom substitute without the optional `canvas`
+   npm package this project deliberately doesn't depend on — see
+   getTracePhotoCtx() in editor.js), so actual point-tracing/redraw isn't
+   exercised here, same convention canvas-renderer.js's own pixel output
+   already isn't. What IS testable without a canvas context: the Room Type
+   wiring (count/hint/copy-from/width-height), the trace popup's static
+   markup, and that it reuses the same overlay pattern as every other
+   editor dialog. ── */
+
+await test('picking Trace from Photo hides the count field, shows the trace status block, disables Copy layout from and the canvas-size fields', async () => {
+  const { doc } = await mountEditor();
+  change(doc.getElementById('nr-room-type'), 'trace-photo');
+  assert(doc.getElementById('nr-count-field').hidden, 'Trace from Photo has no device count to ask for');
+  assert(doc.getElementById('nr-template-hint').hidden, 'Trace from Photo shows its own status line instead of the generic template hint');
+  assert(!doc.getElementById('nr-trace-field').hidden, 'expected the trace status/button block to appear');
+  assert(doc.getElementById('nr-trace-status').textContent === 'No photo traced yet.', 'expected the initial untraced status');
+  assert(doc.getElementById('nr-copy-from').disabled, 'Copy layout from and a template are mutually exclusive');
+  assert(doc.getElementById('nr-width').disabled, 'canvas size should be locked until a photo is traced (its size comes from the photo)');
+  assert(doc.getElementById('nr-height').disabled, 'canvas size should be locked until a photo is traced (its size comes from the photo)');
+});
+
+await test('switching away from Trace from Photo re-enables the canvas-size fields and resets the trace status', async () => {
+  const { doc } = await mountEditor();
+  const roomType = doc.getElementById('nr-room-type');
+  change(roomType, 'trace-photo');
+  change(roomType, 'blank');
+  assert(doc.getElementById('nr-trace-field').hidden, 'Blank should not show the trace block');
+  assert(!doc.getElementById('nr-width').disabled, 'Blank should leave the canvas-size fields usable again');
+  assert(!doc.getElementById('nr-height').disabled, 'Blank should leave the canvas-size fields usable again');
+});
+
+await test('the Trace from Photo popup reuses the shared overlay pattern and starts in its empty, nothing-loaded state', async () => {
+  const { doc } = await mountEditor();
+  const overlay = doc.getElementById('trace-photo-overlay');
+  assert(overlay && overlay.classList.contains('overlay'), 'expected #trace-photo-overlay using the shared .overlay style');
+  assert(overlay.querySelector('.popup'), 'expected the same .popup shape every other editor dialog uses');
+  assert(doc.getElementById('trace-photo-canvas'), 'expected the tracing canvas element');
+  assert(!doc.getElementById('trace-photo-empty').hidden, 'expected the "load a photo" empty state to show by default');
+  assert(doc.getElementById('btn-trace-undo-point').disabled, 'undo should start disabled with no points yet');
+  assert(doc.getElementById('btn-trace-cancel-shape').disabled, 'clear should start disabled with no points yet');
+  assert(doc.getElementById('btn-trace-use-outline').disabled, 'Use This Outline needs at least 3 points');
+});
+
+await test('Escape closes the Trace from Photo popup without also closing the New Room dialog behind it', async () => {
+  const { doc } = await mountEditor();
+  const newRoomOverlay = doc.getElementById('new-room-overlay');
+  const traceOverlay = doc.getElementById('trace-photo-overlay');
+  newRoomOverlay.classList.add('open');
+  traceOverlay.classList.add('open');
+  key(doc, 'Escape');
+  assert(!traceOverlay.classList.contains('open'), 'Escape should close the trace popup (the topmost dialog)');
+  assert(newRoomOverlay.classList.contains('open'), 'the New Room dialog underneath should stay open');
 });
 
 /* ── Report ────────────────────────────────────────────────────────── */
