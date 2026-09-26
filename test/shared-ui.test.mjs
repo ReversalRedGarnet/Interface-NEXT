@@ -16,6 +16,11 @@ async function test(name, fn) {
   catch (err) { results.push(['FAIL', name, err.message]); }
 }
 function assert(cond, msg) { if (!cond) throw new Error(msg); }
+function assertEqual(actual, expected, msg) {
+  if (actual !== expected) {
+    throw new Error(`${msg}\n  expected: ${JSON.stringify(expected)}\n  actual:   ${JSON.stringify(actual)}`);
+  }
+}
 
 const dom = new JSDOM('<!doctype html><html><body></body></html>', { url: 'http://localhost/test.html' });
 global.window = dom.window;
@@ -29,7 +34,18 @@ function keydown(el, key, opts = {}) {
   el.dispatchEvent(new dom.window.KeyboardEvent('keydown', { key, bubbles: true, cancelable: true, ...opts }));
 }
 function pointer(el, type, opts = {}) {
-  el.dispatchEvent(new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, ...opts }));
+  // MouseEventInit has no pointerId slot, so a real PointerEvent isn't
+  // needed here — view-controls.js only reads clientX/clientY/button off
+  // the event itself, plus e.pointerId to key its per-pointer Map; a plain
+  // MouseEvent with pointerId attached afterward (an ordinary own property,
+  // nothing blocks it) satisfies both, the same way the existing single-
+  // pointer tests already work without ever setting one (multiple bare
+  // MouseEvents with no pointerId all key to the same `undefined`, which is
+  // exactly the single-pointer case).
+  const { pointerId, ...init } = opts;
+  const evt = new dom.window.MouseEvent(type, { bubbles: true, cancelable: true, ...init });
+  if (pointerId !== undefined) Object.defineProperty(evt, 'pointerId', { value: pointerId });
+  el.dispatchEvent(evt);
 }
 
 const { createDisclosure } = await import('../js/disclosure.js');
@@ -190,6 +206,13 @@ function makeViewDom() {
 }
 
 function transformOf(frame) { return frame.style.transform; }
+/** Parses the exact {x, y} view.js writes into frame.style.transform
+ *  (`translate(Xpx, Ypx) scale(S)`) so pinch/pan tests can assert on the
+ *  real pan offset, not just "it changed". */
+function translateOf(frame) {
+  const m = /translate\(([-\d.]+)px, ?([-\d.]+)px\)/.exec(transformOf(frame));
+  return m ? { x: Number(m[1]), y: Number(m[2]) } : null;
+}
 
 await test('fitToScreen applies a scale()+translate() transform to the frame', async () => {
   const { viewport, frame } = makeViewDom();
@@ -310,6 +333,142 @@ await test('a custom shouldPan predicate (the editor\'s: only in Select tool, ex
   pointer(viewport, 'pointerdown', { clientX: 10, clientY: 10 });
   pointer(window.document, 'pointermove', { clientX: 60, clientY: 60 });
   assert(transformOf(frame) === before, 'pan should not start while the armed tool is not Select');
+});
+
+await test('an ordinary single-finger drag still pans exactly as before (multi-pointer tracking did not disturb it)', async () => {
+  const { viewport, frame } = makeViewDom();
+  const ctl = createViewController({
+    viewport, frame,
+    getCanvasSize: () => ({ w: 1200, h: 800 }),
+    getContentBounds: () => ({ minX: 0, minY: 0, maxX: 1200, maxY: 800 }),
+  });
+  ctl.setView(2, -100, -50);
+  pointer(viewport, 'pointerdown', { clientX: 100, clientY: 100, pointerId: 1 });
+  pointer(window.document, 'pointermove', { clientX: 140, clientY: 130, pointerId: 1 });
+  assert(ctl.scale === 2, 'a single-finger drag should never change scale');
+  const t = translateOf(frame);
+  assert(t.x === -60 && t.y === -20, `expected the drag's delta (+40,+30) applied to the origin (-100,-50) → (-60,-20), got (${t.x},${t.y})`);
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   Two-finger pinch-to-zoom — tracked via a pointerId → position Map so a
+   2nd simultaneous pointer is recognized instead of fighting the 1st
+   ══════════════════════════════════════════════════════════════════ */
+
+await test('a two-finger pinch-out (fingers spreading apart) increases scale', async () => {
+  const { viewport, frame } = makeViewDom();
+  const ctl = createViewController({
+    viewport, frame,
+    getCanvasSize: () => ({ w: 1200, h: 800 }),
+    getContentBounds: () => ({ minX: 0, minY: 0, maxX: 1200, maxY: 800 }),
+  });
+  ctl.actualSize();
+  pointer(viewport, 'pointerdown', { clientX: 100, clientY: 100, pointerId: 1 });
+  pointer(viewport, 'pointerdown', { clientX: 200, clientY: 100, pointerId: 2 }); // 100px apart
+  pointer(window.document, 'pointermove', { clientX: 300, clientY: 100, pointerId: 2 }); // now 200px apart
+  assertEqual(ctl.scale, 2, 'doubling the finger-to-finger distance should double the scale');
+});
+
+await test('a two-finger pinch-in (fingers coming together) decreases scale', async () => {
+  const { viewport, frame } = makeViewDom();
+  const ctl = createViewController({
+    viewport, frame,
+    getCanvasSize: () => ({ w: 1200, h: 800 }),
+    getContentBounds: () => ({ minX: 0, minY: 0, maxX: 1200, maxY: 800 }),
+  });
+  ctl.actualSize();
+  pointer(viewport, 'pointerdown', { clientX: 100, clientY: 100, pointerId: 1 });
+  pointer(viewport, 'pointerdown', { clientX: 300, clientY: 100, pointerId: 2 }); // 200px apart
+  pointer(window.document, 'pointermove', { clientX: 200, clientY: 100, pointerId: 2 }); // now 100px apart
+  assertEqual(ctl.scale, 0.5, 'halving the finger-to-finger distance should halve the scale');
+});
+
+await test('pinch zoom clamps at MAX_SCALE (3), same as button/wheel zoom', async () => {
+  const { viewport, frame } = makeViewDom();
+  const ctl = createViewController({
+    viewport, frame,
+    getCanvasSize: () => ({ w: 1200, h: 800 }),
+    getContentBounds: () => ({ minX: 0, minY: 0, maxX: 1200, maxY: 800 }),
+  });
+  ctl.actualSize();
+  pointer(viewport, 'pointerdown', { clientX: 100, clientY: 100, pointerId: 1 });
+  pointer(viewport, 'pointerdown', { clientX: 200, clientY: 100, pointerId: 2 }); // 100px apart
+  pointer(window.document, 'pointermove', { clientX: 10100, clientY: 100, pointerId: 2 }); // 10,000px apart — a 100x pinch
+  assertEqual(ctl.scale, 3, 'an enormous pinch-out should clamp at MAX_SCALE, not grow past it');
+});
+
+await test('pinch zoom clamps at MIN_SCALE (0.25), same as button/wheel zoom', async () => {
+  const { viewport, frame } = makeViewDom();
+  const ctl = createViewController({
+    viewport, frame,
+    getCanvasSize: () => ({ w: 1200, h: 800 }),
+    getContentBounds: () => ({ minX: 0, minY: 0, maxX: 1200, maxY: 800 }),
+  });
+  ctl.actualSize();
+  pointer(viewport, 'pointerdown', { clientX: 100, clientY: 100, pointerId: 1 });
+  pointer(viewport, 'pointerdown', { clientX: 1100, clientY: 100, pointerId: 2 }); // 1000px apart
+  pointer(window.document, 'pointermove', { clientX: 101, clientY: 100, pointerId: 2 }); // 1px apart — a ~0.001x pinch
+  assertEqual(ctl.scale, 0.25, 'an enormous pinch-in should clamp at MIN_SCALE, not shrink past it');
+});
+
+await test('releasing one finger mid-pinch resumes single-finger pan from that finger\'s CURRENT position, without a jump', async () => {
+  const { viewport, frame } = makeViewDom();
+  const ctl = createViewController({
+    viewport, frame,
+    getCanvasSize: () => ({ w: 1200, h: 800 }),
+    getContentBounds: () => ({ minX: 0, minY: 0, maxX: 1200, maxY: 800 }),
+  });
+  ctl.actualSize();
+  // Two fingers down 200px apart, then finger 1 alone drags out to double
+  // the distance to 400px (a clean pinch-out to scale 2) — finger 1 ends
+  // up far from where it started, at (700, 100).
+  pointer(viewport, 'pointerdown', { clientX: 100, clientY: 100, pointerId: 1 });
+  pointer(viewport, 'pointerdown', { clientX: 300, clientY: 100, pointerId: 2 });
+  pointer(window.document, 'pointermove', { clientX: 700, clientY: 100, pointerId: 1 });
+  assertEqual(ctl.scale, 2, 'setup: the pinch should have reached scale 2');
+  const afterPinch = translateOf(frame);
+
+  // Finger 2 lifts — only finger 1 remains, currently at (700, 100).
+  pointer(window.document, 'pointerup', { pointerId: 2 });
+  // Finger 1 then drags a further (+30, +30) from where it actually is.
+  pointer(window.document, 'pointermove', { clientX: 730, clientY: 130, pointerId: 1 });
+
+  assertEqual(ctl.scale, 2, 'releasing one finger and panning with the other should never itself change scale');
+  const afterResume = translateOf(frame);
+  assertEqual(afterResume.x, afterPinch.x + 30, 'the resumed pan should apply the (+30) delta from finger 1\'s actual last position, not jump based on its original touch-down position');
+  assertEqual(afterResume.y, afterPinch.y + 30, 'same check on the y axis');
+});
+
+await test('a third simultaneous pointer pauses the gesture cleanly (no NaN/garbage state), and releasing back to two resumes a working pinch', async () => {
+  const { viewport, frame } = makeViewDom();
+  const ctl = createViewController({
+    viewport, frame,
+    getCanvasSize: () => ({ w: 1200, h: 800 }),
+    getContentBounds: () => ({ minX: 0, minY: 0, maxX: 1200, maxY: 800 }),
+  });
+  ctl.actualSize();
+  const before = translateOf(frame);
+
+  pointer(viewport, 'pointerdown', { clientX: 100, clientY: 100, pointerId: 1 });
+  pointer(viewport, 'pointerdown', { clientX: 300, clientY: 100, pointerId: 2 }); // 200px apart
+  pointer(viewport, 'pointerdown', { clientX: 500, clientY: 500, pointerId: 3 }); // a 3rd finger joins
+  // Movement while 3 are down should be completely inert — not partially
+  // applied, not NaN, not a crash.
+  pointer(window.document, 'pointermove', { clientX: 150, clientY: 100, pointerId: 1 });
+  assertEqual(ctl.scale, 1, 'scale should be untouched while 3 pointers are active');
+  const duringThree = translateOf(frame);
+  assertEqual(duringThree.x, before.x, 'pan x should be untouched while 3 pointers are active');
+  assertEqual(duringThree.y, before.y, 'pan y should be untouched while 3 pointers are active');
+  assert(!Number.isNaN(ctl.scale), 'scale must never become NaN across a 3-pointer transition');
+
+  // Third finger lifts — back to a clean 2-pointer state, using pointer 1's
+  // position as it now stands ((150, 100), from the inert move above) and
+  // pointer 2's untouched (300, 100).
+  pointer(window.document, 'pointerup', { pointerId: 3 });
+  pointer(window.document, 'pointermove', { clientX: 450, clientY: 100, pointerId: 2 }); // 150 → 300px apart: a clean 2x pinch-out
+  assertEqual(ctl.scale, 2, 'a fresh pinch after the 3rd finger lifts should compute cleanly, not carry over stale/garbage state');
+  const after = translateOf(frame);
+  assert(!Number.isNaN(after.x) && !Number.isNaN(after.y), 'pan must never become NaN after recovering from a 3-pointer interruption');
 });
 
 /* ── Report ────────────────────────────────────────────────────────── */

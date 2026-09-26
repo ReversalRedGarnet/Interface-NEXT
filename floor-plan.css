@@ -244,6 +244,12 @@
   width: 100%;
   height: min(70vh, 640px);
   overflow: hidden;
+  /* Pan/zoom here is entirely JS-driven (transform, not native scroll —
+     see the `overflow: hidden` above), so there's no native single-finger
+     scroll or pinch-zoom happening in this element to preserve; disabling
+     touch-action lets two-finger pinch reach view-controls.js as pointer
+     events instead of the browser hijacking it as a page zoom/scroll. */
+  touch-action: none;
 }
 
 .room-viewport .room {

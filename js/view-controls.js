@@ -173,21 +173,75 @@ export function createViewController({
     zoomAt(e.clientX - rect.left, e.clientY - rect.top, view.scale * factor);
   }, { passive: false });
 
+  /** Every pointer currently down that passed the pan gate below, keyed by
+   *  pointerId → its latest known viewport-relative client position. One
+   *  active pointer means an ordinary single-finger (or mouse) pan; exactly
+   *  two means a pinch; three or more means neither — both gestures pause
+   *  until the count drops back down, rather than fighting over the state. */
+  const pointers = new Map();
   let panDrag = null;
+  let pinchStart = null; // { dist, scale } captured at the moment a 2nd pointer joins
+
+  function distance(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+  function midpoint(a, b) { return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }; }
+
+  /** (Re)derives panDrag/pinchStart from the current `pointers` map after
+   *  any add/remove — always a fresh baseline from wherever the surviving
+   *  pointer(s) are RIGHT NOW, never the original gesture's start, so
+   *  entering/leaving a pinch (or losing a finger down to one) never
+   *  produces a jump. */
+  function refreshGestureState() {
+    if (pointers.size === 1) {
+      const [p] = pointers.values();
+      panDrag = { startX: p.x, startY: p.y, origX: view.x, origY: view.y, moved: false };
+      pinchStart = null;
+    } else if (pointers.size === 2) {
+      const [a, b] = pointers.values();
+      pinchStart = { dist: distance(a, b), scale: view.scale };
+      panDrag = null;
+    } else {
+      panDrag = null;
+      pinchStart = null;
+    }
+  }
+
   viewport.addEventListener('pointerdown', e => {
     if (!isReady()) return;
     if (!shouldPan(e)) return;
     if (e.button !== undefined && e.button !== 0) return;
-    panDrag = { startX: e.clientX, startY: e.clientY, origX: view.x, origY: view.y, moved: false };
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    refreshGestureState();
   });
   window.addEventListener('pointermove', e => {
-    if (!panDrag) return;
-    const dx = e.clientX - panDrag.startX, dy = e.clientY - panDrag.startY;
-    if (Math.hypot(dx, dy) > PAN_DRAG_THRESHOLD) panDrag.moved = true;
-    if (!panDrag.moved) return;
-    setView(view.scale, panDrag.origX + dx, panDrag.origY + dy);
+    if (!pointers.has(e.pointerId)) return;
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+
+    if (pointers.size === 2 && pinchStart) {
+      const [a, b] = pointers.values();
+      const dist = distance(a, b);
+      const scaleFactor = pinchStart.dist > 0 ? dist / pinchStart.dist : 1;
+      const mid = midpoint(a, b);
+      const rect = viewport.getBoundingClientRect();
+      zoomAt(mid.x - rect.left, mid.y - rect.top, pinchStart.scale * scaleFactor);
+      return;
+    }
+
+    if (pointers.size === 1 && panDrag) {
+      const [p] = pointers.values();
+      const dx = p.x - panDrag.startX, dy = p.y - panDrag.startY;
+      if (Math.hypot(dx, dy) > PAN_DRAG_THRESHOLD) panDrag.moved = true;
+      if (!panDrag.moved) return;
+      setView(view.scale, panDrag.origX + dx, panDrag.origY + dy);
+    }
   });
-  window.addEventListener('pointerup', () => { panDrag = null; });
+  function endPointer(e) {
+    if (!pointers.has(e.pointerId)) return;
+    pointers.delete(e.pointerId);
+    refreshGestureState();
+  }
+  window.addEventListener('pointerup', endPointer);
+  window.addEventListener('pointercancel', endPointer);
+  window.addEventListener('pointerleave', endPointer);
 
   window.addEventListener('resize', handleResize);
   if (typeof ResizeObserver === 'function') new ResizeObserver(handleResize).observe(viewport);

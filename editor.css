@@ -372,6 +372,10 @@ body.editor-page {
   height: min(70vh, 640px);
   overflow: hidden;
   cursor: grab;
+  /* Same reasoning as .room-viewport in floor-plan.css: pan/zoom is
+     JS-driven, nothing here relies on native scroll/pinch, so give
+     two-finger gestures to view-controls.js instead of the browser. */
+  touch-action: none;
 }
 .editor-canvas-viewport:active { cursor: grabbing; }
 
