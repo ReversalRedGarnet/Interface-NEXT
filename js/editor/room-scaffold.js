@@ -51,6 +51,8 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>${escapeHtml(label)}</title>
+  <link rel="manifest" href="../manifest.json">
+  <meta name="theme-color" content="#FAF9F6">
   <link rel="stylesheet" href="../tokens.css">
   <link rel="stylesheet" href="../base.css">
   <link rel="stylesheet" href="../layout.css">
