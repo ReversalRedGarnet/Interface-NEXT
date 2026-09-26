@@ -79,10 +79,10 @@ body.editor-page {
   letter-spacing: 0.08em;
 }
 
-.editor-lock-card .editor-status-error {
+.editor-lock-card .editor-status {
   margin-bottom: var(--space-3);
 }
-.editor-lock-card .editor-status-error:empty {
+.editor-lock-card .editor-status:empty {
   margin-bottom: 0;
 }
 

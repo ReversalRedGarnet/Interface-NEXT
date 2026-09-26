@@ -49,17 +49,22 @@ const {
 } = await import('../js/editor/room-templates.js');
 const { render, clientToSvgPoint } = await import('../js/editor/canvas-renderer.js');
 const { createToolController, resizeRect, resizeRectOutline, isAxisAlignedRect4 } = await import('../js/editor/tools.js');
-const { isCorrectPasscode, isSessionUnlocked, markSessionUnlocked } = await import('../js/editor/passcode-gate.js');
+const {
+  isCorrectPasscode, isSessionUnlocked, markSessionUnlocked,
+  loadPasscodeConfig, recordFailedAttempt, resetFailedAttempts, cooldownRemainingMs,
+} = await import('../js/editor/passcode-gate.js');
 
 /** A minimal storage stand-in — same shape as sessionStorage's own
- *  getItem/setItem — so isSessionUnlocked/markSessionUnlocked can be
- *  tested without depending on jsdom's sessionStorage or any real global
- *  state. A fresh instance always models a brand-new browser session. */
+ *  getItem/setItem/removeItem — so the passcode gate's storage-backed
+ *  functions can be tested without depending on jsdom's sessionStorage or
+ *  any real global state. A fresh instance always models a brand-new
+ *  browser session. */
 function fakeStorage() {
   const map = new Map();
   return {
     getItem: k => (map.has(k) ? map.get(k) : null),
     setItem: (k, v) => { map.set(k, String(v)); },
+    removeItem: k => { map.delete(k); },
   };
 }
 
@@ -1423,14 +1428,19 @@ await test('a brand-new session (no unlock flag written yet) is locked', async (
 });
 
 await test('the wrong code is rejected', async () => {
-  assertEqual(isCorrectPasscode('0000'), false, 'an arbitrary wrong code should be rejected');
-  assertEqual(isCorrectPasscode(''), false, 'an empty code should be rejected');
-  assertEqual(isCorrectPasscode('123'), false, 'a partial/near-miss code should be rejected');
-  assertEqual(isCorrectPasscode(' 1234'), false, 'the comparison should not tolerate incidental whitespace either');
+  assertEqual(isCorrectPasscode('0000', '1234'), false, 'an arbitrary wrong code should be rejected');
+  assertEqual(isCorrectPasscode('', '1234'), false, 'an empty code should be rejected');
+  assertEqual(isCorrectPasscode('123', '1234'), false, 'a partial/near-miss code should be rejected');
+  assertEqual(isCorrectPasscode(' 1234', '1234'), false, 'the comparison should not tolerate incidental whitespace either');
 });
 
 await test('the correct code is accepted', async () => {
-  assertEqual(isCorrectPasscode('1234'), true, 'the literal code "1234" should be accepted');
+  assertEqual(isCorrectPasscode('1234', '1234'), true, 'a code matching the configured passcode should be accepted');
+});
+
+await test('isCorrectPasscode never accepts anything when no passcode is configured', async () => {
+  assertEqual(isCorrectPasscode('1234', null), false, 'a null configured passcode (config failed to load) should reject every input');
+  assertEqual(isCorrectPasscode('', undefined), false, 'an undefined configured passcode should reject every input, including an empty guess');
 });
 
 await test('marking a session unlocked persists for that same storage/session', async () => {
@@ -1455,6 +1465,122 @@ await test('a fresh session (a different storage instance) is locked again, even
 await test('isSessionUnlocked fails locked (not open) if storage access itself throws', async () => {
   const brokenStorage = { getItem() { throw new Error('storage disabled'); } };
   assertEqual(isSessionUnlocked(brokenStorage), false, 'a storage read failure should read as locked, never as unlocked');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   Per-deployment passcode config — loaded from js/editor/passcode.config.js
+   (gitignored) via an injectable importer, so a missing/malformed file
+   never falls back to a default passcode
+   ══════════════════════════════════════════════════════════════════ */
+
+await test('loadPasscodeConfig resolves the configured passcode when the module loads correctly', async () => {
+  const result = await loadPasscodeConfig(async () => ({ EDITOR_PASSCODE: 'secret-code' }));
+  assertEqual(result.ok, true, 'a well-formed config module should resolve ok');
+  assertEqual(result.passcode, 'secret-code', 'the resolved passcode should be exactly what the module exported');
+});
+
+await test('loadPasscodeConfig fails closed (ok:false) when the config file does not exist', async () => {
+  const missingFile = async () => { throw new Error('Cannot find module'); };
+  const result = await loadPasscodeConfig(missingFile);
+  assertEqual(result.ok, false, 'a missing config file must never be treated as configured');
+  assert(result.error instanceof Error, 'the failure should carry the underlying error for diagnostics');
+});
+
+await test('loadPasscodeConfig fails closed when the config module exists but has no usable passcode', async () => {
+  const noExport = await loadPasscodeConfig(async () => ({}));
+  assertEqual(noExport.ok, false, 'a module missing EDITOR_PASSCODE entirely should fail closed');
+
+  const emptyString = await loadPasscodeConfig(async () => ({ EDITOR_PASSCODE: '' }));
+  assertEqual(emptyString.ok, false, 'an empty-string passcode should fail closed rather than accept a blank guess');
+
+  const wrongType = await loadPasscodeConfig(async () => ({ EDITOR_PASSCODE: 1234 }));
+  assertEqual(wrongType.ok, false, 'a non-string passcode (e.g. a bare number) should fail closed');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   Failed-attempt backoff — a mild, sessionStorage-scoped deterrent, not a
+   real lockout: 3 consecutive failures before any cooldown, then an
+   increasing/capped wait, reset by a successful unlock or a new session
+   ══════════════════════════════════════════════════════════════════ */
+
+await test('the first two failures never trigger a cooldown', async () => {
+  const storage = fakeStorage();
+  const now = 1_000_000;
+  recordFailedAttempt(storage, now);
+  assertEqual(cooldownRemainingMs(storage, now), 0, 'a single failure should not throttle anything');
+  recordFailedAttempt(storage, now);
+  assertEqual(cooldownRemainingMs(storage, now), 0, 'a second consecutive failure should still not throttle anything');
+});
+
+await test('the 3rd consecutive failure starts a 5s cooldown that counts down and then lapses', async () => {
+  const storage = fakeStorage();
+  const now = 1_000_000;
+  recordFailedAttempt(storage, now);
+  recordFailedAttempt(storage, now);
+  recordFailedAttempt(storage, now);
+  assertEqual(cooldownRemainingMs(storage, now), 5000, 'the 3rd failure should start exactly a 5s cooldown');
+  assertEqual(cooldownRemainingMs(storage, now + 4000), 1000, 'the remaining time should count down as the clock advances');
+  assertEqual(cooldownRemainingMs(storage, now + 5000), 0, 'the cooldown should be fully lapsed once its full duration has passed');
+  assertEqual(cooldownRemainingMs(storage, now + 9000), 0, 'the cooldown should never go negative once well past its duration');
+});
+
+await test('cooldowns increase with further consecutive failures, then cap', async () => {
+  const storage = fakeStorage();
+  const now = 2_000_000;
+  for (let i = 0; i < 3; i++) recordFailedAttempt(storage, now);
+  assertEqual(cooldownRemainingMs(storage, now), 5000, 'the 3rd failure should be the 5s tier');
+
+  recordFailedAttempt(storage, now); // 4th
+  assertEqual(cooldownRemainingMs(storage, now), 15000, 'the 4th failure should step up to the 15s tier');
+
+  recordFailedAttempt(storage, now); // 5th
+  assertEqual(cooldownRemainingMs(storage, now), 30000, 'the 5th failure should step up to the 30s tier');
+
+  recordFailedAttempt(storage, now); // 6th
+  assertEqual(cooldownRemainingMs(storage, now), 30000, 'a 6th failure should stay capped at 30s, not keep increasing');
+});
+
+await test('a successful unlock resets the failure count back to no cooldown', async () => {
+  const storage = fakeStorage();
+  const now = 3_000_000;
+  for (let i = 0; i < 5; i++) recordFailedAttempt(storage, now);
+  assert(cooldownRemainingMs(storage, now) > 0, 'setup: a cooldown should be active after 5 failures');
+
+  markSessionUnlocked(storage);
+  assertEqual(cooldownRemainingMs(storage, now), 0, 'unlocking should clear any active cooldown immediately');
+
+  recordFailedAttempt(storage, now);
+  recordFailedAttempt(storage, now);
+  assertEqual(cooldownRemainingMs(storage, now), 0, 'the failure count should have reset to zero, not merely be under threshold by coincidence');
+});
+
+await test('resetFailedAttempts on its own also clears an active cooldown', async () => {
+  const storage = fakeStorage();
+  const now = 4_000_000;
+  for (let i = 0; i < 3; i++) recordFailedAttempt(storage, now);
+  assert(cooldownRemainingMs(storage, now) > 0, 'setup: a cooldown should be active');
+  resetFailedAttempts(storage);
+  assertEqual(cooldownRemainingMs(storage, now), 0, 'resetting should clear the cooldown the same way a successful unlock does');
+});
+
+await test('a fresh session never inherits another session\'s failure count or cooldown', async () => {
+  const oldSession = fakeStorage();
+  const now = 5_000_000;
+  for (let i = 0; i < 5; i++) recordFailedAttempt(oldSession, now);
+  assert(cooldownRemainingMs(oldSession, now) > 0, 'setup: the old session should be under cooldown');
+
+  const newSession = fakeStorage();
+  assertEqual(cooldownRemainingMs(newSession, now), 0, 'a new session/tab never shares sessionStorage, so it should start with no cooldown');
+});
+
+await test('recordFailedAttempt and cooldownRemainingMs fail toward "no lockout" if storage access throws', async () => {
+  const brokenStorage = {
+    getItem() { throw new Error('storage disabled'); },
+    setItem() { throw new Error('storage disabled'); },
+    removeItem() { throw new Error('storage disabled'); },
+  };
+  assertEqual(recordFailedAttempt(brokenStorage, 1000), 0, 'a storage failure while recording should report no count, not throw');
+  assertEqual(cooldownRemainingMs(brokenStorage, 1000), 0, 'a storage failure while checking should degrade to "no cooldown", the opposite direction of isSessionUnlocked\'s fail-locked default');
 });
 
 /* ── Report ────────────────────────────────────────────────────────── */

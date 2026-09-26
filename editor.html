@@ -31,10 +31,12 @@
 
   <!-- Passcode gate — see js/editor/passcode-gate.js. Casual, client-side
        only (same spirit as admin/trace.html being unlinked-but-reachable):
-       a plain string comparison against "1234", no hashing or backend, a
-       placeholder for real auth later. Shown by default; #editor-app stays
-       `hidden` (nothing in it renders or is reachable) until the session
-       either already carries the unlock flag (sessionStorage — this browser
+       a plain string comparison against a per-deployment passcode (from
+       js/editor/passcode.config.js, gitignored — see
+       passcode.config.example.js), no hashing or backend, a placeholder
+       for real auth later. Shown by default; #editor-app stays `hidden`
+       (nothing in it renders or is reachable) until the session either
+       already carries the unlock flag (sessionStorage — this browser
        tab/session only, cleared on close) or the correct code is entered. -->
   <div class="editor-lock" id="editor-lock">
     <div class="editor-lock-card floating-panel">
@@ -46,7 +48,8 @@
           <input type="password" id="editor-lock-input" autocomplete="off" inputmode="numeric" autofocus>
         </label>
         <p class="editor-status editor-status-error" id="editor-lock-error" role="alert"></p>
-        <button type="submit" class="btn-primary">Unlock</button>
+        <p class="editor-status" id="editor-lock-cooldown" role="status"></p>
+        <button type="submit" class="btn-primary" id="editor-lock-submit">Unlock</button>
       </form>
     </div>
   </div>

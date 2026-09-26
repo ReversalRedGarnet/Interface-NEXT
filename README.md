@@ -420,6 +420,16 @@ build step here, and download-then-manually-replace didn't scale to
 iterative edits). Firefox/Safari will show a message explaining this rather
 than silently failing.
 
+**One-time setup — passcode:** `editor.html` sits behind a casual access
+code (see `js/editor/passcode-gate.js` for exactly what this does and
+doesn't protect against — it's a deterrent, not real auth). The code lives
+in `js/editor/passcode.config.js`, which is gitignored and never committed,
+so it never ends up in this repo's public history. To set it for your own
+deployment: copy `js/editor/passcode.config.example.js` to
+`js/editor/passcode.config.js` (same folder) and edit the `EDITOR_PASSCODE`
+value. Until that file exists, the lock screen fails closed with a message
+pointing back to these steps rather than accepting any code.
+
 1. Open `editor.html` over **localhost or https** (e.g. `npm run serve`) and
    click **Open Project Folder** — grant it access to the repo root. The
    File System Access API isn't available in an insecure context, so a

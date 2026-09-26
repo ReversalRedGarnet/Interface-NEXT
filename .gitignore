@@ -1,1 +1,5 @@
 node_modules/
+
+# Per-deployment editor passcode — copy js/editor/passcode.config.example.js
+# to this path and set a real value. Never committed.
+js/editor/passcode.config.js

@@ -29,7 +29,10 @@ import { computeContentBounds, zoomModifierLabel } from '../room-logic.js';
 import { createViewController } from '../view-controls.js';
 import { createDisclosure } from '../disclosure.js';
 import { createHelpOverlay } from '../help-overlay.js';
-import { isCorrectPasscode, isSessionUnlocked, markSessionUnlocked } from './passcode-gate.js';
+import {
+  isCorrectPasscode, isSessionUnlocked, markSessionUnlocked,
+  loadPasscodeConfig, recordFailedAttempt, cooldownRemainingMs,
+} from './passcode-gate.js';
 
 /* ── DOM refs ─────────────────────────────────────────────────────── */
 
@@ -46,28 +49,82 @@ const lockScreen = $('editor-lock');
 const lockForm = $('editor-lock-form');
 const lockInput = $('editor-lock-input');
 const lockError = $('editor-lock-error');
+const lockCooldown = $('editor-lock-cooldown');
+const lockSubmit = $('editor-lock-submit');
 
 function revealEditor() {
   lockScreen.hidden = true;
   editorApp.hidden = false;
 }
 
+/* Holds this deployment's real passcode once loadPasscodeConfig() resolves
+ * (see below) — stays null if the config is missing/malformed, which keeps
+ * the form permanently disabled (fails closed) rather than accepting any
+ * input at all. */
+let configuredPasscode = null;
+let cooldownTimer = null;
+
+function setLockControlsDisabled(disabled) {
+  lockInput.disabled = disabled;
+  lockSubmit.disabled = disabled;
+}
+
+/** Reflects the current cooldown (if any) into the lock screen: disables
+ *  the form and counts down while one is active, re-enables it the moment
+ *  it lapses. Safe to call repeatedly/redundantly (after every failed
+ *  attempt, and on a tick while a cooldown is running). */
+function updateCooldownUI() {
+  const remainingMs = cooldownRemainingMs();
+  if (remainingMs <= 0) {
+    if (cooldownTimer) {
+      clearInterval(cooldownTimer);
+      cooldownTimer = null;
+    }
+    lockCooldown.textContent = '';
+    if (configuredPasscode !== null) setLockControlsDisabled(false);
+    return;
+  }
+  setLockControlsDisabled(true);
+  const seconds = Math.ceil(remainingMs / 1000);
+  lockCooldown.textContent = `Too many incorrect attempts — try again in ${seconds}s.`;
+  if (!cooldownTimer) {
+    cooldownTimer = setInterval(updateCooldownUI, 250);
+  }
+}
+
 if (isSessionUnlocked()) {
   revealEditor();
 } else {
-  lockInput.focus();
+  // Fails closed by default (disabled) until the config load below either
+  // supplies a real passcode or reports it can't — never briefly "open" in
+  // between, and never falls back to accepting anything.
+  setLockControlsDisabled(true);
+  loadPasscodeConfig().then(result => {
+    if (!result.ok) {
+      lockError.textContent = 'This deployment has no editor passcode configured — copy '
+        + 'js/editor/passcode.config.example.js to js/editor/passcode.config.js, set a '
+        + 'passcode, and reload.';
+      return;
+    }
+    configuredPasscode = result.passcode;
+    updateCooldownUI();
+    lockInput.focus();
+  });
 }
 
 lockForm.addEventListener('submit', e => {
   e.preventDefault();
-  if (isCorrectPasscode(lockInput.value)) {
+  if (configuredPasscode === null || cooldownRemainingMs() > 0) return;
+  if (isCorrectPasscode(lockInput.value, configuredPasscode)) {
     markSessionUnlocked();
     lockError.textContent = '';
     revealEditor();
   } else {
+    recordFailedAttempt();
     lockError.textContent = 'Incorrect code. Try again.';
     lockInput.value = '';
-    lockInput.focus();
+    updateCooldownUI();
+    if (cooldownRemainingMs() <= 0) lockInput.focus();
   }
 });
 
