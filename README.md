@@ -70,10 +70,10 @@ js/editor/
 test/
   state.test.mjs      — the old-shape → inspectionState/condition migration,
                         run against representative old-shape sample data
-  room-logic.test.mjs — room-logic.js's pure logic: inspection order,
-                        next-unchecked, stats, filter/search matching, and
-                        the fit-to-screen geometry (deviceFootprint,
-                        computeContentBounds, computeFitScale/FitPan)
+  room-logic.test.mjs — room-logic.js's pure logic: stats, filter/search
+                        matching, and the fit-to-screen geometry
+                        (deviceFootprint, computeContentBounds,
+                        computeFitScale/FitPan)
   export.test.mjs — buildRoomRows roster-completeness (every device gets a
                     row, untouched ones export as "Not Checked") and
                     fetchRoomDevices' tolerant-failure behavior
@@ -218,8 +218,8 @@ a checker would. It's the feedback loop to reach for **before** changing
 saved under the wrong key, a device that can't be reached by keyboard, a
 device that can't be re-selected in the inspector, one tab's save wiping
 another's. `test/room-logic.test.mjs` covers the pure decision logic
-(inspection order, next-unchecked, filter/search matching) directly, with
-no DOM at all.
+(filter/search matching, fit-to-screen geometry) directly, with no DOM at
+all.
 
 ## Room workstation
 The room page's inspector panel is always on screen — never a popup — so
@@ -230,9 +230,9 @@ width) and the sidebar (a fixed 320px column, its own `--surface-raised`
 background and left-border divider, and its own independent scroll) are two
 distinct regions, not one flat row — the header/breadcrumb stays a
 full-width bar above the split, with no toolbar row left in it. Every
-control the room page has — Next Unchecked, Search, zoom/pan, Inspection
-Mode, Filter, room actions, Legend + Stats, and the device inspector — now
-lives inside the sidebar itself, organized into six clearly divided
+control the room page has — Search, zoom/pan, Inspection Mode, Filter,
+room actions, Legend + Stats, and the device inspector — now lives inside
+the sidebar itself, organized into six clearly divided
 sections (see below) rather than split between a header toolbar and the
 sidebar. On mobile the sidebar becomes a collapsible bottom sheet, closed to
 a small handle by default so the floor plan stays the dominant thing on
@@ -268,8 +268,8 @@ The sidebar hosts six sections, top to bottom, each its own clearly divided
 group rather than one undifferentiated wall of controls (a divider — the
 same `--border-divider` token used for every other structural seam in the
 app — separates each section from the next):
-1. **Primary actions** — Next Unchecked and Search, unlabeled since they're
-   the whole point of the page and need no caption.
+1. **Primary actions** — Search, unlabeled since it's the whole point of
+   the page and needs no caption.
 2. **Inspection Mode** — the toggle button; its active UI (the picker +
    banner, below) renders directly beneath it, in this same section, while
    armed.
@@ -295,10 +295,6 @@ whether it's working. Everything below is built on that.
   and notes. Status changes and notes autosave — there's no Save button —
   and a small **Saved**/**Saving…** indicator next to the device id
   confirms it went through.
-- **→ Next Unchecked** → jumps straight to the next device still marked
-  Unchecked (row-major: top-to-bottom, then left-to-right, derived from
-  each device's own stored position), panning/zooming it into view and
-  focusing its status control.
 - **Inspection Mode**'s toggle button lives in its own sidebar section and
   stays there, visible, when armed — switching to its pressed look rather
   than disappearing, so there's always a visible, clickable trace of how
@@ -350,7 +346,7 @@ whether it's working. Everything below is built on that.
   hijacked. A quiet hint next to the zoom controls says so.
 - **Keyboard**: `1`/`2`/`3` mark the selected device Working/Minor/Major,
   `0` resets it to Not Checked, `N` jumps to its notes field, `U` undoes,
-  `→` is Next Unchecked, `/` opens search, `F` fits the floor plan to
+  `/` opens search, `F` fits the floor plan to
   screen, `Esc` exits Inspection Mode or closes whatever menu/dialog is
   open. Press `?` for the full list on screen — shortcuts are never
   mandatory or permanently displayed otherwise. Every shortcut dispatches on
@@ -364,7 +360,7 @@ whether it's working. Everything below is built on that.
   arming Inspection Mode.
 
 No emoji anywhere in the app — every icon is either a plain character
-already used elsewhere (←, →, ↓, ↶, ↺, ⋯, ✕) or a small flat outline SVG
+already used elsewhere (←, ↓, ↶, ↺, ⋯, ✕) or a small flat outline SVG
 (`.icon` in controls.css), sized in `em` and colored via `currentColor` so
 it always matches its own button.
 

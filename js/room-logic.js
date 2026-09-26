@@ -1,8 +1,8 @@
 /**
  * room-logic.js — pure decision logic behind the room page's workstation
- * features: inspection order, next-unchecked lookup, stats, filter
- * matching, and search matching. No DOM — testable directly under Node,
- * same split as schema.js vs canvas-renderer.js/tools.js.
+ * features: stats, filter matching, search matching, and the zoom/pan fit
+ * math. No DOM — testable directly under Node, same split as schema.js vs
+ * canvas-renderer.js/tools.js.
  *
  * Every device is described by two independent fields, matching exactly
  * what state.js now stores:
@@ -15,38 +15,6 @@
  * left, label, assetId) — it never requires or invents a new room-data
  * field.
  */
-
-/**
- * Deterministic inspection order: top-to-bottom, then left-to-right —
- * row-major over each device's existing stored position. Ties on `top`
- * (the common case: a row of PCs sharing one y-coordinate) resolve by
- * `left`, so a genuine row reads left-to-right exactly as a person
- * sweeping the room would expect.
- */
-export function orderDevicesForInspection(devices) {
-  return [...devices].sort((a, b) => {
-    const dy = (Number(a.top) || 0) - (Number(b.top) || 0);
-    if (dy !== 0) return dy;
-    return (Number(a.left) || 0) - (Number(b.left) || 0);
-  });
-}
-
-/**
- * Finds the next device (in inspection order) for which `isUnchecked`
- * returns true, starting just after `afterId` (or from the top if
- * `afterId` is null/not found) and wrapping around once. Returns null if
- * every device is checked, or the device list is empty.
- */
-export function findNextUnchecked(orderedDevices, isUnchecked, afterId = null) {
-  if (!orderedDevices.length) return null;
-  const afterIdx = afterId ? orderedDevices.findIndex(d => d.id === afterId) : -1;
-  const startIdx = afterIdx + 1;
-  for (let i = 0; i < orderedDevices.length; i++) {
-    const idx = (startIdx + i) % orderedDevices.length;
-    if (isUnchecked(orderedDevices[idx])) return orderedDevices[idx];
-  }
-  return null;
-}
 
 /**
  * Room-wide counts for the header stats line and the completion state.

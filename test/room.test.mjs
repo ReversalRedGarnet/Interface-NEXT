@@ -3,9 +3,9 @@
  *
  * Drives the real js/room.js inside jsdom and asserts on the DOM a checker
  * would actually touch: the inspector panel (not a popup) for ordinary
- * inspection, Inspection Mode, Next Unchecked, filters, search, and the
- * save-status indicator. Reset stays a modal (destructive, room-wide);
- * everything else here goes through the persistent inspector.
+ * inspection, Inspection Mode, filters, search, and the save-status
+ * indicator. Reset stays a modal (destructive, room-wide); everything else
+ * here goes through the persistent inspector.
  * Run: node test/room.test.mjs
  */
 import { JSDOM } from 'jsdom';
@@ -447,33 +447,19 @@ await test('room actions (Undo/Export/Reset) live behind a single overflow menu 
   assert(doc.getElementById('reset-overlay').classList.contains('open'), 'the reset action itself should still have run (opened its confirmation)');
 });
 
+await test('the overflow menu also links to the editor', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const menu = doc.getElementById('overflow-menu');
+  const editorLink = [...menu.querySelectorAll('a')].find(a => a.textContent.trim() === 'Editor');
+  assert(editorLink, 'expected an "Editor" link inside the room actions overflow menu');
+  assert(editorLink.getAttribute('href') === '../editor.html', `expected the Editor link to point at ../editor.html, got ${editorLink.getAttribute('href')}`);
+});
+
 await test('Escape closes the overflow menu before it would exit Inspection Mode', async () => {
   const { doc } = await mount(readRoom('commons'));
   click(doc.getElementById('btn-more'));
   key(doc, 'Escape');
   assert(doc.getElementById('overflow-menu').hidden, 'Escape should close an open overflow menu');
-});
-
-/* ── Next Unchecked ──────────────────────────────────────────────── */
-
-await test('Next Unchecked selects the first unchecked device in row-major order', async () => {
-  const { doc } = await mount(readRoom('commons'));
-  click(doc.getElementById('btn-next-unchecked'));
-  const selected = doc.querySelector('.pc.selected, .printer.selected');
-  assert(selected, 'Next Unchecked did not select any device');
-  // commons.json's actual top-most row is Staff 1/2 (top:30), above the
-  // PC1..PC5 row (top:60) — this assertion is pinned to the real fixture,
-  // not to an assumption about which row "looks" first.
-  assert(selected.dataset.id === 'SPC1', `expected SPC1 (the real top-most device) first, got ${selected.dataset.id}`);
-});
-
-await test('Next Unchecked skips already-inspected devices and advances past the current selection', async () => {
-  const { doc } = await mount(readRoom('commons'));
-  selectViaClick(doc, 'SPC1');
-  click(doc.querySelector('#inspector-status-grid [data-status="working"]'));
-  click(doc.getElementById('btn-next-unchecked'));
-  const selected = doc.querySelector('.pc.selected, .printer.selected');
-  assert(selected.dataset.id === 'SPC2', `expected SPC2 next (same row, to the right), got ${selected?.dataset.id}`);
 });
 
 /* ── Filters (fade, never hide) ──────────────────────────────────── */
@@ -707,12 +693,10 @@ await test('the sidebar is organized into distinct labelled sections rather than
 await test('the main area above the floor plan carries no leftover toolbar row — every control lives in the sidebar', async () => {
   const { doc } = await mount(readRoom('commons'));
   const header = doc.querySelector('header');
-  assert(!header.querySelector('#btn-next-unchecked'), 'Next Unchecked should no longer live in the header toolbar');
   assert(!header.querySelector('#btn-mode-toggle'), 'the Inspection Mode toggle should no longer live in the header toolbar');
   assert(!header.querySelector('#zoom-controls'), 'the zoom controls should no longer live in the header toolbar');
   assert(!doc.querySelector('.workstation-toolbar'), 'the old horizontal toolbar row should be gone entirely');
   const panel = doc.getElementById('inspector-panel');
-  assert(panel.contains(doc.getElementById('btn-next-unchecked')), 'Next Unchecked should now live in the sidebar');
   assert(panel.contains(doc.getElementById('btn-search')), 'Search should now live in the sidebar');
   assert(panel.contains(doc.getElementById('btn-mode-toggle')), 'the Inspection Mode toggle should now live in the sidebar');
   assert(panel.contains(doc.getElementById('btn-filter-toggle')), 'the Filter toggle should now live in the sidebar');
@@ -759,20 +743,46 @@ await test('U undoes the most recent status change, regardless of how it was mad
   assert(!readState(window)['TEST_PC1'], 'U should undo the "1" keyboard shortcut\'s status change');
 });
 
-await test('ArrowRight triggers Next Unchecked from the keyboard', async () => {
-  const { doc } = await mount(readRoom('commons'));
-  key(doc, 'ArrowRight');
-  const selected = doc.querySelector('.pc.selected, .printer.selected');
-  assert(selected?.dataset.id === 'SPC1', `ArrowRight should select the first unchecked device, got ${selected?.dataset.id}`);
-});
-
-await test('typing in the notes field does not trigger 1/2/3/0/U/ArrowRight shortcuts', async () => {
+await test('typing in the notes field does not trigger 1/2/3/0/U shortcuts', async () => {
   const { doc, window } = await mount(readRoom('commons'));
   selectViaClick(doc, 'PC1');
   const notes = doc.getElementById('inspector-notes');
   notes.focus();
   key(doc, '2'); // dispatched on doc, but activeElement is the textarea — must be ignored
   assert(!readState(window)['TEST_PC1'], 'a keystroke while typing notes should not have applied a status');
+});
+
+/* ── Next Unchecked — fully removed, not hidden/disabled ──────────── */
+
+await test('there is no Next Unchecked button anywhere on the page', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  assert(!doc.getElementById('btn-next-unchecked'), 'expected the Next Unchecked button to be gone entirely, not just hidden');
+  assert(!doc.body.textContent.includes('Next Unchecked'), 'expected no leftover "Next Unchecked" text anywhere on the page');
+});
+
+await test('ArrowRight is unbound — ArrowRight does nothing, with or without a device already selected', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  key(doc, 'ArrowRight');
+  assert(!doc.querySelector('.pc.selected, .printer.selected'), 'ArrowRight should not select anything when nothing was selected');
+
+  selectViaClick(doc, 'PC1');
+  key(doc, 'ArrowRight');
+  const selected = doc.querySelector('.pc.selected, .printer.selected');
+  assert(selected?.dataset.id === 'PC1', 'ArrowRight should leave the existing selection exactly as it was');
+});
+
+await test('the inspector\'s empty-state text no longer references Next Unchecked or the → shortcut', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const text = doc.getElementById('inspector-empty').textContent;
+  assert(text === 'Select a device to inspect it.', `expected the empty-state text with the Next Unchecked clause dropped, got: "${text}"`);
+});
+
+await test('the keyboard-shortcuts help overlay no longer lists a → / Next Unchecked entry', async () => {
+  const { doc } = await mount(readRoom('commons'));
+  const helpText = doc.getElementById('help-overlay').textContent;
+  assert(!/next unchecked/i.test(helpText), 'expected no "next unchecked" wording left in the shortcuts help');
+  const kbdEntries = [...doc.querySelectorAll('#help-overlay dt.kbd')].map(el => el.textContent);
+  assert(!kbdEntries.includes('→'), `expected no → shortcut entry left in the shortcuts help, got: ${kbdEntries.join(', ')}`);
 });
 
 /* ── Legend + Stats (collapsible sidebar section) ──────────────────── */

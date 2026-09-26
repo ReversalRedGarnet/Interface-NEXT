@@ -44,6 +44,19 @@ const {
 } = await import('../js/editor/room-scaffold.js');
 const { render, clientToSvgPoint } = await import('../js/editor/canvas-renderer.js');
 const { createToolController, resizeRect, resizeRectOutline, isAxisAlignedRect4 } = await import('../js/editor/tools.js');
+const { isCorrectPasscode, isSessionUnlocked, markSessionUnlocked } = await import('../js/editor/passcode-gate.js');
+
+/** A minimal storage stand-in — same shape as sessionStorage's own
+ *  getItem/setItem — so isSessionUnlocked/markSessionUnlocked can be
+ *  tested without depending on jsdom's sessionStorage or any real global
+ *  state. A fresh instance always models a brand-new browser session. */
+function fakeStorage() {
+  const map = new Map();
+  return {
+    getItem: k => (map.has(k) ? map.get(k) : null),
+    setItem: (k, v) => { map.set(k, String(v)); },
+  };
+}
 
 function readFile(rel) {
   return fs.readFileSync(path.join(ROOT, rel), 'utf8');
@@ -908,6 +921,50 @@ await test('a duplicate assetId is never blocked at the persistence layer — bo
   const saved = JSON.parse(serializeRoomData(data)).devices;
   assertEqual(saved[0].assetId, 'AST-SAME01', 'the first device should keep the id it was given');
   assertEqual(saved[1].assetId, 'AST-SAME01', 'the second device should keep the duplicate id too — proceeding anyway must not be silently reverted');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   Passcode gate — locked by default, wrong code rejected, correct code
+   unlocks + persists for the session, a fresh session re-locks
+   ══════════════════════════════════════════════════════════════════ */
+
+await test('a brand-new session (no unlock flag written yet) is locked', async () => {
+  assertEqual(isSessionUnlocked(fakeStorage()), false, 'a fresh session with no stored flag should read as locked');
+});
+
+await test('the wrong code is rejected', async () => {
+  assertEqual(isCorrectPasscode('0000'), false, 'an arbitrary wrong code should be rejected');
+  assertEqual(isCorrectPasscode(''), false, 'an empty code should be rejected');
+  assertEqual(isCorrectPasscode('123'), false, 'a partial/near-miss code should be rejected');
+  assertEqual(isCorrectPasscode(' 1234'), false, 'the comparison should not tolerate incidental whitespace either');
+});
+
+await test('the correct code is accepted', async () => {
+  assertEqual(isCorrectPasscode('1234'), true, 'the literal code "1234" should be accepted');
+});
+
+await test('marking a session unlocked persists for that same storage/session', async () => {
+  const storage = fakeStorage();
+  assertEqual(isSessionUnlocked(storage), false, 'setup: should start locked');
+  markSessionUnlocked(storage);
+  assertEqual(isSessionUnlocked(storage), true, 'should read as unlocked immediately after marking it so');
+  // A second, independent read of the same storage — mirrors a page
+  // reload within the same browser session/tab.
+  assertEqual(isSessionUnlocked(storage), true, 'should still read as unlocked on a later check within the same session');
+});
+
+await test('a fresh session (a different storage instance) is locked again, even after another session was unlocked', async () => {
+  const oldSession = fakeStorage();
+  markSessionUnlocked(oldSession);
+  assertEqual(isSessionUnlocked(oldSession), true, 'setup: the old session should be unlocked');
+
+  const newSession = fakeStorage(); // a new tab/browser session never shares sessionStorage
+  assertEqual(isSessionUnlocked(newSession), false, 'a fresh session should never inherit another session\'s unlock flag');
+});
+
+await test('isSessionUnlocked fails locked (not open) if storage access itself throws', async () => {
+  const brokenStorage = { getItem() { throw new Error('storage disabled'); } };
+  assertEqual(isSessionUnlocked(brokenStorage), false, 'a storage read failure should read as locked, never as unlocked');
 });
 
 /* ── Report ────────────────────────────────────────────────────────── */

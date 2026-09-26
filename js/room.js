@@ -1,8 +1,8 @@
 /**
  * room.js — the room page as a workstation: an always-visible inspector
- * panel (not a modal) drives ordinary device inspection, with Next
- * Unchecked, Inspection Mode, filters, search, zoom/pan, and keyboard
- * shortcuts all built on top of the same status/notes storage as before.
+ * panel (not a modal) drives ordinary device inspection, with Inspection
+ * Mode, filters, search, zoom/pan, and keyboard shortcuts all built on top
+ * of the same status/notes storage as before.
  *
  * Call initRoomPage(CFG) once CFG (metadata + layout + devices + the
  * project-wide assets.json lookup) is ready. Modals are reserved for
@@ -13,7 +13,7 @@ import { loadState, saveState, stateKey } from './state.js';
 import { formatDate } from './format.js';
 import { exportRoom, exportAllRooms, ALL_ROOMS } from './export.js';
 import {
-  orderDevicesForInspection, findNextUnchecked, computeStats,
+  computeStats,
   matchesFilter, matchesSearch, buildSearchHaystack,
   computeContentBounds, computeFitScale as fitScaleFor, computeFitPan as fitPanFor,
   zoomModifierLabel,
@@ -91,7 +91,7 @@ const PAN_DRAG_THRESHOLD = 3;
 const FIT_MARGIN = 16;
 
 /** No emoji anywhere in this file — every icon is either a plain
- *  typographic character already used elsewhere in the app (←, →, ↓, ↶,
+ *  typographic character already used elsewhere in the app (←, ↓, ↶,
  *  ↺) or one of these small flat outline SVGs, sized in `em` so they scale
  *  with whatever text they sit next to. `currentColor` means each one
  *  picks up its button's own text color for free — no new color values. */
@@ -271,7 +271,6 @@ export function initRoomPage(CFG) {
   let state = loadState();
 
   const deviceById = new Map(CFG.devices.map(d => [d.id, d]));
-  const orderedDevices = orderDevicesForInspection(CFG.devices);
   /** The room's true drawn extent (walls/devices/labels), not just its
    *  nominal canvas size — see computeContentBounds in room-logic.js for
    *  why the two frequently differ. Computed once: layout/devices are
@@ -324,7 +323,6 @@ export function initRoomPage(CFG) {
             <!-- 1. Primary actions — the core inspect-a-device loop, most
                  prominent and needing no label of its own. -->
             <div class="sidebar-section sidebar-primary" id="sidebar-primary">
-              <button type="button" class="btn-primary sidebar-block-btn" id="btn-next-unchecked">→ Next Unchecked</button>
               <button type="button" class="toolbar-btn sidebar-block-btn" id="btn-search">${ICON_SEARCH} Search <span class="kbd">/</span></button>
             </div>
 
@@ -362,6 +360,7 @@ export function initRoomPage(CFG) {
                     <button type="button" class="overflow-item" id="btn-export-room" role="menuitem">↓ Export This Room</button>
                     <button type="button" class="overflow-item" id="btn-export-all" role="menuitem">↓ Export All Rooms</button>
                     <button type="button" class="overflow-item" id="btn-reset" role="menuitem">↺ Reset This Room</button>
+                    <a class="overflow-item" role="menuitem" href="../editor.html">Editor</a>
                   </div>
                 </div>
                 <button type="button" class="toolbar-btn" id="btn-help" aria-label="Keyboard shortcuts" title="Keyboard shortcuts">?</button>
@@ -395,7 +394,7 @@ export function initRoomPage(CFG) {
             <div class="sidebar-section sidebar-inspector" id="sidebar-inspector">
               <div id="inspector-normal">
                 <p class="quick-mark-label sidebar-section-label">Inspector</p>
-                <p class="inspector-empty" id="inspector-empty">Select a device to inspect it, or press <span class="kbd">→</span> for the next unchecked one.</p>
+                <p class="inspector-empty" id="inspector-empty">Select a device to inspect it.</p>
                 <div class="inspector-content" id="inspector-content" hidden>
                   <div class="inspector-head">
                     <h3 id="inspector-device-id"></h3>
@@ -454,7 +453,6 @@ export function initRoomPage(CFG) {
           <div><dt class="kbd">0</dt><dd>Reset selected device to Not Checked</dd></div>
           <div><dt class="kbd">N</dt><dd>Add/edit note on selected device</dd></div>
           <div><dt class="kbd">U</dt><dd>Undo last status change</dd></div>
-          <div><dt class="kbd">→</dt><dd>Jump to next unchecked device</dd></div>
           <div><dt class="kbd">/</dt><dd>Search</dd></div>
           <div><dt class="kbd">F</dt><dd>Fit floor plan to screen</dd></div>
           <div><dt class="kbd">${zoomModifierLabel()}+scroll</dt><dd>Zoom the floor plan (plain scroll behaves normally)</dd></div>
@@ -853,7 +851,7 @@ export function initRoomPage(CFG) {
   }
 
   /** The one place selection happens — every entry point (a plain click,
-   *  Next Unchecked, a search result) ends up here. */
+   *  a search result) ends up here. */
   function selectDevice(deviceId, opts = {}) {
     if (selectedDeviceId && selectedDeviceId !== deviceId) flushNotesSave();
     if (selectedDeviceId) nodeById.get(selectedDeviceId)?.classList.remove('selected');
@@ -960,9 +958,8 @@ export function initRoomPage(CFG) {
 
   /**
    * Shared by every entry point that needs to bring a possibly-off-screen
-   * device into view: Next Unchecked and search results. A plain click
-   * doesn't need this — the device was already visible, or it wouldn't
-   * have been clickable.
+   * device into view: search results. A plain click doesn't need this —
+   * the device was already visible, or it wouldn't have been clickable.
    */
   function focusDevice(deviceId, opts = {}) {
     const device = deviceById.get(deviceId);
@@ -972,14 +969,6 @@ export function initRoomPage(CFG) {
     const [cx, cy] = deviceCenter(device);
     setView(targetScale, vw / 2 - cx * targetScale, vh / 2 - cy * targetScale);
     if (opts.select !== false) selectDevice(deviceId, opts);
-  }
-
-  /* ── Next Unchecked ───────────────────────────────────────────── */
-
-  function goToNextUnchecked() {
-    const next = findNextUnchecked(orderedDevices, d => inspectionOf(d).inspectionState === 'unchecked', selectedDeviceId);
-    if (!next) { announce('Every device is inspected.'); return; }
-    focusDevice(next.id);
   }
 
   /* ── Search (in-room + other rooms) ──────────────────────────── */
@@ -1133,7 +1122,6 @@ export function initRoomPage(CFG) {
     if (!overflowMenu.hidden && !overflowWrap.contains(e.target)) setOverflowOpen(false);
   });
 
-  document.getElementById('btn-next-unchecked').addEventListener('click', goToNextUnchecked);
   undoBtn.addEventListener('click', undoLast);
 
   inspectorNotesEl.addEventListener('input', () => {
@@ -1214,7 +1202,6 @@ export function initRoomPage(CFG) {
     const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
     if (typing) return;
 
-    if (e.key === 'ArrowRight') { e.preventDefault(); goToNextUnchecked(); return; }
     if (e.key.toLowerCase() === 'f') { e.preventDefault(); fitToScreen(); return; }
     if (e.key.toLowerCase() === 'u') { e.preventDefault(); undoLast(); return; }
     if (!selectedDeviceId) return;

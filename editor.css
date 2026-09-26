@@ -13,6 +13,11 @@ body.editor-page {
   min-height: 100vh;
 }
 
+/* [hidden] override needed here too, same reason as .editor-body[hidden]
+   below — .editor-app's own `display: flex` ties with the UA stylesheet's
+   `[hidden] { display: none }` at equal specificity, and this is the
+   element the passcode gate (see js/editor/passcode-gate.js) hides by
+   default until unlocked. */
 .editor-app {
   padding: var(--space-4) var(--space-4) var(--space-3);
   flex: 1;
@@ -20,6 +25,55 @@ body.editor-page {
   display: flex;
   flex-direction: column;
   min-height: 0;
+}
+.editor-app[hidden] { display: none; }
+
+/* ── Passcode gate ──
+   A plain centered card, not a dismissible .overlay popup — there's no
+   dimmed content behind it to see through (the real editor is [hidden],
+   not just visually covered), so it's laid out as ordinary in-flow content
+   filling the space .editor-app would otherwise occupy. */
+.editor-lock {
+  flex: 1;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-4);
+}
+.editor-lock[hidden] { display: none; }
+
+.editor-lock-card {
+  width: 100%;
+  max-width: 360px;
+  padding: var(--space-6);
+}
+
+.editor-lock-card h1 {
+  margin-bottom: var(--space-2);
+}
+
+.editor-lock-body {
+  color: var(--text-muted);
+  font-size: var(--text-body);
+  line-height: 1.55;
+  margin-bottom: var(--space-4);
+}
+
+.editor-lock-card .editor-field {
+  margin-bottom: var(--space-3);
+}
+
+.editor-lock-card .editor-status-error {
+  margin-bottom: var(--space-3);
+}
+.editor-lock-card .editor-status-error:empty {
+  margin-bottom: 0;
+}
+
+.editor-lock-card .btn-primary {
+  width: 100%;
+  padding: var(--space-2) var(--space-4);
 }
 
 .editor-header {

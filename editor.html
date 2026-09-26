@@ -24,11 +24,34 @@
       <nav class="site-nav" aria-label="Primary">
         <a href="index.html">Campus</a>
         <a href="issues.html">Issues</a>
+        <a href="editor.html" aria-current="page">Editor</a>
       </nav>
     </div>
   </div>
 
-  <div class="editor-app" id="editor-app">
+  <!-- Passcode gate — see js/editor/passcode-gate.js. Casual, client-side
+       only (same spirit as admin/trace.html being unlinked-but-reachable):
+       a plain string comparison against "1234", no hashing or backend, a
+       placeholder for real auth later. Shown by default; #editor-app stays
+       `hidden` (nothing in it renders or is reachable) until the session
+       either already carries the unlock flag (sessionStorage — this browser
+       tab/session only, cleared on close) or the correct code is entered. -->
+  <div class="editor-lock" id="editor-lock">
+    <div class="editor-lock-card floating-panel">
+      <h1>Floor Plan Editor</h1>
+      <p class="editor-lock-body">This is a testing-phase tool — enter the access code to continue.</p>
+      <form id="editor-lock-form" novalidate>
+        <label class="editor-field">
+          <span>Access code</span>
+          <input type="password" id="editor-lock-input" autocomplete="off" inputmode="numeric" autofocus>
+        </label>
+        <p class="editor-status editor-status-error" id="editor-lock-error" role="alert"></p>
+        <button type="submit" class="btn-primary">Unlock</button>
+      </form>
+    </div>
+  </div>
+
+  <div class="editor-app" id="editor-app" hidden>
 
     <header class="editor-header">
       <h1>Floor Plan Editor</h1>

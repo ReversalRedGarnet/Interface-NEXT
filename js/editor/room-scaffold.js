@@ -80,6 +80,7 @@ export function generateRoomHtml({ id, label, campus, dataUrl }) {
       <nav class="site-nav" aria-label="Primary">
         <a href="../index.html">Campus</a>
         <a href="../issues.html">Issues</a>
+        <a href="../editor.html">Editor</a>
       </nav>
     </div>
   </div>

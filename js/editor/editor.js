@@ -23,10 +23,47 @@ import {
   computeContentBounds, computeFitScale as fitScaleFor, computeFitPan as fitPanFor,
   zoomModifierLabel,
 } from '../room-logic.js';
+import { isCorrectPasscode, isSessionUnlocked, markSessionUnlocked } from './passcode-gate.js';
 
 /* ── DOM refs ─────────────────────────────────────────────────────── */
 
 const $ = id => document.getElementById(id);
+
+/* ── Passcode gate ────────────────────────────────────────────────────
+   Runs first, before anything else below touches the DOM: #editor-app
+   starts `hidden` in editor.html itself, so even a script error further
+   down in this file leaves the real editor unreachable rather than failing
+   open. See passcode-gate.js for why this is deliberately casual. */
+
+const editorApp = $('editor-app');
+const lockScreen = $('editor-lock');
+const lockForm = $('editor-lock-form');
+const lockInput = $('editor-lock-input');
+const lockError = $('editor-lock-error');
+
+function revealEditor() {
+  lockScreen.hidden = true;
+  editorApp.hidden = false;
+}
+
+if (isSessionUnlocked()) {
+  revealEditor();
+} else {
+  lockInput.focus();
+}
+
+lockForm.addEventListener('submit', e => {
+  e.preventDefault();
+  if (isCorrectPasscode(lockInput.value)) {
+    markSessionUnlocked();
+    lockError.textContent = '';
+    revealEditor();
+  } else {
+    lockError.textContent = 'Incorrect code. Try again.';
+    lockInput.value = '';
+    lockInput.focus();
+  }
+});
 
 const connectBtn = $('btn-connect');
 const connectStatus = $('connect-status');
