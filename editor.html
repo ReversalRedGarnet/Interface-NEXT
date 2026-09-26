@@ -217,6 +217,20 @@
         <datalist id="nr-site-list"></datalist>
       </label>
       <label class="editor-field">
+        <span>Room type</span>
+        <select id="nr-room-type">
+          <option value="blank">Blank</option>
+          <option value="computer-lab">Computer Lab</option>
+          <option value="office">Office</option>
+          <option value="network-room">Network Room</option>
+        </select>
+      </label>
+      <label class="editor-field" id="nr-count-field" hidden>
+        <span id="nr-count-label">How many?</span>
+        <input type="number" id="nr-count" min="1" step="1">
+      </label>
+      <p class="editor-hint" id="nr-template-hint" hidden>Generates a starting layout (walls, entrance, devices) — a normal, fully-editable draft room, same as Blank.</p>
+      <label class="editor-field">
         <span>Copy layout from (optional)</span>
         <select id="nr-copy-from">
           <option value="">— start blank —</option>

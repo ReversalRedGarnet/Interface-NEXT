@@ -44,6 +44,10 @@ function click(el) {
 function key(doc, k) {
   doc.dispatchEvent(new doc.defaultView.KeyboardEvent('keydown', { key: k, bubbles: true }));
 }
+function change(el, value) {
+  el.value = value;
+  el.dispatchEvent(new el.ownerDocument.defaultView.Event('change', { bubbles: true }));
+}
 
 async function test(name, fn) {
   try { await fn(); results.push(['PASS', name, '']); }
@@ -132,6 +136,51 @@ await test('the Delete Room confirmation reuses the existing overlay/popup patte
   const warning = doc.getElementById('delete-room-final-warning');
   assert(warning, 'expected a Final-room warning element');
   assert(warning.hidden, 'the Final warning should be hidden by default (only a final room\'s confirmation shows it)');
+});
+
+/* ── Room Type templates — the Room Type ↔ count field ↔ copy-from
+   interaction is wired unconditionally at script load (openNewRoomDialog
+   itself needs File System Access to populate the copy-from list, but the
+   change-listener that reacts to Room Type does not), so it's testable here
+   the same way tool-arming is: no loaded room or rootHandle needed. ── */
+
+await test('the New Room dialog offers the four Room Type options', async () => {
+  const { doc } = await mountEditor();
+  const options = [...doc.getElementById('nr-room-type').options].map(o => o.value);
+  assert(options.join(',') === 'blank,computer-lab,office,network-room', `unexpected Room Type options: ${options.join(',')}`);
+});
+
+await test('picking Computer Lab reveals the device-count field (defaulted to 24) and disables Copy layout from', async () => {
+  const { doc } = await mountEditor();
+  change(doc.getElementById('nr-room-type'), 'computer-lab');
+  assert(!doc.getElementById('nr-count-field').hidden, 'the count field should appear for Computer Lab');
+  assert(doc.getElementById('nr-count').value === '24', 'expected the documented default PC count');
+  assert(doc.getElementById('nr-copy-from').disabled, 'Copy layout from and a template are mutually exclusive');
+  assert(!doc.getElementById('nr-template-hint').hidden, 'a non-blank template should show the template hint');
+});
+
+await test('picking Office reveals the device-count field defaulted to 5', async () => {
+  const { doc } = await mountEditor();
+  change(doc.getElementById('nr-room-type'), 'office');
+  assert(!doc.getElementById('nr-count-field').hidden, 'the count field should appear for Office');
+  assert(doc.getElementById('nr-count').value === '5', 'expected the documented default desk count');
+});
+
+await test('picking Network Room hides the count field (fixed device set) but still disables Copy layout from', async () => {
+  const { doc } = await mountEditor();
+  change(doc.getElementById('nr-room-type'), 'network-room');
+  assert(doc.getElementById('nr-count-field').hidden, 'Network Room has a fixed device set — no count field');
+  assert(doc.getElementById('nr-copy-from').disabled, 'Copy layout from and a template are mutually exclusive');
+});
+
+await test('switching back to Blank hides the count field/hint and re-enables Copy layout from', async () => {
+  const { doc } = await mountEditor();
+  const roomType = doc.getElementById('nr-room-type');
+  change(roomType, 'computer-lab');
+  change(roomType, 'blank');
+  assert(doc.getElementById('nr-count-field').hidden, 'Blank should not show a count field');
+  assert(doc.getElementById('nr-template-hint').hidden, 'Blank should not show the template hint');
+  assert(!doc.getElementById('nr-copy-from').disabled, 'Blank should leave Copy layout from usable again');
 });
 
 /* ── Report ────────────────────────────────────────────────────────── */

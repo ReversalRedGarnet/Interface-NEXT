@@ -20,6 +20,10 @@ import {
   validateNewRoomId,
 } from './room-scaffold.js';
 import { removeRoomFromCampusData, serializeCampusData } from '../campus-data.js';
+import {
+  ROOM_TEMPLATE_DEFAULT_SIZE, ROOM_TEMPLATE_DEFAULT_COUNT, templateNeedsCount,
+  generateTemplateRoomData,
+} from './room-templates.js';
 import { computeContentBounds, zoomModifierLabel } from '../room-logic.js';
 import { createViewController } from '../view-controls.js';
 import { createDisclosure } from '../disclosure.js';
@@ -125,6 +129,11 @@ const nrId = $('nr-id');
 const nrLabel = $('nr-label');
 const nrSite = $('nr-site');
 const nrSiteList = $('nr-site-list');
+const nrRoomType = $('nr-room-type');
+const nrCountField = $('nr-count-field');
+const nrCountLabel = $('nr-count-label');
+const nrCount = $('nr-count');
+const nrTemplateHint = $('nr-template-hint');
 const nrCopyFrom = $('nr-copy-from');
 const nrWidth = $('nr-width');
 const nrHeight = $('nr-height');
@@ -427,8 +436,10 @@ async function openNewRoomDialog() {
   nrId.value = '';
   nrLabel.value = '';
   nrSite.value = '';
-  nrWidth.value = 1200;
-  nrHeight.value = 800;
+  nrRoomType.value = 'blank';
+  nrRoomType.disabled = false;
+  nrCopyFrom.disabled = false;
+  onRoomTypeChange();
   nrWidth.disabled = false;
   nrHeight.disabled = false;
   newRoomErrors.textContent = '';
@@ -436,15 +447,55 @@ async function openNewRoomDialog() {
   nrId.focus();
 }
 
+const NR_COUNT_LABELS = { 'computer-lab': 'How many PCs?', office: 'How many desks?' };
+
+/** Room Type and "Copy layout from" are two different, mutually exclusive
+ *  ways to seed a new room's starting content — picking a template here
+ *  resets/disables Copy-from (see onCopyFromChange for the reverse
+ *  direction), and each template gets its own default canvas size (see
+ *  ROOM_TEMPLATE_DEFAULT_SIZE) and, for the two that ask for one, its own
+ *  device-count field and default. Blank leaves everything exactly as it
+ *  behaved before Room Type existed. */
+function onRoomTypeChange() {
+  const templateId = nrRoomType.value;
+  const needsCount = templateNeedsCount(templateId);
+  nrCountField.hidden = !needsCount;
+  if (needsCount) {
+    nrCountLabel.textContent = NR_COUNT_LABELS[templateId];
+    nrCount.value = ROOM_TEMPLATE_DEFAULT_COUNT[templateId];
+  }
+  nrTemplateHint.hidden = templateId === 'blank';
+
+  nrCopyFrom.disabled = templateId !== 'blank';
+  if (templateId !== 'blank') {
+    nrCopyFrom.value = '';
+    // Release copy-from's own canvas-size lock (see onCopyFromChange) — a
+    // template's size is a starting suggestion, not fixed like a copied
+    // layout's coordinates are.
+    nrWidth.disabled = false;
+    nrHeight.disabled = false;
+  }
+
+  if (!nrCopyFrom.value) {
+    const size = ROOM_TEMPLATE_DEFAULT_SIZE[templateId] || ROOM_TEMPLATE_DEFAULT_SIZE.blank;
+    nrWidth.value = size.width;
+    nrHeight.value = size.height;
+  }
+}
+
 /** Picking a source room locks the canvas-size fields to its own
  *  canvasWidth/canvasHeight — copied wall/boundary coordinates are only
  *  meaningful against the canvas they were placed on, so letting the size
- *  fields drift from the source would silently misplace everything. */
+ *  fields drift from the source would silently misplace everything. Also
+ *  forces Room Type back to Blank (see onRoomTypeChange for the reverse
+ *  direction) — copying a layout and generating a template are two
+ *  different ways to seed the same field, never both at once. */
 async function onCopyFromChange() {
   const sourceId = nrCopyFrom.value;
   if (!sourceId) {
     nrWidth.disabled = false;
     nrHeight.disabled = false;
+    nrRoomType.disabled = false;
     return;
   }
   try {
@@ -453,11 +504,15 @@ async function onCopyFromChange() {
     nrHeight.value = source.canvasHeight;
     nrWidth.disabled = true;
     nrHeight.disabled = true;
+    nrRoomType.value = 'blank';
+    nrRoomType.disabled = true;
+    onRoomTypeChange();
   } catch (err) {
     newRoomErrors.textContent = `Couldn't read the layout to copy from: ${err.message}`;
     nrCopyFrom.value = '';
     nrWidth.disabled = false;
     nrHeight.disabled = false;
+    nrRoomType.disabled = false;
   }
 }
 
@@ -504,6 +559,7 @@ async function createNewRoom() {
   const canvasWidth = Number(nrWidth.value) || 1200;
   const canvasHeight = Number(nrHeight.value) || 800;
   const copyFromId = nrCopyFrom.value;
+  const templateId = nrRoomType.value;
 
   const problems = [];
   if (!campus) problems.push('Site is required.');
@@ -524,6 +580,9 @@ async function createNewRoom() {
       newRoomErrors.textContent = `Couldn't read the layout to copy from: ${err.message}`;
       return;
     }
+  } else if (templateId && templateId !== 'blank') {
+    const count = templateNeedsCount(templateId) ? Number(nrCount.value) : undefined;
+    roomData = generateTemplateRoomData(templateId, canvasWidth, canvasHeight, count);
   } else {
     roomData = createBlankRoomData(canvasWidth, canvasHeight);
   }
@@ -1176,6 +1235,7 @@ roomPicker.addEventListener('change', () => {
 });
 
 newRoomBtn.addEventListener('click', () => { if (rootHandle) openNewRoomDialog(); });
+nrRoomType.addEventListener('change', onRoomTypeChange);
 nrCopyFrom.addEventListener('change', onCopyFromChange);
 $('new-room-close').addEventListener('click', closeNewRoomDialog);
 $('new-room-cancel').addEventListener('click', closeNewRoomDialog);

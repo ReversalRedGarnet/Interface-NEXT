@@ -43,6 +43,10 @@ const {
   extractAllRoomsIds, patchExportJs, removeFromExportJs, validateNewRoomId,
 } = await import('../js/editor/room-scaffold.js');
 const { removeRoomFromCampusData, serializeCampusData } = await import('../js/campus-data.js');
+const {
+  ROOM_TEMPLATES, ROOM_TEMPLATE_DEFAULT_SIZE, ROOM_TEMPLATE_DEFAULT_COUNT,
+  templateNeedsCount, generateTemplateRoomData,
+} = await import('../js/editor/room-templates.js');
 const { render, clientToSvgPoint } = await import('../js/editor/canvas-renderer.js');
 const { createToolController, resizeRect, resizeRectOutline, isAxisAlignedRect4 } = await import('../js/editor/tools.js');
 const { isCorrectPasscode, isSessionUnlocked, markSessionUnlocked } = await import('../js/editor/passcode-gate.js');
@@ -342,6 +346,184 @@ await test('end-to-end: creating a new room produces four internally-consistent,
   const allRoomsAfter = extractAllRoomsIds(newExportJs);
   assert(allRoomsAfter.includes('B2-220'), 'ALL_ROOMS missing the new id');
   assert(newExportJs.includes("label: 'B2-220', campus: 'Northgate Site'"), 'ALL_ROOMS entry fields do not match the room being created');
+});
+
+/* ══════════════════════════════════════════════════════════════════
+   2b. Room Type templates — generated starting content for New Room
+   ══════════════════════════════════════════════════════════════════ */
+
+/** Every template's output must satisfy the exact same contract a
+ *  hand-built room's data does: round-trips through serializeRoomData/
+ *  normalizeRoomData without losing or reshaping anything, unique device
+ *  ids, numeric top/left, and only recognized layout shape types — the
+ *  same "valid schema output" a Blank or manually-edited room already has
+ *  to satisfy. */
+function assertValidSchema(data, label) {
+  const reparsed = JSON.parse(serializeRoomData(data));
+  assertEqual(reparsed.status, 'draft', `${label}: expected draft status`);
+  assert(Array.isArray(reparsed.layout), `${label}: layout should be an array`);
+  assert(Array.isArray(reparsed.devices), `${label}: devices should be an array`);
+
+  const normalized = normalizeRoomData(reparsed);
+  assertEqual(normalized.devices.length, reparsed.devices.length, `${label}: normalizeRoomData should not drop a device`);
+  assertEqual(normalized.layout.length, reparsed.layout.length, `${label}: normalizeRoomData should not drop a layout shape`);
+
+  const ids = reparsed.devices.map(d => d.id);
+  assertEqual(new Set(ids).size, ids.length, `${label}: device ids should all be unique`);
+  for (const d of reparsed.devices) {
+    assert(typeof d.top === 'number' && typeof d.left === 'number', `${label}: device ${d.id} should have numeric top/left`);
+    assert(typeof d.id === 'string' && d.id.length > 0, `${label}: every device needs a non-empty id`);
+  }
+  for (const shape of reparsed.layout) {
+    assert(LAYOUT_SHAPE_TYPES.includes(shape.type), `${label}: unrecognized layout shape type "${shape.type}"`);
+  }
+  return reparsed;
+}
+
+await test('ROOM_TEMPLATES/ROOM_TEMPLATE_DEFAULT_SIZE/ROOM_TEMPLATE_DEFAULT_COUNT agree on the four templates the dialog offers', async () => {
+  assertEqual(ROOM_TEMPLATES.join(','), 'blank,computer-lab,office,network-room', 'unexpected template id list/order');
+  for (const id of ROOM_TEMPLATES) {
+    assert(Object.prototype.hasOwnProperty.call(ROOM_TEMPLATE_DEFAULT_SIZE, id), `${id} is missing a default canvas size`);
+  }
+  assert(templateNeedsCount('computer-lab'), 'Computer Lab should ask for a device count');
+  assert(templateNeedsCount('office'), 'Office should ask for a device count');
+  assert(!templateNeedsCount('network-room'), 'Network Room has a fixed device set — no count field');
+  assert(!templateNeedsCount('blank'), 'Blank never asks for a device count');
+});
+
+await test('generateTemplateRoomData throws for "blank" — the New Room flow calls createBlankRoomData directly for it instead, never through here', async () => {
+  let threw = false;
+  try { generateTemplateRoomData('blank', 1200, 800); } catch { threw = true; }
+  assert(threw, 'generateTemplateRoomData("blank", ...) should throw — there is no blank builder in this module');
+});
+
+await test('Blank regression: Room Type "blank" still produces exactly createBlankRoomData\'s own empty output, unaffected by templates existing', async () => {
+  const size = ROOM_TEMPLATE_DEFAULT_SIZE.blank;
+  const blank = createBlankRoomData(size.width, size.height);
+  assertEqual(blank.status, 'draft', 'a blank room should start draft');
+  assertEqual(blank.layout.length, 0, 'a blank room should start with no layout shapes');
+  assertEqual(blank.devices.length, 0, 'a blank room should start with no devices');
+  assertEqual(blank.canvasWidth, size.width, 'canvas width should be exactly what was asked for');
+  assertEqual(blank.canvasHeight, size.height, 'canvas height should be exactly what was asked for');
+});
+
+await test('Computer Lab: default count, rows of pc devices at the same 120x120 spacing as data/b2-210.json/data/b2-204.json, one staff + one printer', async () => {
+  const size = ROOM_TEMPLATE_DEFAULT_SIZE['computer-lab'];
+  const data = generateTemplateRoomData('computer-lab', size.width, size.height);
+  const reparsed = assertValidSchema(data, 'Computer Lab');
+
+  const pcs = reparsed.devices.filter(d => d.type === 'pc');
+  assertEqual(pcs.length, ROOM_TEMPLATE_DEFAULT_COUNT['computer-lab'], 'unexpected default PC count');
+  assertEqual(reparsed.devices.filter(d => d.type === 'staff').length, 1, 'expected exactly one staff (teacher) station');
+  assertEqual(reparsed.devices.filter(d => d.type === 'printer').length, 1, 'expected exactly one printer');
+  assertEqual(reparsed.devices.length, pcs.length + 2, 'unexpected extra devices beyond PCs + staff + printer');
+
+  // Real grid spacing (see js/build-grid.js's b2-210/b2-204 entries): 120
+  // apart, both directions, wherever two PCs share a row/column.
+  const byRow = new Map();
+  for (const pc of pcs) {
+    if (!byRow.has(pc.top)) byRow.set(pc.top, []);
+    byRow.get(pc.top).push(pc.left);
+  }
+  const rowTops = [...byRow.keys()].sort((a, b) => a - b);
+  for (let i = 1; i < rowTops.length; i++) {
+    assertEqual(rowTops[i] - rowTops[i - 1], 120, 'row-to-row spacing should match the real grid rooms\' 120px');
+  }
+  for (const lefts of byRow.values()) {
+    const sorted = [...lefts].sort((a, b) => a - b);
+    for (let i = 1; i < sorted.length; i++) {
+      assertEqual(sorted[i] - sorted[i - 1], 120, 'column-to-column spacing should match the real grid rooms\' 120px');
+    }
+  }
+
+  const boundaryTypes = reparsed.layout.map(s => s.type);
+  assertEqual(boundaryTypes.filter(t => t === 'door').length, 1, 'expected exactly one entrance (door)');
+  assertEqual(boundaryTypes.filter(t => t === 'floor').length, 1, 'expected exactly one floor rect');
+});
+
+await test('Computer Lab: a custom PC count is honored and still wraps into rows that fit the given width', async () => {
+  const data = generateTemplateRoomData('computer-lab', 900, 700, 7);
+  const reparsed = assertValidSchema(data, 'Computer Lab (custom count)');
+  assertEqual(reparsed.devices.filter(d => d.type === 'pc').length, 7, 'expected exactly 7 PCs');
+  const floor = reparsed.layout.find(s => s.type === 'floor');
+  for (const d of reparsed.devices.filter(d => d.type === 'pc')) {
+    assert(d.left >= floor.x && d.left <= floor.x + floor.width, 'a PC should be placed within the floor bounds horizontally');
+    assert(d.top >= floor.y && d.top <= floor.y + floor.height, 'a PC should be placed within the floor bounds vertically');
+  }
+});
+
+await test('Office: default desk count, that many staff devices (spaced looser than a lab grid) plus one printer and one labeled furniture item', async () => {
+  const size = ROOM_TEMPLATE_DEFAULT_SIZE.office;
+  const data = generateTemplateRoomData('office', size.width, size.height);
+  const reparsed = assertValidSchema(data, 'Office');
+
+  const desks = reparsed.devices.filter(d => d.type === 'staff');
+  assertEqual(desks.length, ROOM_TEMPLATE_DEFAULT_COUNT.office, 'unexpected default desk count');
+  assert(desks.every(d => typeof d.label === 'string' && d.label.length > 0), 'every desk should carry a label');
+  assertEqual(reparsed.devices.filter(d => d.type === 'printer').length, 1, 'expected exactly one printer');
+  const furniture = reparsed.devices.filter(d => d.type === 'furniture');
+  assertEqual(furniture.length, 1, 'expected exactly one furniture item');
+  assertEqual(furniture[0].label, 'Cabinet', 'furniture item should carry a generic label');
+  assertEqual(reparsed.devices.length, desks.length + 2, 'unexpected extra devices beyond desks + printer + furniture');
+});
+
+await test('Office: a custom desk count is honored', async () => {
+  const data = generateTemplateRoomData('office', 900, 600, 3);
+  const reparsed = assertValidSchema(data, 'Office (custom count)');
+  assertEqual(reparsed.devices.filter(d => d.type === 'staff').length, 3, 'expected exactly 3 desks');
+});
+
+await test('Network Room: smaller default canvas, exactly one server/switch/router/ups clustered together, no count field applies', async () => {
+  const size = ROOM_TEMPLATE_DEFAULT_SIZE['network-room'];
+  assert(size.width < ROOM_TEMPLATE_DEFAULT_SIZE.blank.width, 'Network Room should default smaller than a lab/blank room');
+  assert(size.height < ROOM_TEMPLATE_DEFAULT_SIZE.blank.height, 'Network Room should default smaller than a lab/blank room');
+
+  const data = generateTemplateRoomData('network-room', size.width, size.height);
+  const reparsed = assertValidSchema(data, 'Network Room');
+
+  for (const type of ['server', 'switch', 'router', 'ups']) {
+    assertEqual(reparsed.devices.filter(d => d.type === type).length, 1, `expected exactly one ${type}`);
+  }
+  assertEqual(reparsed.devices.length, 4, 'expected exactly four devices total');
+
+  // "Clustered together... rather than spread across open floor space" —
+  // every device should sit close to every other one.
+  for (const a of reparsed.devices) {
+    for (const b of reparsed.devices) {
+      assert(Math.abs(a.top - b.top) <= 100 && Math.abs(a.left - b.left) <= 100, `${a.id} and ${b.id} should be clustered close together`);
+    }
+  }
+});
+
+await test('every template registers through the exact same createNewRoom()/room-scaffold.js path as Blank does — same four touch-points', async () => {
+  const indexHtml = readFile('index.html');
+  const exportJs = readFile('js/export.js');
+  const registry = {
+    dataStems: REAL_ROOMS,
+    roomHtmlStems: REAL_ROOMS,
+    indexStems: extractIndexRoomStems(indexHtml),
+    exportIds: extractAllRoomsIds(exportJs),
+  };
+
+  for (const templateId of ['computer-lab', 'office', 'network-room']) {
+    const size = ROOM_TEMPLATE_DEFAULT_SIZE[templateId];
+    const room = { id: `TPL-${templateId}`, label: `Test ${templateId}`, campus: 'Northgate Site' };
+    assertEqual(validateNewRoomId(room.id, registry).length, 0, `fixture id for ${templateId} unexpectedly collided`);
+
+    const roomData = generateTemplateRoomData(templateId, size.width, size.height, ROOM_TEMPLATE_DEFAULT_COUNT[templateId]);
+    const dataText = serializeRoomData(roomData);
+    const roomHtml = generateRoomHtml({ ...room, dataUrl: dataUrlForId(room.id) });
+    const newIndexHtml = patchIndexHtml(indexHtml, room);
+    const newExportJs = patchExportJs(exportJs, room);
+
+    const parsedData = JSON.parse(dataText);
+    assertEqual(parsedData.status, 'draft', `${templateId}: should register as a draft room, same as Blank`);
+    assert(parsedData.devices.length > 0, `${templateId}: expected generated devices, unlike Blank`);
+
+    assert(roomHtml.includes(`id:      '${room.id}'`), `${templateId}: ROOM_META.id mismatch`);
+    assert(newIndexHtml.includes(`href="rooms/${roomFileStem(room.id)}.html"`), `${templateId}: index.html link missing`);
+    assert(extractAllRoomsIds(newExportJs).includes(room.id), `${templateId}: ALL_ROOMS missing the new id`);
+  }
 });
 
 /* ══════════════════════════════════════════════════════════════════
