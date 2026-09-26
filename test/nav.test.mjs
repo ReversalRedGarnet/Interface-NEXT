@@ -43,6 +43,13 @@ const PAGES_EXPECTING_RELATIVE_EDITOR_LINK = [
   ['rooms/workshop.html', '../editor.html'],
   ['rooms/b2-204.html', '../editor.html'],
   ['rooms/b2-210.html', '../editor.html'],
+  // Imported (draft) rooms — see legacy-import.test.mjs — generated via the
+  // same generateRoomHtml() as any other room, so their nav must match too.
+  ['rooms/gpl.html', '../editor.html'],
+  ['rooms/library.html', '../editor.html'],
+  ['rooms/mtl.html', '../editor.html'],
+  ['rooms/s28-104.html', '../editor.html'],
+  ['rooms/s28-107.html', '../editor.html'],
 ];
 
 for (const [rel, href] of PAGES_EXPECTING_RELATIVE_EDITOR_LINK) {

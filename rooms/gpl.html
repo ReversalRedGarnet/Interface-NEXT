@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPL — Gridkeep</title>
+  <link rel="stylesheet" href="../tokens.css">
+  <link rel="stylesheet" href="../base.css">
+  <link rel="stylesheet" href="../layout.css">
+  <link rel="stylesheet" href="../controls.css">
+  <link rel="stylesheet" href="../navigation.css">
+  <link rel="stylesheet" href="../floor-plan.css">
+  <link rel="stylesheet" href="../status.css">
+  <link rel="stylesheet" href="../workstation.css">
+  <link rel="stylesheet" href="../overlays.css">
+  <link rel="stylesheet" href="../responsive.css">
+</head>
+<body>
+
+  <script>
+    window.ROOM_META = {
+      id:      'GPL',
+      label:   'GPL',
+      campus:  'Lawson Tama Campus',
+      back:    '../index.html',
+      dataUrl: '../data/gpl.json',
+    };
+  </script>
+
+  <div class="site-header">
+    <div class="site-header-inner">
+      <span class="site-tool">Gridkeep</span>
+      <nav class="site-nav" aria-label="Primary">
+        <a href="../index.html">Campus</a>
+        <a href="../issues.html">Issues</a>
+        <a href="../editor.html">Editor</a>
+      </nav>
+    </div>
+  </div>
+
+  <div id="room-root"></div>
+  <script type="module" src="../js/main.js"></script>
+
+  <footer class="site-footer">
+    <p><a href="https://github.com/ReversalRedGarnet">ReversalRedGarnet</a></p>
+  </footer>
+
+</body>
+</html>
