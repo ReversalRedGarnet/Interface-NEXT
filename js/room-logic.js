@@ -208,3 +208,14 @@ export function computeFitPan(bounds, availableWidth, availableHeight, scale) {
     y: (availableHeight - boundsHeight * scale) / 2 - bounds.minY * scale,
   };
 }
+
+/** Ctrl on Windows/Linux, Cmd on Mac — for wheel-zoom hint text only; the
+ *  actual key check (e.ctrlKey || e.metaKey) accepts either regardless of
+ *  platform, this is purely about which word to show. Guarded for
+ *  environments (like the test suite) with no `navigator` at all. Shared by
+ *  every page with a zoom/pan viewport (room.js, the editor) so the wording
+ *  can never drift between them. */
+export function zoomModifierLabel() {
+  const platform = (typeof navigator !== 'undefined' && navigator.platform) || '';
+  return /Mac|iPod|iPhone|iPad/.test(platform) ? 'Cmd' : 'Ctrl';
+}

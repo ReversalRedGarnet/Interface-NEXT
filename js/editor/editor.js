@@ -9,9 +9,9 @@ import {
   DEVICE_TYPES, PLACEABLE_SHAPE_TYPES, LAYOUT_SHAPES, shapeDisplayName,
   normalizeRoomData, createBlankRoomData, cloneRoomLayoutOnly, serializeRoomData,
   normalizeAssetsData, serializeAssetsData, generateAssetId, registerAssetId,
-  findAssetIdOwner, isLayoutLocked,
+  findAssetIdOwner, isLayoutLocked, deviceBoxSize,
 } from './schema.js';
-import { render } from './canvas-renderer.js';
+import { render, renderDevice } from './canvas-renderer.js';
 import { createToolController } from './tools.js';
 import {
   roomFileStem, dataUrlForId, generateRoomHtml,
@@ -19,6 +19,10 @@ import {
   extractAllRoomsIds, patchExportJs,
   validateNewRoomId,
 } from './room-scaffold.js';
+import {
+  computeContentBounds, computeFitScale as fitScaleFor, computeFitPan as fitPanFor,
+  zoomModifierLabel,
+} from '../room-logic.js';
 
 /* ── DOM refs ─────────────────────────────────────────────────────── */
 
@@ -47,6 +51,28 @@ const saveBtn = $('btn-save');
 const dirtyIndicator = $('dirty-indicator');
 const statusEl = $('editor-status');
 const svg = $('editor-canvas');
+const canvasViewport = $('canvas-viewport');
+const canvasFrame = $('canvas-frame');
+
+const sidebarViewSection = $('sidebar-view');
+const sidebarLegendSection = $('sidebar-legend');
+const sidebarHelpSection = $('sidebar-help');
+
+const edZoomOutBtn = $('ed-zoom-out');
+const edZoomInBtn = $('ed-zoom-in');
+const edZoomFitBtn = $('ed-zoom-fit');
+const edZoom100Btn = $('ed-zoom-100');
+const edZoomFullscreenBtn = $('ed-zoom-fullscreen');
+const edZoomHint = $('ed-zoom-hint');
+
+const legendToggleBtn = $('btn-editor-legend-toggle');
+const legendBody = $('editor-legend-body');
+const deviceLegendEl = $('editor-device-legend');
+
+const editorHelpBtn = $('btn-editor-help');
+const editorHelpOverlay = $('editor-help-overlay');
+const editorHelpCloseBtn = $('editor-help-close');
+const editorShortcutList = $('editor-shortcut-list');
 
 const newRoomOverlay = $('new-room-overlay');
 const newRoomErrors = $('new-room-errors');
@@ -296,10 +322,11 @@ async function loadRoom(id, label, campus) {
   state.tool = { type: 'select' };
   state.dirty = false;
 
-  toolsPanel.hidden = false;
+  showRoomSections();
   editorFooter.hidden = false;
   setStatus(`Loaded data/${stem}.json`);
   renderAll();
+  resetView();
 }
 
 async function saveExistingRoom() {
@@ -458,10 +485,11 @@ async function createNewRoom() {
     state.tool = { type: 'select' };
     state.dirty = false;
     roomPicker.value = id;
-    toolsPanel.hidden = false;
+    showRoomSections();
     editorFooter.hidden = false;
     setStatus(`Created ${id}: data/${roomFileStem(id)}.json, rooms/${roomFileStem(id)}.html, index.html, and js/export.js.`);
     renderAll();
+    resetView();
   } catch (err) {
     newRoomErrors.textContent = err.message;
   }
@@ -469,15 +497,173 @@ async function createNewRoom() {
 
 /* ── Rendering ────────────────────────────────────────────────────── */
 
+/** Tools/Properties/View/Legend/Help all stay hidden until a room is
+ *  actually loaded or created — same gating `toolsPanel` alone used to have,
+ *  just applied to every section that's meaningless against an empty
+ *  canvas. */
+function showRoomSections() {
+  toolsPanel.hidden = false;
+  sidebarViewSection.hidden = false;
+  sidebarLegendSection.hidden = false;
+  sidebarHelpSection.hidden = false;
+}
+
 function renderAll() {
   if (!state.data) return;
   const locked = isLayoutLocked(state.data);
+  syncFrameSize();
   render(svg, state.data, { selection: state.selection, gridSize: state.gridSize, showGrid: showGridInput.checked, locked });
   renderProperties();
   renderRoomStatus();
   updatePaletteLockState(locked);
   updateDirtyUI();
 }
+
+/* ── Zoom / pan / fit (View section) ──────────────────────────────────
+   Ported from room.js's own zoom/pan block: same constants, same fit-math
+   (via room-logic.js's computeContentBounds/computeFitScale/computeFitPan —
+   imported, not re-derived), same view-transform approach. The one real
+   difference: room.js's content never changes after load, so it computes
+   `contentBounds` once; the editor's room DATA changes constantly as it's
+   edited, so bounds are recomputed fresh on every fit instead of cached.
+   The transform applies to `canvasFrame` (a plain div sized to the room's
+   canvasWidth/canvasHeight), not the SVG's own viewBox — tools.js's
+   clientToSvgPoint() reads the SVG's getScreenCTM(), which already folds in
+   any ancestor CSS transform, so panning/zooming this frame needs no
+   changes there at all. */
+
+const MIN_SCALE = 0.25;
+const MAX_SCALE = 3;
+const PAN_DRAG_THRESHOLD = 3;
+const FIT_MARGIN = 16;
+
+let view = { scale: 1, x: 0, y: 0 };
+let fitIsCurrent = true;
+
+function syncFrameSize() {
+  canvasFrame.style.width = `${state.data.canvasWidth}px`;
+  canvasFrame.style.height = `${state.data.canvasHeight}px`;
+}
+
+function currentContentBounds() {
+  const { canvasWidth: W, canvasHeight: H, layout, devices } = state.data;
+  return computeContentBounds(layout, devices, W, H);
+}
+
+function clampScale(s) { return Math.min(MAX_SCALE, Math.max(MIN_SCALE, s)); }
+
+function computeFitScale() {
+  const W = state.data.canvasWidth, H = state.data.canvasHeight;
+  const vw = canvasViewport.clientWidth || W, vh = canvasViewport.clientHeight || H;
+  return fitScaleFor(currentContentBounds(), vw, vh, FIT_MARGIN);
+}
+
+function clampPanAxis(pos, scaledSize, viewSize) {
+  if (scaledSize <= viewSize) return 0;
+  return Math.min(0, Math.max(viewSize - scaledSize, pos));
+}
+
+function clampPan(x, y, scale) {
+  const W = state.data.canvasWidth, H = state.data.canvasHeight;
+  const vw = canvasViewport.clientWidth || W, vh = canvasViewport.clientHeight || H;
+  return {
+    x: clampPanAxis(x, W * scale, vw),
+    y: clampPanAxis(y, H * scale, vh),
+  };
+}
+
+function applyView() {
+  canvasFrame.style.transformOrigin = 'top left';
+  canvasFrame.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+}
+
+function setView(scale, x, y) {
+  if (scale !== view.scale) fitIsCurrent = false;
+  view.scale = clampScale(scale);
+  const clamped = clampPan(x, y, view.scale);
+  view.x = clamped.x;
+  view.y = clamped.y;
+  applyView();
+}
+
+function zoomAt(viewportX, viewportY, newScale) {
+  newScale = clampScale(newScale);
+  const roomX = (viewportX - view.x) / view.scale;
+  const roomY = (viewportY - view.y) / view.scale;
+  setView(newScale, viewportX - roomX * newScale, viewportY - roomY * newScale);
+}
+
+function zoomByFactor(factor) {
+  const W = state.data.canvasWidth, H = state.data.canvasHeight;
+  const vw = canvasViewport.clientWidth || W, vh = canvasViewport.clientHeight || H;
+  zoomAt(vw / 2, vh / 2, view.scale * factor);
+}
+
+function fitToScreen() {
+  if (!state.data) return;
+  const W = state.data.canvasWidth, H = state.data.canvasHeight;
+  const vw = canvasViewport.clientWidth || W, vh = canvasViewport.clientHeight || H;
+  const scale = clampScale(computeFitScale());
+  const { x, y } = fitPanFor(currentContentBounds(), vw, vh, scale);
+  view.scale = scale;
+  view.x = x;
+  view.y = y;
+  applyView();
+  fitIsCurrent = true;
+}
+function actualSize() { setView(1, 0, 0); }
+
+/** Called once per newly loaded/created room — resets pan/zoom to a fresh
+ *  fit rather than carrying over whatever the previous room's view was. The
+ *  requestAnimationFrame re-fit mirrors room.js's own workaround: right
+ *  after a room's data first populates the sidebar, the viewport may not
+ *  have finished laying out yet, so clientWidth/Height can still read their
+ *  old (or zero) values at the point fitToScreen() is first called. */
+function resetView() {
+  fitToScreen();
+  if (typeof requestAnimationFrame === 'function') requestAnimationFrame(() => fitToScreen());
+}
+
+function handleViewportResize() {
+  if (!state.data) return;
+  if (fitIsCurrent) fitToScreen();
+  else setView(view.scale, view.x, view.y);
+}
+window.addEventListener('resize', handleViewportResize);
+if (typeof ResizeObserver === 'function') {
+  new ResizeObserver(handleViewportResize).observe(canvasViewport);
+}
+
+let panDrag = null;
+canvasViewport.addEventListener('pointerdown', e => {
+  // Only pans in Select mode, and only when the pointerdown didn't land on
+  // an actual device/shape/handle — the same target check tools.js's own
+  // hitTest() makes, so the two never fight over the same gesture: either
+  // tools.js starts a real drag (this stays out of the way) or nothing was
+  // hit and only a pan may start.
+  if (state.tool?.type !== 'select') return;
+  if (e.target.closest?.('[data-kind]')) return;
+  if (e.button !== undefined && e.button !== 0) return;
+  panDrag = { startX: e.clientX, startY: e.clientY, origX: view.x, origY: view.y, moved: false };
+});
+window.addEventListener('pointermove', e => {
+  if (!panDrag) return;
+  const dx = e.clientX - panDrag.startX, dy = e.clientY - panDrag.startY;
+  if (Math.hypot(dx, dy) > PAN_DRAG_THRESHOLD) panDrag.moved = true;
+  if (!panDrag.moved) return;
+  setView(view.scale, panDrag.origX + dx, panDrag.origY + dy);
+});
+window.addEventListener('pointerup', () => { panDrag = null; });
+
+// Plain wheel scroll over the canvas behaves like normal page scroll; zoom
+// only kicks in with Ctrl/Cmd held, matching room.js's own wheel handler.
+canvasViewport.addEventListener('wheel', e => {
+  if (!(e.ctrlKey || e.metaKey)) return;
+  e.preventDefault();
+  const rect = canvasViewport.getBoundingClientRect();
+  const factor = e.deltaY < 0 ? 1.1 : 0.9;
+  zoomAt(e.clientX - rect.left, e.clientY - rect.top, view.scale * factor);
+}, { passive: false });
 
 /* ── Room status: draft/final badge + Mark as Final / Unlock Layout ──
    "Final" locks the room's LAYOUT (layout[] — walls/doors/entrance/
@@ -812,6 +998,63 @@ function buildPalette() {
   });
 }
 
+/* ── Legend — what each device-type block in the Tools palette actually
+   looks like on canvas, built from canvas-renderer.js's own renderDevice()
+   so it can never drift from what the canvas draws. Collapsible, same
+   disclosure convention as room.js's Legend & Stats section. ── */
+
+function buildDeviceLegend() {
+  deviceLegendEl.innerHTML = '';
+  const svgNS = 'http://www.w3.org/2000/svg';
+  const pad = 3;
+  DEVICE_TYPES.forEach(type => {
+    const item = document.createElement('div');
+    item.className = 'legend-item';
+
+    const sample = { type, id: type };
+    const { width, height } = deviceBoxSize(sample);
+    const swatch = document.createElementNS(svgNS, 'svg');
+    swatch.setAttribute('viewBox', `-${pad} -${pad} ${width + pad * 2} ${height + pad * 2}`);
+    swatch.setAttribute('width', String(width));
+    swatch.setAttribute('height', String(height));
+    swatch.classList.add('editor-legend-swatch');
+    swatch.appendChild(renderDevice(sample, 0));
+    item.appendChild(swatch);
+
+    const label = document.createElement('span');
+    label.textContent = type.length <= 3 ? type.toUpperCase() : type.charAt(0).toUpperCase() + type.slice(1);
+    item.appendChild(label);
+
+    deviceLegendEl.appendChild(item);
+  });
+}
+
+function setEditorLegendOpen(open) {
+  legendBody.hidden = !open;
+  legendToggleBtn.setAttribute('aria-expanded', String(open));
+  legendToggleBtn.textContent = open ? 'Legend ▴' : 'Legend ▾';
+}
+
+/* ── Help / shortcuts ──────────────────────────────────────────────── */
+
+function buildEditorShortcutList() {
+  const rows = [
+    ['Click canvas', 'Place the armed tool, or select what’s under the pointer'],
+    ['Drag, or click then click a destination', 'Move the selected device or shape'],
+    ['Corner / endpoint handles', 'Resize or reshape the selected shape'],
+    ['Delete', 'Delete the selected device or shape'],
+    ['Escape', 'Return to Select, or close an open dialog'],
+    ['F', 'Fit the floor plan to screen'],
+    [`${zoomModifierLabel()}+scroll`, 'Zoom the floor plan (plain scroll behaves normally)'],
+    ['?', 'Open this help'],
+  ];
+  editorShortcutList.innerHTML = rows.map(([kbd, desc]) => `
+    <div><dt class="kbd">${kbd}</dt><dd>${desc}</dd></div>`).join('');
+}
+
+function openEditorHelp() { editorHelpOverlay.classList.add('open'); }
+function closeEditorHelp() { editorHelpOverlay.classList.remove('open'); }
+
 /* ── Wiring ───────────────────────────────────────────────────────── */
 
 createToolController(svg, () => state, patch => {
@@ -849,17 +1092,37 @@ gridSizeInput.addEventListener('input', () => {
 });
 showGridInput.addEventListener('change', renderAll);
 
+edZoomOutBtn.addEventListener('click', () => zoomByFactor(0.8));
+edZoomInBtn.addEventListener('click', () => zoomByFactor(1.25));
+edZoomFitBtn.addEventListener('click', fitToScreen);
+edZoom100Btn.addEventListener('click', actualSize);
+edZoomFullscreenBtn.addEventListener('click', () => {
+  if (document.fullscreenElement) document.exitFullscreen?.();
+  else canvasViewport.requestFullscreen?.();
+});
+
+legendToggleBtn.addEventListener('click', () => setEditorLegendOpen(legendBody.hidden));
+
+editorHelpBtn.addEventListener('click', openEditorHelp);
+editorHelpCloseBtn.addEventListener('click', closeEditorHelp);
+editorHelpOverlay.addEventListener('click', e => { if (e.target === editorHelpOverlay) closeEditorHelp(); });
+
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') {
     if (newRoomOverlay.classList.contains('open')) { closeNewRoomDialog(); return; }
     if (unlockOverlay.classList.contains('open')) { closeUnlockConfirm(); return; }
+    if (editorHelpOverlay.classList.contains('open')) { closeEditorHelp(); return; }
     state.tool = { type: 'select' };
     document.querySelectorAll('.editor-tool-btn.armed').forEach(b => b.classList.remove('armed'));
   }
   const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(document.activeElement?.tagName);
   if (e.key === 'Delete' && state.selection && !typing) {
     deleteSelected();
+    return;
   }
+  if (typing) return;
+  if (e.key === '?') { e.preventDefault(); openEditorHelp(); return; }
+  if (e.key.toLowerCase() === 'f' && state.data) { e.preventDefault(); fitToScreen(); }
 });
 
 window.addEventListener('beforeunload', e => {
@@ -868,3 +1131,7 @@ window.addEventListener('beforeunload', e => {
 
 buildPalette();
 buildDeviceTypeList();
+buildDeviceLegend();
+setEditorLegendOpen(false);
+buildEditorShortcutList();
+edZoomHint.textContent = `${zoomModifierLabel()}+scroll to zoom`;

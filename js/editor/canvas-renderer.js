@@ -135,7 +135,11 @@ function markLocked(node) {
   return node;
 }
 
-function renderDevice(device, index) {
+/** Exported so the sidebar's device-type Legend can build an accurate
+ *  canvas-identical swatch per type (see editor.js's buildDeviceLegend) —
+ *  reusing this instead of re-describing each type's look in CSS/markup
+ *  means the legend can never drift from what the canvas actually draws. */
+export function renderDevice(device, index) {
   const { width, height } = deviceBoxSize(device);
   const g = el('g', {
     class: `ed-device ed-device-${device.type || 'pc'}`,

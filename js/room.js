@@ -16,6 +16,7 @@ import {
   orderDevicesForInspection, findNextUnchecked, computeStats,
   matchesFilter, matchesSearch, buildSearchHaystack,
   computeContentBounds, computeFitScale as fitScaleFor, computeFitPan as fitPanFor,
+  zoomModifierLabel,
 } from './room-logic.js';
 
 /**
@@ -96,15 +97,6 @@ const FIT_MARGIN = 16;
  *  picks up its button's own text color for free — no new color values. */
 const ICON_SEARCH = '<svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6.5" cy="6.5" r="4.5"/><line x1="9.8" y1="9.8" x2="14" y2="14" stroke-linecap="round"/></svg>';
 const ICON_FULLSCREEN = '<svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 5V1h4"/><path d="M11 1h4v4"/><path d="M15 11v4h-4"/><path d="M5 15H1v-4"/></svg>';
-
-/** Ctrl on Windows/Linux, Cmd on Mac — for the wheel-zoom hint text only;
- *  the actual key check (e.ctrlKey || e.metaKey) accepts either regardless
- *  of platform, this is purely about which word to show. Guarded for
- *  environments (like the test suite) with no `navigator` at all. */
-function zoomModifierLabel() {
-  const platform = (typeof navigator !== 'undefined' && navigator.platform) || '';
-  return /Mac|iPod|iPhone|iPad/.test(platform) ? 'Cmd' : 'Ctrl';
-}
 
 function escapeXML(s) {
   return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));

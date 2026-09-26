@@ -39,62 +39,108 @@
       </div>
     </header>
 
-    <div class="editor-body" id="editor-body" hidden>
+    <div class="editor-body workstation" id="editor-body" hidden>
 
-      <aside class="editor-sidebar">
-
-        <section class="editor-panel">
-          <h2>Room</h2>
-          <label class="editor-field">
-            <span>Existing room</span>
-            <select id="room-picker">
-              <option value="">— choose —</option>
-            </select>
-          </label>
-          <button class="toolbar-btn" id="btn-new-room">＋ New Room…</button>
-
-          <div class="editor-room-status" id="room-status-row" hidden>
-            <span class="summary-pill" id="room-status-badge"></span>
-            <button class="toolbar-btn" id="btn-mark-final" hidden>Mark as Final</button>
-            <button class="toolbar-btn" id="btn-unlock-layout" hidden>Unlock Layout</button>
+      <main class="editor-canvas-wrap floor-pane">
+        <div class="editor-canvas-viewport" id="canvas-viewport">
+          <div class="editor-canvas-frame" id="canvas-frame">
+            <svg id="editor-canvas" class="editor-canvas" xmlns="http://www.w3.org/2000/svg"></svg>
           </div>
-        </section>
-
-        <section class="editor-panel" id="tools-panel" hidden>
-          <h2>Tools</h2>
-          <div class="editor-tool-group">
-            <span class="editor-tool-group-label">Devices</span>
-            <div class="editor-tool-row" id="device-tools"></div>
-          </div>
-          <div class="editor-tool-group">
-            <span class="editor-tool-group-label">Shapes</span>
-            <div class="editor-tool-row" id="shape-tools"></div>
-          </div>
-          <p class="editor-hint">Arm a tool, click the canvas to place it. Escape returns to Select. Reposition anything by dragging it, or click it once and click a destination point instead. Drag a wall's or outline's small handles to reshape it; a rectangular shape's corner handles resize it (always staying a rectangle); an entrance is a fixed width and only moves, not resizes.</p>
-          <label class="editor-field editor-field-inline">
-            <span>Grid size</span>
-            <input type="number" id="grid-size" min="0" step="1" value="10">
-          </label>
-          <label class="editor-field editor-field-inline">
-            <input type="checkbox" id="show-grid" checked>
-            <span>Show grid</span>
-          </label>
-        </section>
-
-        <section class="editor-panel" id="properties-panel" hidden>
-          <h2>Properties</h2>
-          <div id="properties-fields"></div>
-          <button class="btn-danger" id="btn-delete-selected" hidden>Delete</button>
-          <datalist id="device-type-list"></datalist>
-        </section>
-
-      </aside>
-
-      <main class="editor-canvas-wrap">
-        <div class="editor-canvas-scroll" id="canvas-scroll">
-          <svg id="editor-canvas" class="editor-canvas" xmlns="http://www.w3.org/2000/svg"></svg>
         </div>
       </main>
+
+      <!-- Every editor control lives here as its own labelled sidebar
+           section, matching the room page's own inspector-panel/
+           sidebar-section pattern exactly (see workstation.css) rather than
+           the old one-box-per-panel look. -->
+      <aside class="inspector-panel" id="editor-sidebar" aria-label="Editor controls">
+        <div class="inspector-scroll" id="editor-sidebar-scroll">
+
+          <!-- 1. Room — existing-room picker, New Room, and the Draft/
+               Final status badge + its Mark as Final / Unlock Layout
+               actions. -->
+          <div class="sidebar-section sidebar-room" id="sidebar-room">
+            <p class="quick-mark-label sidebar-section-label">Room</p>
+            <label class="editor-field">
+              <span>Existing room</span>
+              <select id="room-picker">
+                <option value="">— choose —</option>
+              </select>
+            </label>
+            <button class="toolbar-btn sidebar-block-btn" id="btn-new-room">＋ New Room…</button>
+
+            <div class="editor-room-status" id="room-status-row" hidden>
+              <span class="summary-pill" id="room-status-badge"></span>
+              <button class="toolbar-btn" id="btn-mark-final" hidden>Mark as Final</button>
+              <button class="toolbar-btn" id="btn-unlock-layout" hidden>Unlock Layout</button>
+            </div>
+          </div>
+
+          <!-- 2. Tools — the device/shape placement palette. -->
+          <div class="sidebar-section sidebar-tools" id="tools-panel" hidden>
+            <p class="quick-mark-label sidebar-section-label">Tools</p>
+            <div class="editor-tool-group">
+              <span class="editor-tool-group-label">Devices</span>
+              <div class="editor-tool-row" id="device-tools"></div>
+            </div>
+            <div class="editor-tool-group">
+              <span class="editor-tool-group-label">Shapes</span>
+              <div class="editor-tool-row" id="shape-tools"></div>
+            </div>
+            <p class="editor-hint">Arm a tool, click the canvas to place it. Escape returns to Select. Reposition anything by dragging it, or click it once and click a destination point instead. Drag a wall's or outline's small handles to reshape it; a rectangular shape's corner handles resize it (always staying a rectangle); an entrance is a fixed width and only moves, not resizes.</p>
+            <label class="editor-field editor-field-inline">
+              <span>Grid size</span>
+              <input type="number" id="grid-size" min="0" step="1" value="10">
+            </label>
+            <label class="editor-field editor-field-inline">
+              <input type="checkbox" id="show-grid" checked>
+              <span>Show grid</span>
+            </label>
+          </div>
+
+          <!-- 3. Properties — detail/edit fields for whatever's currently
+               selected on the canvas; hidden with nothing selected. -->
+          <div class="sidebar-section sidebar-properties" id="properties-panel" hidden>
+            <p class="quick-mark-label sidebar-section-label">Properties</p>
+            <div id="properties-fields"></div>
+            <button class="btn-danger" id="btn-delete-selected" hidden>Delete</button>
+            <datalist id="device-type-list"></datalist>
+          </div>
+
+          <!-- 4. View — zoom/pan/fit, same control set and behavior as the
+               room page's own View section (see room.js's zoom/pan block). -->
+          <div class="sidebar-section sidebar-view" id="sidebar-view" hidden>
+            <p class="quick-mark-label sidebar-section-label">View</p>
+            <div class="zoom-controls" id="zoom-controls">
+              <button type="button" class="toolbar-btn" id="ed-zoom-out" aria-label="Zoom out">−</button>
+              <button type="button" class="toolbar-btn" id="ed-zoom-fit" aria-label="Fit to screen">Fit</button>
+              <button type="button" class="toolbar-btn" id="ed-zoom-100" aria-label="Actual size">100%</button>
+              <button type="button" class="toolbar-btn" id="ed-zoom-in" aria-label="Zoom in">+</button>
+              <button type="button" class="toolbar-btn" id="ed-zoom-fullscreen" aria-label="Fullscreen"><svg class="icon" width="1em" height="1em" viewBox="0 0 16 16" aria-hidden="true" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"><path d="M1 5V1h4"/><path d="M11 1h4v4"/><path d="M15 11v4h-4"/><path d="M5 15H1v-4"/></svg></button>
+              <span class="zoom-hint" id="ed-zoom-hint"></span>
+            </div>
+          </div>
+
+          <!-- 5. Legend — what each device-type block in the Tools palette
+               above actually looks like once placed on the canvas (built
+               from the same renderDevice() the canvas itself uses — see
+               editor.js's buildDeviceLegend). Collapsible, same disclosure
+               convention as the room page's own Legend & Stats section. -->
+          <div class="sidebar-section sidebar-legend" id="sidebar-legend" hidden>
+            <button type="button" class="site-toggle sidebar-legend-toggle" id="btn-editor-legend-toggle" aria-expanded="false" aria-controls="editor-legend-body"></button>
+            <div class="legend-stats-body" id="editor-legend-body" hidden>
+              <div class="legend" id="editor-device-legend"></div>
+            </div>
+          </div>
+
+          <!-- 6. Help — editor-specific shortcuts/controls, same overlay
+               style as the room page's own keyboard-shortcuts help. -->
+          <div class="sidebar-section sidebar-help" id="sidebar-help" hidden>
+            <button type="button" class="toolbar-btn sidebar-block-btn" id="btn-editor-help" aria-label="Help and shortcuts">? Help / Shortcuts</button>
+          </div>
+
+        </div>
+      </aside>
 
     </div>
 
@@ -160,6 +206,15 @@
         <button class="btn-danger"    id="unlock-confirm">Yes, Unlock</button>
         <button class="btn-secondary" id="unlock-cancel">Cancel</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Help / shortcuts -->
+  <div class="overlay" id="editor-help-overlay" role="dialog" aria-modal="true" aria-labelledby="editor-help-title">
+    <div class="popup">
+      <button class="popup-close" id="editor-help-close" aria-label="Close">✕</button>
+      <h3 class="popup-title" id="editor-help-title">Editor shortcuts</h3>
+      <dl class="shortcut-list" id="editor-shortcut-list"></dl>
     </div>
   </div>
 

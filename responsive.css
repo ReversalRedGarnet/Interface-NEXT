@@ -85,9 +85,27 @@
   }
 }
 
-/* ── Editor page — small screens ── */
-@media (max-width: 900px) {
-  .editor-body { flex-direction: column; }
-  .editor-sidebar { width: 100%; flex: none; flex-direction: row; flex-wrap: wrap; }
-  .editor-panel { flex: 1 1 240px; }
+/* ── Editor page — small screens ──
+   The editor now shares room.html's own .workstation/.floor-pane/
+   .inspector-panel classes (see editor.html/editor.css), so the 700px
+   block above already stacks it the same way: canvas first, full-width
+   sidebar below. The one thing that needs overriding here is
+   .inspector-panel's collapsed-bottom-sheet treatment — that assumes a
+   .sheet-handle toggle button the editor doesn't have, so its whole Room/
+   Tools/Properties/View/Legend/Help sidebar would otherwise shrink to an
+   unreachable 72px sliver with no way to reopen it. Reverted back to plain
+   static in-flow content instead: the sidebar just stacks below the canvas
+   at full width and scrolls with the page. */
+@media (max-width: 700px) {
+  body.editor-page .inspector-panel {
+    position: static;
+    width: 100%;
+    max-height: none;
+    overflow: visible;
+    border-top: var(--border-divider);
+    border-left: none;
+    border-radius: 0;
+    box-shadow: none;
+  }
+  body.editor-page .editor-canvas-viewport { height: 45vh; }
 }

@@ -40,48 +40,21 @@ body.editor-page {
   color: var(--text-muted);
 }
 
-/* ── Body: sidebar + canvas ──
+/* ── Body: canvas + sidebar ──
+   Reuses room.html's own .workstation/.floor-pane/.inspector-panel classes
+   (see workstation.css) so the editor is structurally the same app — canvas
+   on the left (majority width), a docked sidebar of labelled
+   .sidebar-section groups on the right — rather than a separate one-box-
+   per-panel layout of its own.
+
    [hidden] needs an explicit override here — a same-specificity author
-   rule declaring `display` (this one) beats the UA stylesheet's own
-   `[hidden] { display: none }` on a cascade tie, so without this the
-   editor body/footer show up before a project folder is even connected.
-   Same recurring pattern flagged and fixed repeatedly elsewhere in this
-   app (room.js's sidebar sections, menu.js's site-toggle target) — this
-   is one more instance of it, on editor.html specifically. */
-.editor-body {
-  display: flex;
-  gap: var(--space-4);
-  flex: 1;
-  min-height: 0;
-}
+   rule declaring `display` (.workstation's own `display: flex`) beats the
+   UA stylesheet's own `[hidden] { display: none }` on a cascade tie, so
+   without this the editor body/footer show up before a project folder is
+   even connected. Same recurring pattern flagged and fixed repeatedly
+   elsewhere in this app (room.js's sidebar sections, menu.js's site-toggle
+   target) — this is one more instance of it, on editor.html specifically. */
 .editor-body[hidden] { display: none; }
-
-.editor-sidebar {
-  width: 280px;
-  flex: 0 0 280px;
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-3);
-  overflow-y: auto;
-}
-
-/* Ordinary docked panel — a border, no shadow (see controls.css/
-   overlays.css's "borders over shadows" note). */
-.editor-panel {
-  background: var(--surface);
-  border: var(--border-divider);
-  border-radius: var(--radius-panel);
-  padding: var(--space-4);
-}
-
-.editor-panel h2 {
-  margin-bottom: var(--space-3);
-}
-
-.editor-panel .toolbar-btn {
-  width: 100%;
-  margin-top: var(--space-2);
-}
 
 .editor-field {
   display: flex;
@@ -251,10 +224,10 @@ body.editor-page {
   margin-top: var(--space-2);
 }
 
-/* ── Canvas — an ordinary docked surface, no shadow ── */
+/* ── Canvas — an ordinary docked surface, no shadow. .floor-pane (see
+   workstation.css, applied alongside this class in editor.html) supplies
+   flex:1/min-width:0/position:relative; this is just the visual "dock". ── */
 .editor-canvas-wrap {
-  flex: 1;
-  min-width: 0;
   background: var(--bg);
   border: var(--border-divider);
   border-radius: var(--radius-panel);
@@ -262,10 +235,27 @@ body.editor-page {
   display: flex;
 }
 
-.editor-canvas-scroll {
+/* ── Zoom/pan viewport — the editor's own version of room.html's
+   .room-viewport: a fixed-height clipped window, panned/zoomed via
+   .editor-canvas-frame's transform rather than native scrolling (see
+   editor.js's View-section block). Sized the same as .room-viewport so the
+   two pages' floor plans read as the same-scale surface. */
+.editor-canvas-viewport {
   flex: 1;
-  overflow: auto;
-  padding: var(--space-4);
+  min-width: 0;
+  width: 100%;
+  height: min(70vh, 640px);
+  overflow: hidden;
+  cursor: grab;
+}
+.editor-canvas-viewport:active { cursor: grabbing; }
+
+/* Sized in JS (editor.js's syncFrameSize) to the room's own
+   canvasWidth/canvasHeight, in px — the transform target for pan/zoom.
+   Device coordinates and the SVG's own viewBox never change; only this
+   frame's translate+scale does. */
+.editor-canvas-frame {
+  transform-origin: top left;
 }
 
 .editor-canvas {
@@ -274,7 +264,7 @@ body.editor-page {
   border: 1.5px solid var(--line);
   border-radius: var(--radius-control);
   width: 100%;
-  height: auto;
+  height: 100%;
   cursor: crosshair;
 }
 
@@ -350,6 +340,14 @@ body.editor-page {
   pointer-events: none;
 }
 .ed-device-printer .ed-device-label { fill: var(--text-secondary); font-size: var(--text-meta); }
+
+/* ── Device-type Legend swatches — each one is a real renderDevice() output
+   (see editor.js's buildDeviceLegend), so it's pixel-identical to what that
+   type actually looks like once placed, not a redrawn approximation. ── */
+.editor-legend-swatch {
+  flex-shrink: 0;
+  overflow: visible;
+}
 
 .ed-selected .ed-rect-body,
 .ed-selected .ed-device-body,
